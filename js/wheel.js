@@ -1210,24 +1210,49 @@
     return Math.random();
   }
 
+  function getChanceWeight(item) {
+    return Math.max(0, safeNumber(item && item.chance, 0));
+  }
+
   function rollWinnerIndex() {
     if (!wheelItems.length) return 0;
 
-    // Losowanie proporcjonalne do szans:
-    // np. 50% = 50 "losow", 10% = 10 "losow".
-    const tickets = wheelItems.map((item) => Math.max(0, Math.floor(safeNumber(item.chance, 0))));
-    const totalTickets = tickets.reduce((acc, value) => acc + value, 0);
-
-    if (totalTickets <= 0) {
+    // Losowanie ważone procentami:
+    // wiekszy % => wieksza szansa; mniejszy % => mniejsza szansa.
+    const weights = wheelItems.map((item) => getChanceWeight(item));
+    const totalWeight = weights.reduce((acc, value) => acc + value, 0);
+    if (totalWeight <= 0) {
       return Math.floor(Math.random() * wheelItems.length);
     }
 
-    let rollTicket = Math.floor(getRandomUnit() * totalTickets) + 1; // 1..totalTickets
-    for (let i = 0; i < tickets.length; i += 1) {
-      rollTicket -= tickets[i];
-      if (rollTicket <= 0) return i;
+    let threshold = getRandomUnit() * totalWeight;
+    for (let i = 0; i < weights.length; i += 1) {
+      threshold -= weights[i];
+      if (threshold < 0) {
+        return i;
+      }
     }
-    return tickets.length - 1;
+    return weights.length - 1;
+  }
+
+  function simulateChanceDistribution(spins = 10000) {
+    const rounds = Math.max(1, Math.floor(safeNumber(spins, 10000)));
+    const counts = Array.from({ length: wheelItems.length }, () => 0);
+    for (let i = 0; i < rounds; i += 1) {
+      const winnerIndex = rollWinnerIndex();
+      counts[winnerIndex] = (counts[winnerIndex] || 0) + 1;
+    }
+
+    return wheelItems.map((item, index) => {
+      const count = Math.max(0, Math.floor(safeNumber(counts[index], 0)));
+      return {
+        index,
+        name: String(item.name || `Pole ${index + 1}`),
+        configuredChance: getChanceWeight(item),
+        wins: count,
+        winPercent: Number(((count / rounds) * 100).toFixed(2))
+      };
+    });
   }
 
   /* =========================
@@ -2360,7 +2385,8 @@
       });
       return true;
     },
-    stats: () => [...history]
+    stats: () => [...history],
+    simulateChances: (spins = 10000) => simulateChanceDistribution(spins)
   };
 
   /* ========================= */

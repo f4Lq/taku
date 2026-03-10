@@ -246,11 +246,15 @@
     const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
     const WHEEL_SYNC_API_ENDPOINT = "/api/wheel/sync";
     const WHEEL_STATS_API_ENDPOINT = "/api/wheel/stats";
+    const KARY_STATE_API_ENDPOINT = "/api/kary/state";
+    const ADMIN_STATE_API_ENDPOINT = "/api/admin/state";
     const WHEEL_WS_URL = resolveWheelWebSocketUrl();
     const WHEEL_WS_ENABLED = Boolean(WHEEL_WS_URL);
     const WHEEL_SYNC_POLL_MS = 900;
     const WHEEL_SYNC_SOCKET_RETRY_MS = 2500;
     const WHEEL_SYNC_MAX_PROCESSED_EVENTS = 600;
+    const KARY_STATE_SYNC_POLL_MS = 1000;
+    const ADMIN_STATE_SYNC_POLL_MS = 1300;
     const LAST_ROUTE_PATH_KEY = "takuu_last_route_path";
     const LAST_RELOAD_SOURCE_KEY = "takuu_last_reload_source_path";
     const ADMIN_REMEMBER_ME_KEY = "takuu_admin_remember_me";
@@ -273,6 +277,21 @@
     let draggingMemberRow = null;
     let karyTimerTickId = null;
     let karyExternalTimerBridgeBound = false;
+    let karyStateSyncPollId = null;
+    let karyStateSyncBusy = false;
+    let karyStateApiDisabled = false;
+    let karyStateRemoteUpdatedAt = 0;
+    let karyStatePushInFlight = false;
+    let karyStatePushQueued = false;
+    let adminStateSyncPollId = null;
+    let adminStateSyncBusy = false;
+    let adminStateApiDisabled = false;
+    let adminStateRemoteUpdatedAt = 0;
+    let adminStatePushInFlight = false;
+    let adminStatePushQueued = false;
+    let adminStateSyncInitialized = false;
+    let adminStatePendingLocalPush = false;
+    let adminStateApplyingRemote = false;
     let activeKaryCurrency = "pln";
     let karyLiveState = { timers: {}, timerTotals: {}, counters: {}, lastTickAt: 0 };
     let karyCennikItems = [];
@@ -1957,24 +1976,23 @@
       return `https://kick.com/${clean.replace(/^@+/, "")}`;
     }
 
-    function loadAdminAccounts() {
-      const fallback = [
-        {
-          id: ROOT_ADMIN_ID,
-          login: ROOT_ADMIN_LOGIN,
-          password: ROOT_ADMIN_PASSWORD,
-          discordUserId: ROOT_ADMIN_DISCORD_ID,
-          discordName: "",
-          canAccessAdmin: true,
-          canAccessStreamObs: true,
-          isRoot: true,
-          isDiscordAccount: false
-        }
-      ];
+    function getRootAdminAccount(discordName = "") {
+      return {
+        id: ROOT_ADMIN_ID,
+        login: ROOT_ADMIN_LOGIN,
+        password: ROOT_ADMIN_PASSWORD,
+        discordUserId: ROOT_ADMIN_DISCORD_ID,
+        discordName: String(discordName || ""),
+        canAccessAdmin: true,
+        canAccessStreamObs: true,
+        isRoot: true,
+        isDiscordAccount: false
+      };
+    }
 
-      const raw = readStorageJson(ADMIN_ACCOUNTS_KEY, fallback);
-      const accounts = Array.isArray(raw)
-        ? raw
+    function normalizeAdminAccounts(rawAccounts) {
+      const accounts = Array.isArray(rawAccounts)
+        ? rawAccounts
             .filter((item) => item && (item.discordUserId || (item.login && item.password)))
             .map((item) => ({
               id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
@@ -1988,7 +2006,7 @@
               isRoot: Boolean(item.isRoot),
               isDiscordAccount: Boolean(item.isDiscordAccount || item.discordUserId)
             }))
-        : fallback;
+        : [];
 
       accounts.forEach((account) => {
         if (!account.login && account.discordUserId) {
@@ -2002,36 +2020,41 @@
       const rootIndex = accounts.findIndex((item) => item.id === ROOT_ADMIN_ID || item.login === ROOT_ADMIN_LOGIN);
       const rootDiscordName = rootIndex !== -1 ? String(accounts[rootIndex].discordName || "") : "";
       if (rootIndex === -1) {
-        accounts.unshift({
-          id: ROOT_ADMIN_ID,
-          login: ROOT_ADMIN_LOGIN,
-          password: ROOT_ADMIN_PASSWORD,
-          discordUserId: ROOT_ADMIN_DISCORD_ID,
-          discordName: rootDiscordName,
-          canAccessAdmin: true,
-          canAccessStreamObs: true,
-          isRoot: true,
-          isDiscordAccount: false
-        });
+        accounts.unshift(getRootAdminAccount(rootDiscordName));
       } else {
-        accounts[rootIndex] = {
-          id: ROOT_ADMIN_ID,
-          login: ROOT_ADMIN_LOGIN,
-          password: ROOT_ADMIN_PASSWORD,
-          discordUserId: ROOT_ADMIN_DISCORD_ID,
-          discordName: rootDiscordName,
-          canAccessAdmin: true,
-          canAccessStreamObs: true,
-          isRoot: true,
-          isDiscordAccount: false
-        };
+        accounts[rootIndex] = getRootAdminAccount(rootDiscordName);
       }
-
       return accounts;
+    }
+
+    function normalizeCustomMembers(rawMembers) {
+      if (!Array.isArray(rawMembers)) {
+        return [];
+      }
+      return rawMembers
+        .filter((item) => item && item.id && item.name && item.url)
+        .map((item) => ({
+          id: String(item.id),
+          name: String(item.name),
+          url: sanitizeMemberUrl(item.url),
+          avatar: String(item.avatar || CHANNEL_AVATAR_FALLBACK)
+        }));
+    }
+
+    function loadAdminAccounts() {
+      const fallback = [
+        getRootAdminAccount("")
+      ];
+
+      const raw = readStorageJson(ADMIN_ACCOUNTS_KEY, fallback);
+      return normalizeAdminAccounts(raw);
     }
 
     function saveAdminAccounts() {
       saveStorageJson(ADMIN_ACCOUNTS_KEY, adminAccounts);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
     }
 
     function sanitizeBaseMemberOverrides(rawValue) {
@@ -2074,22 +2097,14 @@
     function saveBaseMemberOverrides() {
       baseMemberOverrides = sanitizeBaseMemberOverrides(baseMemberOverrides);
       saveStorageJson(CCI_BASE_MEMBER_OVERRIDES_KEY, baseMemberOverrides);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
     }
 
     function loadCustomMembers() {
       const raw = readStorageJson(CCI_MEMBERS_KEY, []);
-      if (!Array.isArray(raw)) {
-        return [];
-      }
-
-      return raw
-        .filter((item) => item && item.id && item.name && item.url)
-        .map((item) => ({
-          id: String(item.id),
-          name: String(item.name),
-          url: sanitizeMemberUrl(item.url),
-          avatar: String(item.avatar || CHANNEL_AVATAR_FALLBACK)
-        }));
+      return normalizeCustomMembers(raw);
     }
 
     function loadBaseMembersFromGrid() {
@@ -2133,6 +2148,9 @@
 
     function saveCustomMembers() {
       saveStorageJson(CCI_MEMBERS_KEY, customMembers);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
     }
 
     function loadMembersOrder() {
@@ -2145,6 +2163,9 @@
 
     function saveMembersOrder() {
       saveStorageJson(CCI_MEMBERS_ORDER_KEY, membersOrder);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
     }
 
     function getAllMembers() {
@@ -3005,6 +3026,9 @@
 
     function saveKaryCennikItems() {
       saveStorageJson(KARY_CENNIK_KEY, karyCennikItems);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
     }
 
     function renderPublicKaryCennik() {
@@ -3153,23 +3177,43 @@
       setPanelStatus(adminCennikStatusEl, text, type);
     }
 
-    function loadTimeryConfig() {
-      const raw = readStorageJson(TIMERY_CONFIG_KEY, timeryConfigState);
-      const asObject = raw && typeof raw === "object" ? raw : {};
+    function normalizeTimeryConfig(rawValue, fallbackState = null) {
+      const fallback =
+        fallbackState && typeof fallbackState === "object"
+          ? fallbackState
+          : {
+              panelOpen: false,
+              layout: "list",
+              bgColor: "#101420",
+              showTitle: true,
+              showProgress: true,
+              showStatus: true
+            };
+      const asObject = rawValue && typeof rawValue === "object" ? rawValue : {};
       const layoutRaw = String(asObject.layout || "list").toLowerCase();
       const layout = layoutRaw === "grid" || layoutRaw === "compact" ? layoutRaw : "list";
-      timeryConfigState = {
+      return {
         panelOpen: Boolean(asObject.panelOpen),
         layout,
-        bgColor: /^#[\da-f]{6}$/i.test(String(asObject.bgColor || "")) ? String(asObject.bgColor) : "#101420",
+        bgColor: /^#[\da-f]{6}$/i.test(String(asObject.bgColor || ""))
+          ? String(asObject.bgColor)
+          : String(fallback.bgColor || "#101420"),
         showTitle: asObject.showTitle !== false,
         showProgress: asObject.showProgress !== false,
         showStatus: asObject.showStatus !== false
       };
     }
 
+    function loadTimeryConfig() {
+      const raw = readStorageJson(TIMERY_CONFIG_KEY, timeryConfigState);
+      timeryConfigState = normalizeTimeryConfig(raw, timeryConfigState);
+    }
+
     function saveTimeryConfig() {
       saveStorageJson(TIMERY_CONFIG_KEY, timeryConfigState);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
     }
 
     function applyTimeryConfig() {
@@ -3208,24 +3252,44 @@
       }
     }
 
-    function loadLicznikiConfig() {
-      const raw = readStorageJson(LICZNIKI_CONFIG_KEY, licznikiConfigState);
-      const asObject = raw && typeof raw === "object" ? raw : {};
+    function normalizeLicznikiConfig(rawValue, fallbackState = null) {
+      const fallback =
+        fallbackState && typeof fallbackState === "object"
+          ? fallbackState
+          : {
+              panelOpen: false,
+              layout: "grid",
+              bgColor: "#101420",
+              showTitle: true,
+              showStatus: true,
+              showValue: true
+            };
+      const asObject = rawValue && typeof rawValue === "object" ? rawValue : {};
       const layoutRaw = String(asObject.layout || "grid").toLowerCase();
       const layout =
         layoutRaw === "list" || layoutRaw === "compact" ? layoutRaw : "grid";
-      licznikiConfigState = {
+      return {
         panelOpen: Boolean(asObject.panelOpen),
         layout,
-        bgColor: /^#[\da-f]{6}$/i.test(String(asObject.bgColor || "")) ? String(asObject.bgColor) : "#101420",
+        bgColor: /^#[\da-f]{6}$/i.test(String(asObject.bgColor || ""))
+          ? String(asObject.bgColor)
+          : String(fallback.bgColor || "#101420"),
         showTitle: asObject.showTitle !== false,
         showStatus: asObject.showStatus !== false,
         showValue: asObject.showValue !== false
       };
     }
 
+    function loadLicznikiConfig() {
+      const raw = readStorageJson(LICZNIKI_CONFIG_KEY, licznikiConfigState);
+      licznikiConfigState = normalizeLicznikiConfig(raw, licznikiConfigState);
+    }
+
     function saveLicznikiConfig() {
       saveStorageJson(LICZNIKI_CONFIG_KEY, licznikiConfigState);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
     }
 
     function applyLicznikiConfig() {
@@ -3487,6 +3551,573 @@
     function saveKaryState() {
       ensureKaryStateShape();
       saveStorageJson(KARY_STATE_KEY, karyLiveState);
+    }
+
+    function getKaryStateSnapshot() {
+      ensureKaryStateShape();
+      return {
+        timers: { ...karyLiveState.timers },
+        timerTotals: { ...karyLiveState.timerTotals },
+        counters: { ...karyLiveState.counters },
+        lastTickAt: Math.max(0, Math.floor(Number(karyLiveState.lastTickAt || 0)))
+      };
+    }
+
+    function normalizeKaryStateSnapshot(rawState) {
+      const previousState = karyLiveState;
+      const source = rawState && typeof rawState === "object" && !Array.isArray(rawState) ? rawState : {};
+
+      karyLiveState = {
+        timers: source.timers && typeof source.timers === "object" ? { ...source.timers } : {},
+        timerTotals: source.timerTotals && typeof source.timerTotals === "object" ? { ...source.timerTotals } : {},
+        counters: source.counters && typeof source.counters === "object" ? { ...source.counters } : {},
+        lastTickAt: Number(source.lastTickAt || 0)
+      };
+      ensureKaryStateShape();
+      const normalized = getKaryStateSnapshot();
+      karyLiveState = previousState;
+      return normalized;
+    }
+
+    function getKarySnapshotKey(snapshot) {
+      try {
+        return JSON.stringify(snapshot || {});
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function applyRemoteKaryState(rawState, updatedAt = 0) {
+      const normalized = normalizeKaryStateSnapshot(rawState);
+      const currentSnapshot = getKaryStateSnapshot();
+
+      if (updatedAt > 0) {
+        karyStateRemoteUpdatedAt = Math.max(karyStateRemoteUpdatedAt, Math.floor(updatedAt));
+      }
+
+      if (getKarySnapshotKey(normalized) === getKarySnapshotKey(currentSnapshot)) {
+        return false;
+      }
+
+      karyLiveState = normalized;
+      saveKaryState();
+      renderKaryLiveState();
+      return true;
+    }
+
+    function stopKaryStateSyncBridge() {
+      if (!karyStateSyncPollId) {
+        return;
+      }
+      window.clearInterval(karyStateSyncPollId);
+      karyStateSyncPollId = null;
+    }
+
+    async function pushKaryStateToApiOnce() {
+      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return false;
+      }
+
+      const snapshot = getKaryStateSnapshot();
+      karyStatePushInFlight = true;
+
+      try {
+        const response = await fetch(KARY_STATE_API_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "set",
+            state: snapshot
+          }),
+          keepalive: true
+        });
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] POST /api/kary/state failed", {
+            status: response.status,
+            details
+          });
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            karyStateApiDisabled = true;
+            stopKaryStateSyncBridge();
+          }
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuScript] POST /api/kary/state returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        const updatedAt = Math.max(
+          0,
+          Math.floor(Number(payload?.updatedAt || payload?.serverTime || Date.now()) || 0)
+        );
+        if (updatedAt > 0) {
+          karyStateRemoteUpdatedAt = Math.max(karyStateRemoteUpdatedAt, updatedAt);
+        }
+        return Boolean(payload && payload.ok === true);
+      } catch (error) {
+        console.warn("[TakuuScript] POST /api/kary/state request error", error);
+        return false;
+      } finally {
+        karyStatePushInFlight = false;
+        if (karyStatePushQueued) {
+          karyStatePushQueued = false;
+          queueKaryStateApiPush();
+        }
+      }
+    }
+
+    function queueKaryStateApiPush() {
+      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return;
+      }
+      if (karyStatePushInFlight) {
+        karyStatePushQueued = true;
+        return;
+      }
+      void pushKaryStateToApiOnce();
+    }
+
+    async function syncKaryStateFromApiOnce(options = {}) {
+      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return false;
+      }
+      const force = options && options.force === true;
+      if (karyStateSyncBusy) {
+        return false;
+      }
+      if (!force && (karyStatePushInFlight || karyStatePushQueued)) {
+        return false;
+      }
+
+      karyStateSyncBusy = true;
+      const knownUpdatedAt = Math.max(0, Math.floor(Number(karyStateRemoteUpdatedAt || 0)));
+      const query = !force && knownUpdatedAt > 0 ? `?after=${knownUpdatedAt}` : "";
+
+      try {
+        const response = await fetch(`${KARY_STATE_API_ENDPOINT}${query}`, { cache: "no-store" });
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] GET /api/kary/state failed", {
+            status: response.status,
+            details
+          });
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            karyStateApiDisabled = true;
+            stopKaryStateSyncBridge();
+          }
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuScript] GET /api/kary/state returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        if (!payload || typeof payload !== "object") {
+          return false;
+        }
+
+        const updatedAt = Math.max(0, Math.floor(Number(payload.updatedAt || 0)));
+        const state = payload.state && typeof payload.state === "object" && !Array.isArray(payload.state)
+          ? payload.state
+          : null;
+
+        if (!state) {
+          return false;
+        }
+        if (karyStatePushInFlight || karyStatePushQueued) {
+          return false;
+        }
+        if (!force && updatedAt > 0 && updatedAt <= knownUpdatedAt) {
+          return false;
+        }
+
+        return applyRemoteKaryState(state, updatedAt);
+      } catch (error) {
+        console.warn("[TakuuScript] GET /api/kary/state request error", error);
+        return false;
+      } finally {
+        karyStateSyncBusy = false;
+      }
+    }
+
+    function startKaryStateSyncBridge() {
+      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return;
+      }
+
+      void syncKaryStateFromApiOnce({ force: true });
+      if (karyStateSyncPollId) {
+        return;
+      }
+
+      karyStateSyncPollId = window.setInterval(() => {
+        void syncKaryStateFromApiOnce();
+      }, KARY_STATE_SYNC_POLL_MS);
+    }
+
+    function normalizeKaryCennikItems(rawItems) {
+      if (!Array.isArray(rawItems)) {
+        return [];
+      }
+      return rawItems
+        .map((item, index) => normalizeKaryCennikItem(item, index))
+        .filter(Boolean);
+    }
+
+    function normalizeAdminStatePayload(rawState) {
+      const source = rawState && typeof rawState === "object" && !Array.isArray(rawState) ? rawState : {};
+      const normalizedMembersOrder = Array.isArray(source.membersOrder)
+        ? source.membersOrder.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+
+      return {
+        accounts: normalizeAdminAccounts(source.accounts),
+        baseMemberOverrides: sanitizeBaseMemberOverrides(source.baseMemberOverrides),
+        customMembers: normalizeCustomMembers(source.customMembers),
+        membersOrder: normalizedMembersOrder,
+        karyCennikItems: normalizeKaryCennikItems(source.karyCennikItems),
+        timeryConfig: normalizeTimeryConfig(source.timeryConfig, timeryConfigState),
+        licznikiConfig: normalizeLicznikiConfig(source.licznikiConfig, licznikiConfigState)
+      };
+    }
+
+    function getAdminStateSnapshot() {
+      const snapshot = {
+        accounts: normalizeAdminAccounts(adminAccounts),
+        baseMemberOverrides: sanitizeBaseMemberOverrides(baseMemberOverrides),
+        customMembers: normalizeCustomMembers(customMembers),
+        membersOrder: normalizeMembersOrder(membersOrder),
+        karyCennikItems: normalizeKaryCennikItems(karyCennikItems),
+        timeryConfig: normalizeTimeryConfig(timeryConfigState, timeryConfigState),
+        licznikiConfig: normalizeLicznikiConfig(licznikiConfigState, licznikiConfigState)
+      };
+      return snapshot;
+    }
+
+    function saveAdminStateSnapshotToStorage(snapshot = null) {
+      const source = snapshot && typeof snapshot === "object" ? snapshot : getAdminStateSnapshot();
+      saveStorageJson(ADMIN_ACCOUNTS_KEY, source.accounts);
+      saveStorageJson(CCI_BASE_MEMBER_OVERRIDES_KEY, source.baseMemberOverrides);
+      saveStorageJson(CCI_MEMBERS_KEY, source.customMembers);
+      saveStorageJson(CCI_MEMBERS_ORDER_KEY, source.membersOrder);
+      saveStorageJson(KARY_CENNIK_KEY, source.karyCennikItems);
+      saveStorageJson(TIMERY_CONFIG_KEY, source.timeryConfig);
+      saveStorageJson(LICZNIKI_CONFIG_KEY, source.licznikiConfig);
+    }
+
+    function getAdminSnapshotKey(snapshot) {
+      try {
+        return JSON.stringify(snapshot || {});
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function applyRemoteAdminState(rawState, updatedAt = 0) {
+      const normalized = normalizeAdminStatePayload(rawState);
+      const currentSnapshot = getAdminStateSnapshot();
+
+      if (updatedAt > 0) {
+        adminStateRemoteUpdatedAt = Math.max(adminStateRemoteUpdatedAt, Math.floor(updatedAt));
+      }
+      if (getAdminSnapshotKey(normalized) === getAdminSnapshotKey(currentSnapshot)) {
+        return false;
+      }
+
+      adminStateApplyingRemote = true;
+      try {
+        adminAccounts = normalized.accounts;
+        baseMemberOverrides = normalized.baseMemberOverrides;
+        customMembers = normalized.customMembers;
+        membersOrder = normalized.membersOrder;
+        karyCennikItems = normalized.karyCennikItems;
+        timeryConfigState = normalized.timeryConfig;
+        licznikiConfigState = normalized.licznikiConfig;
+
+        baseMembers = loadBaseMembersFromGrid();
+        refreshMembersOrder(false);
+
+        if (editingMemberId && !getAllMembers().some((member) => member.id === editingMemberId)) {
+          stopMemberEdit({ resetForm: true });
+        }
+
+        const finalSnapshot = getAdminStateSnapshot();
+        saveAdminStateSnapshotToStorage(finalSnapshot);
+
+        renderPublicKaryCennik();
+        renderAdminKaryCennikTable();
+        renderCustomMembersCards();
+        renderAdminMembersTable();
+        renderAdminAccountsTable();
+        applyTimeryConfig();
+        applyLicznikiConfig();
+        restoreAdminSession();
+      } finally {
+        adminStateApplyingRemote = false;
+      }
+      return true;
+    }
+
+    function stopAdminStateSyncBridge() {
+      if (!adminStateSyncPollId) {
+        return;
+      }
+      window.clearInterval(adminStateSyncPollId);
+      adminStateSyncPollId = null;
+    }
+
+    async function pushAdminStateToApiOnce() {
+      if (adminStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return false;
+      }
+
+      const snapshot = getAdminStateSnapshot();
+      adminStatePushInFlight = true;
+
+      try {
+        const response = await fetch(ADMIN_STATE_API_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "set",
+            state: snapshot
+          }),
+          keepalive: true
+        });
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] POST /api/admin/state failed", {
+            status: response.status,
+            details
+          });
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            adminStateApiDisabled = true;
+            stopAdminStateSyncBridge();
+          }
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuScript] POST /api/admin/state returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        const updatedAt = Math.max(0, Math.floor(Number(payload?.updatedAt || payload?.serverTime || Date.now()) || 0));
+        if (updatedAt > 0) {
+          adminStateRemoteUpdatedAt = Math.max(adminStateRemoteUpdatedAt, updatedAt);
+        }
+        return Boolean(payload && payload.ok === true);
+      } catch (error) {
+        console.warn("[TakuuScript] POST /api/admin/state request error", error);
+        return false;
+      } finally {
+        adminStatePushInFlight = false;
+        if (adminStatePushQueued) {
+          adminStatePushQueued = false;
+          queueAdminStateApiPush();
+        }
+      }
+    }
+
+    function queueAdminStateApiPush() {
+      if (adminStateApplyingRemote || adminStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return;
+      }
+      if (!adminStateSyncInitialized) {
+        adminStatePendingLocalPush = true;
+        return;
+      }
+      if (adminStatePushInFlight) {
+        adminStatePushQueued = true;
+        return;
+      }
+      void pushAdminStateToApiOnce();
+    }
+
+    async function syncAdminStateFromApiOnce(options = {}) {
+      if (adminStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return false;
+      }
+      const force = options && options.force === true;
+      if (adminStateSyncBusy) {
+        return false;
+      }
+      if (!force && (adminStatePushInFlight || adminStatePushQueued)) {
+        return false;
+      }
+
+      adminStateSyncBusy = true;
+      const knownUpdatedAt = Math.max(0, Math.floor(Number(adminStateRemoteUpdatedAt || 0)));
+      const query = !force && knownUpdatedAt > 0 ? `?after=${knownUpdatedAt}` : "";
+
+      try {
+        const response = await fetch(`${ADMIN_STATE_API_ENDPOINT}${query}`, { cache: "no-store" });
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] GET /api/admin/state failed", {
+            status: response.status,
+            details
+          });
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            adminStateApiDisabled = true;
+            stopAdminStateSyncBridge();
+          }
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuScript] GET /api/admin/state returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        if (!payload || typeof payload !== "object") {
+          return false;
+        }
+
+        const updatedAt = Math.max(0, Math.floor(Number(payload.updatedAt || 0)));
+        const state = payload.state && typeof payload.state === "object" && !Array.isArray(payload.state)
+          ? payload.state
+          : null;
+
+        if (updatedAt > 0) {
+          adminStateRemoteUpdatedAt = Math.max(adminStateRemoteUpdatedAt, updatedAt);
+        }
+        if (!state) {
+          return false;
+        }
+        if (adminStatePushInFlight || adminStatePushQueued) {
+          return false;
+        }
+        if (!force && updatedAt > 0 && updatedAt <= knownUpdatedAt) {
+          return false;
+        }
+
+        return applyRemoteAdminState(state, updatedAt);
+      } catch (error) {
+        console.warn("[TakuuScript] GET /api/admin/state request error", error);
+        return false;
+      } finally {
+        adminStateSyncBusy = false;
+      }
+    }
+
+    function startAdminStateSyncBridge() {
+      if (adminStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return;
+      }
+
+      void syncAdminStateFromApiOnce({ force: true }).finally(() => {
+        adminStateSyncInitialized = true;
+        if (adminStatePendingLocalPush && adminStateRemoteUpdatedAt <= 0) {
+          adminStatePendingLocalPush = false;
+          queueAdminStateApiPush();
+        } else {
+          adminStatePendingLocalPush = false;
+        }
+      });
+
+      if (adminStateSyncPollId) {
+        return;
+      }
+      adminStateSyncPollId = window.setInterval(() => {
+        void syncAdminStateFromApiOnce();
+      }, ADMIN_STATE_SYNC_POLL_MS);
     }
 
     function renderKaryLiveState() {
@@ -3772,6 +4403,7 @@
       karyLiveState.lastTickAt = Date.now();
 
       saveKaryState();
+      queueKaryStateApiPush();
       renderKaryLiveState();
 
       const timerLabel = getTimerLabel(normalizedKey);
@@ -3927,15 +4559,7 @@
         addTimerTime,
         addTimerMinutes: (timerKey, minutes, options = {}) => addTimerTime(timerKey, minutes, "minutes", options),
         addTimerSeconds: (timerKey, seconds, options = {}) => addTimerTime(timerKey, seconds, "seconds", options),
-        getStateSnapshot: () => {
-          ensureKaryStateShape();
-          return {
-            timers: { ...karyLiveState.timers },
-            timerTotals: { ...karyLiveState.timerTotals },
-            counters: { ...karyLiveState.counters },
-            lastTickAt: Math.max(0, Math.floor(Number(karyLiveState.lastTickAt || 0)))
-          };
-        }
+        getStateSnapshot: () => getKaryStateSnapshot()
       };
 
       if (!karyExternalTimerBridgeBound) {
@@ -3966,6 +4590,7 @@
         karyLiveState.timerTotals[timerKey] = 0;
         karyLiveState.lastTickAt = Date.now();
         saveKaryState();
+        queueKaryStateApiPush();
         renderKaryLiveState();
         setKaryStatus("Timer zresetowany.", "success");
         sendAdminWebhookEvent("timer_reset", timerLabel, {
@@ -4007,6 +4632,7 @@
       }
       karyLiveState.lastTickAt = Date.now();
       saveKaryState();
+      queueKaryStateApiPush();
       renderKaryLiveState();
       if (normalizedAction === "set") {
         setKaryStatus("Ustawiono czas timera.", "success");
@@ -4049,6 +4675,7 @@
       if (normalizedAction === "reset") {
         karyLiveState.counters[counterKey] = 0;
         saveKaryState();
+        queueKaryStateApiPush();
         renderKaryLiveState();
         setKaryStatus("Licznik zresetowany.", "success");
         sendAdminWebhookEvent("counter_reset", counterLabel, {
@@ -4069,6 +4696,7 @@
       const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)));
       karyLiveState.counters[counterKey] = normalizedAction === "set" ? deltaValue : current + deltaValue;
       saveKaryState();
+      queueKaryStateApiPush();
       renderKaryLiveState();
       setKaryStatus(normalizedAction === "set" ? "Ustawiono licznik." : "Dodano wartość do licznika.", "success");
       sendAdminWebhookEvent(normalizedAction === "set" ? "counter_set" : "counter_add", counterLabel, {
@@ -5535,6 +6163,34 @@
         return;
       }
 
+      if (
+        changedKey === ADMIN_ACCOUNTS_KEY ||
+        changedKey === CCI_BASE_MEMBER_OVERRIDES_KEY ||
+        changedKey === CCI_MEMBERS_KEY ||
+        changedKey === CCI_MEMBERS_ORDER_KEY ||
+        changedKey === KARY_CENNIK_KEY ||
+        changedKey === TIMERY_CONFIG_KEY ||
+        changedKey === LICZNIKI_CONFIG_KEY
+      ) {
+        adminAccounts = loadAdminAccounts();
+        baseMemberOverrides = loadBaseMemberOverrides();
+        baseMembers = loadBaseMembersFromGrid();
+        customMembers = loadCustomMembers();
+        membersOrder = loadMembersOrder();
+        refreshMembersOrder(false);
+        loadKaryCennikItems();
+        loadTimeryConfig();
+        loadLicznikiConfig();
+        renderPublicKaryCennik();
+        renderAdminKaryCennikTable();
+        renderCustomMembersCards();
+        renderAdminMembersTable();
+        renderAdminAccountsTable();
+        applyTimeryConfig();
+        applyLicznikiConfig();
+        return;
+      }
+
       if (changedKey === WHEEL_SYNC_STORAGE_KEY) {
         if (event.newValue) {
           try {
@@ -5582,6 +6238,8 @@
         if (lastAppliedRouteName === "stats") {
           startWheelStatsLiveUpdates();
         }
+        void syncAdminStateFromApiOnce({ force: true });
+        void syncKaryStateFromApiOnce({ force: true });
         updateFriendsLiveBadges();
         return;
       }
@@ -5607,6 +6265,7 @@
     loadKaryCennikItems();
     migrateDuplicatedKicksyPrices();
     loadKaryState();
+    startKaryStateSyncBridge();
     bindExternalTimerBridge();
     startWheelSyncBridge();
     void fetchWheelStatsFromApiOnce().finally(() => {
@@ -5616,6 +6275,7 @@
     loadLicznikiConfig();
     saveAdminAccounts();
     restoreAdminSession();
+    startAdminStateSyncBridge();
     renderPublicKaryCennik();
     renderAdminKaryCennikTable();
     resetAdminCennikForm();
