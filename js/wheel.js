@@ -9,6 +9,24 @@
      CONFIG STORAGE
   ========================= */
 
+  function resolveWheelWebSocketUrl() {
+    const explicit = String(window.TAKUU_WHEEL_WS_URL || "").trim();
+    if (!explicit) {
+      return "";
+    }
+
+    if (/^wss?:\/\//i.test(explicit)) {
+      return explicit;
+    }
+
+    if (explicit.startsWith("/")) {
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${wsProtocol}//${window.location.host}${explicit}`;
+    }
+
+    return "";
+  }
+
   const STORAGE_KEY = "takuu_wheel_config";
   const HISTORY_KEY = "takuu_wheel_history";
   const SPIN_SPEED_KEY = "takuu_wheel_spin_speed";
@@ -16,7 +34,8 @@
   const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
   const WHEEL_SYNC_API_ENDPOINT = "/api/wheel/sync";
   const WHEEL_STATS_API_ENDPOINT = "/api/wheel/stats";
-  const WHEEL_WS_URL = "wss://taku-live.pl/ws";
+  const WHEEL_WS_URL = resolveWheelWebSocketUrl();
+  const WHEEL_WS_ENABLED = Boolean(WHEEL_WS_URL);
   const MAX_PROCESSED_SYNC_EVENTS = 400;
   const DEFAULT_SPIN_SPEED = 1;
   const MIN_SPIN_SPEED = 0.5;
@@ -247,6 +266,31 @@
   const TICK_ONSET_THRESHOLD = 0.012;
   const TICK_POOL_SIZE = 6;
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  function isObsAudioModeHintEnabled() {
+    try {
+      if (typeof window.__takuuObsOverlayMode === "boolean") {
+        return window.__takuuObsOverlayMode;
+      }
+    } catch (_error) {
+      // Ignore global hint failures.
+    }
+
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const raw = String(params.get("obs") || params.get("overlay") || "").trim().toLowerCase();
+      if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") {
+        return true;
+      }
+    } catch (_error) {
+      // Ignore search params failures.
+    }
+
+    const ua = String(window.navigator?.userAgent || "").toLowerCase();
+    return ua.includes("obs") || ua.includes("obsbrowser") || ua.includes("obs-studio");
+  }
+  const OBS_AUDIO_MODE = isObsAudioModeHintEnabled();
+  const TICK_AUDIO_WARMUP_INTERVAL_MS = 1000;
+  const TICK_AUDIO_WARMUP_MAX_ATTEMPTS = 24;
   let tickAudioContext = null;
   let tickSourceIndex = 0;
   let tickPool = [];
@@ -256,6 +300,9 @@
   let tickBufferSource = "";
   let tickBufferLoading = null;
   let lastTickPlaybackAt = 0;
+  let tickWarmupIntervalId = null;
+  let tickWarmupAttempts = 0;
+  let tickAutoplayBlockedLogged = false;
 
   function buildTickPool(sourcePath) {
     const source = String(sourcePath || "").trim() || TICK_SOUND_SOURCES[0];
@@ -442,20 +489,32 @@
 
   function handleTickPlayError(error) {
     const descriptor = String(error && (error.name || error.message) || "").toLowerCase();
+    const autoplayBlocked =
+      descriptor.includes("notallowed") ||
+      descriptor.includes("user gesture") ||
+      descriptor.includes("play() failed");
     const shouldTryNextSource =
       descriptor.includes("notfound") ||
       descriptor.includes("notsupported") ||
       descriptor.includes("decode") ||
       descriptor.includes("network");
 
+    if (autoplayBlocked && !tickAutoplayBlockedLogged) {
+      tickAutoplayBlockedLogged = true;
+      console.warn("[TakuuWheel] Tick audio blocked by autoplay policy. In OBS enable Browser Source audio/mixer.");
+    }
+
     if (shouldTryNextSource && trySwitchTickSource(true)) {
+      return;
+    }
+    if (OBS_AUDIO_MODE && playTickFromBuffer()) {
       return;
     }
     playTickBeepFallback();
   }
 
   function playTickFromPool() {
-    if (playTickFromBuffer()) {
+    if (!OBS_AUDIO_MODE && playTickFromBuffer()) {
       return;
     }
 
@@ -497,6 +556,9 @@
       buildTickPool(TICK_SOUND_SOURCES[tickSourceIndex]);
     }
     preloadTickBuffer(TICK_SOUND_SOURCES[tickSourceIndex]);
+    if (!OBS_AUDIO_MODE) {
+      return;
+    }
     const firstAudio = tickPool[0];
     if (!firstAudio) {
       return;
@@ -514,6 +576,10 @@
           firstAudio.currentTime = 0;
           firstAudio.muted = originalMuted;
           firstAudio.volume = originalVolume;
+          if (tickWarmupIntervalId) {
+            window.clearInterval(tickWarmupIntervalId);
+            tickWarmupIntervalId = null;
+          }
         })
         .catch(() => {
           firstAudio.muted = originalMuted;
@@ -523,6 +589,24 @@
     }
     firstAudio.muted = originalMuted;
     firstAudio.volume = originalVolume;
+  }
+
+  function startTickAudioWarmupLoop() {
+    if (!OBS_AUDIO_MODE || tickWarmupIntervalId) {
+      return;
+    }
+    tickWarmupAttempts = 0;
+    tickWarmupIntervalId = window.setInterval(() => {
+      if (tickWarmupAttempts >= TICK_AUDIO_WARMUP_MAX_ATTEMPTS) {
+        if (tickWarmupIntervalId) {
+          window.clearInterval(tickWarmupIntervalId);
+          tickWarmupIntervalId = null;
+        }
+        return;
+      }
+      tickWarmupAttempts += 1;
+      primeTickAudioPlayback();
+    }, TICK_AUDIO_WARMUP_INTERVAL_MS);
   }
 
   buildTickPool(TICK_SOUND_SOURCES[tickSourceIndex]);
@@ -2137,8 +2221,10 @@
      ADMIN SPIN BUTTONS
   ========================= */
 
-  document.addEventListener("pointerdown", primeTickAudioPlayback, { once: true });
-  document.addEventListener("keydown", primeTickAudioPlayback, { once: true });
+  if (OBS_AUDIO_MODE) {
+    document.addEventListener("pointerdown", primeTickAudioPlayback, { once: true });
+    document.addEventListener("keydown", primeTickAudioPlayback, { once: true });
+  }
 
   document.getElementById("wheelSpinNow")?.addEventListener("click", () => {
     primeTickAudioPlayback();
@@ -2208,6 +2294,9 @@
   }
 
   function connectWheelSocket() {
+    if (!WHEEL_WS_ENABLED || typeof WebSocket !== "function") {
+      return;
+    }
     try {
       wheelSocket = new WebSocket(WHEEL_WS_URL);
       wheelSocket.onmessage = (event) => {
@@ -2281,6 +2370,12 @@
   bindSpinSpeedControl();
   renderStreamOBSPanel();
   applyWheelConfigPanelVisibility();
+  startTickAudioWarmupLoop();
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && OBS_AUDIO_MODE) {
+      primeTickAudioPlayback();
+    }
+  });
   draw();
   updateSpinPauseButton();
   window.addEventListener("load", applyObsOverlayMode);

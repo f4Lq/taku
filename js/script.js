@@ -117,6 +117,7 @@
     let wheelSyncApiDisabled = false;
     let wheelStatsApiDisabled = false;
     let wheelSyncLastEventId = 0;
+    let wheelSyncCursorInitialized = false;
     let wheelStatsHistoryCache = [];
     const processedWheelSyncEventIds = new Set();
     const processedWheelSyncEventOrder = [];
@@ -210,9 +211,28 @@
       }
     }
 
+    function resolveWheelWebSocketUrl() {
+      const explicit = String(window.TAKUU_WHEEL_WS_URL || "").trim();
+      if (!explicit) {
+        return "";
+      }
+
+      if (/^wss?:\/\//i.test(explicit)) {
+        return explicit;
+      }
+
+      if (explicit.startsWith("/")) {
+        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        return `${wsProtocol}//${window.location.host}${explicit}`;
+      }
+
+      return "";
+    }
+
     const ADMIN_SESSION_KEY = "takuu_admin_auth";
     const ADMIN_ACCOUNTS_KEY = "takuu_admin_accounts";
     const CCI_MEMBERS_KEY = "takuu_custom_members";
+    const CCI_BASE_MEMBER_OVERRIDES_KEY = "takuu_base_members_overrides";
     const CCI_MEMBERS_ORDER_KEY = "takuu_members_order";
     const KARY_STATE_KEY = "takuu_kary_live_state";
     const KARY_CENNIK_KEY = "takuu_kary_cennik_items";
@@ -222,10 +242,12 @@
     const WHEEL_CONFIG_STORAGE_KEY = "takuu_wheel_config";
     const WHEEL_HISTORY_KEY = "takuu_wheel_history";
     const WHEEL_SYNC_STORAGE_KEY = "takuu_wheel_sync_event";
+    const WHEEL_SYNC_CURSOR_STORAGE_KEY = "takuu_wheel_sync_last_event_id";
     const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
     const WHEEL_SYNC_API_ENDPOINT = "/api/wheel/sync";
     const WHEEL_STATS_API_ENDPOINT = "/api/wheel/stats";
-    const WHEEL_WS_URL = "wss://taku-live.pl/ws";
+    const WHEEL_WS_URL = resolveWheelWebSocketUrl();
+    const WHEEL_WS_ENABLED = Boolean(WHEEL_WS_URL);
     const WHEEL_SYNC_POLL_MS = 900;
     const WHEEL_SYNC_SOCKET_RETRY_MS = 2500;
     const WHEEL_SYNC_MAX_PROCESSED_EVENTS = 600;
@@ -243,6 +265,7 @@
     let activeAdminTab = "members";
     let adminAccounts = [];
     let baseMembers = [];
+    let baseMemberOverrides = {};
     let customMembers = [];
     let membersOrder = [];
     let editingMemberId = "";
@@ -1450,6 +1473,52 @@
       }
     }
 
+    function readWheelSyncCursorFromStorage() {
+      try {
+        const raw = Number.parseInt(String(window.localStorage.getItem(WHEEL_SYNC_CURSOR_STORAGE_KEY) || "0"), 10);
+        if (!Number.isFinite(raw) || raw <= 0) {
+          return 0;
+        }
+        return Math.max(0, Math.floor(raw));
+      } catch (_error) {
+        return 0;
+      }
+    }
+
+    function saveWheelSyncCursorToStorage(value) {
+      const normalized = Math.max(0, Math.floor(Number(value) || 0));
+      try {
+        if (normalized <= 0) {
+          window.localStorage.removeItem(WHEEL_SYNC_CURSOR_STORAGE_KEY);
+        } else {
+          window.localStorage.setItem(WHEEL_SYNC_CURSOR_STORAGE_KEY, String(normalized));
+        }
+      } catch (_error) {
+        // Ignore storage failures.
+      }
+    }
+
+    function hydrateWheelSyncCursor() {
+      if (wheelSyncCursorInitialized) {
+        return;
+      }
+      wheelSyncCursorInitialized = true;
+      const storedCursor = readWheelSyncCursorFromStorage();
+      if (storedCursor > 0) {
+        wheelSyncLastEventId = storedCursor;
+      }
+    }
+
+    function setWheelSyncCursor(nextId) {
+      const normalized = Math.max(0, Math.floor(Number(nextId) || 0));
+      if (normalized === wheelSyncLastEventId) {
+        return false;
+      }
+      wheelSyncLastEventId = normalized;
+      saveWheelSyncCursorToStorage(normalized);
+      return true;
+    }
+
     async function pollWheelSyncApiOnce() {
       if (wheelSyncApiDisabled || typeof fetch !== "function") {
         return;
@@ -1511,6 +1580,27 @@
       }
 
       const events = Array.isArray(data.events) ? data.events : [];
+      const nextAfterFromResponse = Math.max(0, Math.floor(Number(data.nextAfter || 0)));
+      const lastIdFromResponse = Math.max(0, Math.floor(Number(data.lastId || 0)));
+
+      // First poll after page load should not replay old wheel results,
+      // because timer state is already persisted in localStorage.
+      if (wheelSyncLastEventId <= 0 && lastIdFromResponse > 0) {
+        setWheelSyncCursor(lastIdFromResponse);
+        return;
+      }
+
+      // If sync history was rotated/reset on backend, re-anchor cursor.
+      if (
+        wheelSyncLastEventId > 0 &&
+        lastIdFromResponse > 0 &&
+        lastIdFromResponse < wheelSyncLastEventId &&
+        !events.length
+      ) {
+        setWheelSyncCursor(lastIdFromResponse);
+        return;
+      }
+
       let maxProcessedEventId = wheelSyncLastEventId;
       events.forEach((eventItem) => {
         if (!eventItem || typeof eventItem !== "object") {
@@ -1523,9 +1613,6 @@
         consumeWheelSyncMessage(eventItem, "api");
       });
 
-      const nextAfterFromResponse = Math.max(0, Math.floor(Number(data.nextAfter || 0)));
-      const lastIdFromResponse = Math.max(0, Math.floor(Number(data.lastId || 0)));
-
       if (nextAfterFromResponse > maxProcessedEventId) {
         maxProcessedEventId = nextAfterFromResponse;
       }
@@ -1535,7 +1622,7 @@
       }
 
       if (maxProcessedEventId > wheelSyncLastEventId) {
-        wheelSyncLastEventId = maxProcessedEventId;
+        setWheelSyncCursor(maxProcessedEventId);
       }
     }
 
@@ -1547,7 +1634,7 @@
     }
 
     function scheduleWheelSyncSocketReconnect() {
-      if (wheelSyncSocketRetryId || IS_FILE_PROTOCOL || typeof WebSocket !== "function") {
+      if (wheelSyncSocketRetryId || !WHEEL_WS_ENABLED || IS_FILE_PROTOCOL || typeof WebSocket !== "function") {
         return;
       }
       wheelSyncSocketRetryId = window.setTimeout(() => {
@@ -1577,7 +1664,7 @@
     }
 
     function connectWheelSyncSocket() {
-      if (IS_FILE_PROTOCOL || typeof WebSocket !== "function") {
+      if (!WHEEL_WS_ENABLED || IS_FILE_PROTOCOL || typeof WebSocket !== "function") {
         return;
       }
       if (wheelSyncSocket && (wheelSyncSocket.readyState === 0 || wheelSyncSocket.readyState === 1)) {
@@ -1612,6 +1699,8 @@
     }
 
     function startWheelSyncBridge() {
+      hydrateWheelSyncCursor();
+
       if ("BroadcastChannel" in window) {
         try {
           wheelSyncChannel = new BroadcastChannel(WHEEL_SYNC_CHANNEL_NAME);
@@ -1945,6 +2034,48 @@
       saveStorageJson(ADMIN_ACCOUNTS_KEY, adminAccounts);
     }
 
+    function sanitizeBaseMemberOverrides(rawValue) {
+      if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) {
+        return {};
+      }
+
+      const entries = Object.entries(rawValue);
+      const normalized = {};
+      entries.forEach(([id, value]) => {
+        const cleanId = String(id || "").trim();
+        if (!cleanId || !value || typeof value !== "object" || Array.isArray(value)) {
+          return;
+        }
+        const name = String(value.name || "").trim();
+        const url = sanitizeMemberUrl(value.url || "");
+        const avatar = String(value.avatar || "").trim();
+        const deleted = value.deleted === true;
+
+        if (!deleted && !name && !url && !avatar) {
+          return;
+        }
+
+        normalized[cleanId] = {
+          name: name || "",
+          url: url || "",
+          avatar: avatar || "",
+          deleted
+        };
+      });
+
+      return normalized;
+    }
+
+    function loadBaseMemberOverrides() {
+      const raw = readStorageJson(CCI_BASE_MEMBER_OVERRIDES_KEY, {});
+      return sanitizeBaseMemberOverrides(raw);
+    }
+
+    function saveBaseMemberOverrides() {
+      baseMemberOverrides = sanitizeBaseMemberOverrides(baseMemberOverrides);
+      saveStorageJson(CCI_BASE_MEMBER_OVERRIDES_KEY, baseMemberOverrides);
+    }
+
     function loadCustomMembers() {
       const raw = readStorageJson(CCI_MEMBERS_KEY, []);
       if (!Array.isArray(raw)) {
@@ -1969,19 +2100,35 @@
       const nodes = Array.from(friendsGridEl.querySelectorAll(".friend-card:not(.custom-member)"));
       return nodes
         .map((card, index) => {
-          const name = String(card.querySelector(".friend-name")?.textContent || "").trim();
+          const id = `base-${index + 1}`;
+          const override = baseMemberOverrides && typeof baseMemberOverrides === "object"
+            ? baseMemberOverrides[id]
+            : null;
+          if (override && override.deleted === true) {
+            return null;
+          }
+
+          const baseName = String(card.querySelector(".friend-name")?.textContent || "").trim();
           const href = String(card.getAttribute("href") || "").trim();
-          const url = sanitizeMemberUrl(href);
-          const avatar = String(card.querySelector(".friend-avatar")?.getAttribute("src") || "").trim() || CHANNEL_AVATAR_FALLBACK;
+          const baseUrl = sanitizeMemberUrl(href);
+          const baseAvatar = String(card.querySelector(".friend-avatar")?.getAttribute("src") || "").trim() || CHANNEL_AVATAR_FALLBACK;
+
+          const overrideName = override && typeof override.name === "string" ? String(override.name || "").trim() : "";
+          const overrideUrl = override && typeof override.url === "string" ? sanitizeMemberUrl(override.url) : "";
+          const overrideAvatar = override && typeof override.avatar === "string" ? String(override.avatar || "").trim() : "";
+
+          const name = overrideName || baseName || `Członek ${index + 1}`;
+          const url = overrideUrl || baseUrl;
+          const avatar = overrideAvatar || baseAvatar || CHANNEL_AVATAR_FALLBACK;
 
           return {
-            id: `base-${index + 1}`,
-            name: name || `Członek ${index + 1}`,
+            id,
+            name,
             url,
             avatar
           };
         })
-        .filter((item) => item.name && item.url);
+        .filter((item) => item && item.name && item.url);
     }
 
     function saveCustomMembers() {
@@ -2096,7 +2243,7 @@
         return;
       }
 
-      const member = customMembers.find((item) => item.id === cleanId);
+      const member = getAllMembers().find((item) => item.id === cleanId);
       if (!member) {
         setPanelStatus(adminMemberStatusEl, "Nie znaleziono członka do edycji.", "error");
         return;
@@ -2117,7 +2264,8 @@
       }
 
       setMemberFormEditingState(cleanId);
-      setPanelStatus(adminMemberStatusEl, `Edytujesz członka CCI: ${member.name}.`, "info");
+      const memberTypeText = member.builtIn ? " (wbudowany)" : "";
+      setPanelStatus(adminMemberStatusEl, `Edytujesz członka CCI${memberTypeText}: ${member.name}.`, "info");
       if (nameInput) {
         nameInput.focus();
       }
@@ -2581,13 +2729,14 @@
       allMembers.forEach((member) => {
         const row = document.createElement("tr");
         row.dataset.memberId = member.id;
-        row.draggable = true;
+        row.draggable = false;
         row.innerHTML = `
           <td>
             <button
               class="admin-row-btn"
               type="button"
               data-member-drag-handle="1"
+              draggable="true"
               title="Przeciągnij, aby ustawić kolejność"
               aria-label="Przeciągnij, aby ustawić kolejność"
               style="padding: 2px 8px; margin-right: 8px; cursor: grab;"
@@ -2595,16 +2744,10 @@
           </td>
           <td><a href="${escapeHtml(member.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(member.url)}</a></td>
           <td>
-            ${
-              member.builtIn
-                ? "-"
-                : `
-                  <span style="display: inline-flex; flex-wrap: wrap; gap: 8px;">
-                    <button class="admin-row-btn" type="button" data-member-edit="${escapeHtml(member.id)}">Edytuj</button>
-                    <button class="admin-row-btn admin-row-btn-danger" type="button" data-member-remove="${escapeHtml(member.id)}">Usuń</button>
-                  </span>
-                `
-            }
+            <span style="display: inline-flex; flex-wrap: wrap; gap: 8px;">
+              <button class="admin-row-btn" type="button" data-member-edit="${escapeHtml(member.id)}">Edytuj</button>
+              <button class="admin-row-btn admin-row-btn-danger" type="button" data-member-remove="${escapeHtml(member.id)}">Usuń</button>
+            </span>
           </td>
         `;
         adminMembersTableBodyEl.appendChild(row);
@@ -5455,6 +5598,7 @@
     }
     clearAdminSessionOnReload();
     adminAccounts = loadAdminAccounts();
+    baseMemberOverrides = loadBaseMemberOverrides();
     baseMembers = loadBaseMembersFromGrid();
     customMembers = loadCustomMembers();
     membersOrder = loadMembersOrder();
@@ -5512,20 +5656,54 @@
         }
 
         if (editingMemberId) {
-          const editIndex = customMembers.findIndex((member) => member.id === editingMemberId);
-          if (editIndex === -1) {
+          const existingMember = getAllMembers().find((member) => member.id === editingMemberId) || null;
+          if (!existingMember) {
             stopMemberEdit({ resetForm: true });
             setPanelStatus(adminMemberStatusEl, "Nie znaleziono członka do edycji.", "error");
             return;
           }
 
-          const updatedMember = {
-            ...customMembers[editIndex],
-            name,
-            url,
-            avatar: avatar || CHANNEL_AVATAR_FALLBACK
-          };
-          customMembers[editIndex] = updatedMember;
+          const nextAvatar = avatar || CHANNEL_AVATAR_FALLBACK;
+          const editIndex = customMembers.findIndex((member) => member.id === editingMemberId);
+          let updatedMember = null;
+
+          if (editIndex >= 0) {
+            updatedMember = {
+              ...customMembers[editIndex],
+              name,
+              url,
+              avatar: nextAvatar
+            };
+            customMembers[editIndex] = updatedMember;
+          } else {
+            baseMemberOverrides[editingMemberId] = {
+              ...(baseMemberOverrides[editingMemberId] || {}),
+              name,
+              url,
+              avatar: nextAvatar,
+              deleted: false
+            };
+            saveBaseMemberOverrides();
+            baseMembers = baseMembers.map((member) => {
+              if (member.id !== editingMemberId) {
+                return member;
+              }
+              return {
+                ...member,
+                name,
+                url,
+                avatar: nextAvatar
+              };
+            });
+            updatedMember = getAllMembers().find((member) => member.id === editingMemberId) || {
+              id: editingMemberId,
+              name,
+              url,
+              avatar: nextAvatar,
+              builtIn: true
+            };
+          }
+
           refreshMembersOrder(true);
           renderCustomMembersCards();
           renderAdminMembersTable();
@@ -5535,7 +5713,8 @@
             id: updatedMember.id,
             name: updatedMember.name,
             url: updatedMember.url,
-            avatar: updatedMember.avatar
+            avatar: updatedMember.avatar,
+            builtIn: Boolean(updatedMember.builtIn)
           });
           return;
         }
@@ -5565,25 +5744,40 @@
 
     if (adminMembersTableBodyEl) {
       adminMembersTableBodyEl.addEventListener("click", (event) => {
-        const editButton = event.target.closest("[data-member-edit]");
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target) {
+          return;
+        }
+
+        const editButton = target.closest("[data-member-edit]");
         if (editButton) {
           const memberId = String(editButton.dataset.memberEdit || "");
           startMemberEdit(memberId);
           return;
         }
 
-        const removeButton = event.target.closest("[data-member-remove]");
+        const removeButton = target.closest("[data-member-remove]");
         if (!removeButton) {
           return;
         }
 
         const memberId = String(removeButton.dataset.memberRemove || "");
-        const removedMember = customMembers.find((member) => member.id === memberId) || null;
+        const removedMember = getAllMembers().find((member) => member.id === memberId) || null;
         if (!removedMember) {
           return;
         }
 
-        customMembers = customMembers.filter((member) => member.id !== memberId);
+        if (removedMember.builtIn) {
+          baseMemberOverrides[memberId] = {
+            ...(baseMemberOverrides[memberId] || {}),
+            deleted: true
+          };
+          saveBaseMemberOverrides();
+          baseMembers = baseMembers.filter((member) => member.id !== memberId);
+        } else {
+          customMembers = customMembers.filter((member) => member.id !== memberId);
+        }
+
         if (editingMemberId === memberId) {
           stopMemberEdit({ resetForm: true });
         }
@@ -5595,12 +5789,14 @@
         sendAdminWebhookEvent("member_remove", removedMember.name, {
           id: removedMember.id,
           name: removedMember.name,
-          url: removedMember.url
+          url: removedMember.url,
+          builtIn: Boolean(removedMember.builtIn)
         });
       });
 
       adminMembersTableBodyEl.addEventListener("dragstart", (event) => {
-        const handle = event.target.closest("[data-member-drag-handle]");
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        const handle = target ? target.closest("[data-member-drag-handle]") : null;
         if (!handle) {
           event.preventDefault();
           return;
