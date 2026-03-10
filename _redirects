@@ -1,0 +1,38 @@
+/api/*        /api/:splat   200
+/js/*         /js/:splat    200
+/styles/*     /styles/:splat 200
+/sounds/*     /sounds/:splat 200
+
+/kary         /index.html   200
+/kary/        /index.html   200
+/kary/*       /index.html   200
+
+/timery       /index.html   200
+/timery/      /index.html   200
+/timery/*     /index.html   200
+
+/liczniki     /index.html   200
+/liczniki/    /index.html   200
+/liczniki/*   /index.html   200
+
+/klipy        /index.html   200
+/klipy/       /index.html   200
+/klipy/*      /index.html   200
+
+/soon         /index.html   200
+/soon/        /index.html   200
+/soon/*       /index.html   200
+
+/stats        /index.html   200
+/stats/       /index.html   200
+/stats/*      /index.html   200
+
+/logowanie    /index.html   200
+/logowanie/   /index.html   200
+/logowanie/*  /index.html   200
+
+/admin        /index.html   200
+/admin/       /index.html   200
+/admin/*      /index.html   200
+
+/*            /index.html   200

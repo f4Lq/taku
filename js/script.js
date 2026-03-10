@@ -1,0 +1,7249 @@
+﻿const CHANNEL_SLUG = "takuu";
+    const JINA_PREFIX = "https://r.jina.ai/";
+    const ALL_ORIGINS_RAW_PREFIX = "https://api.allorigins.win/raw?url=";
+    const CORS_PROXY_PREFIX = "https://corsproxy.io/?";
+    const LOCAL_KICK_CLIPS_ENDPOINT = "/api/kick/clips";
+    const CLIPS_MAX_ITEMS = 150; // liczba ładowania klipów w /klipy
+    const CHANNEL_AVATAR_FALLBACK = "https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp";
+    const KICK_ICON_URL = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp";
+    const clipsEl = document.getElementById("clips");
+    const statusEl = document.getElementById("status");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const streamShellEl = document.querySelector(".stream-shell");
+    const streamLayoutEl = document.querySelector(".stream-layout");
+    const routePlaceholderEl = document.getElementById("routePlaceholder");
+    const routeBadgeEl = document.getElementById("routeBadge");
+    const statsPanelEl = document.getElementById("statsPanel");
+    const statsRefreshBtnEl = document.getElementById("statsRefreshBtn");
+    const wheelStatsSummaryEl = document.getElementById("wheelStatsSummary");
+    const wheelStatsSegmentBodyEl = document.getElementById("wheelStatsSegmentBody");
+    const wheelStatsRecentListEl = document.getElementById("wheelStatsRecentList");
+    const karyPanelEl = document.getElementById("karyPanel");
+    const timeryPanelEl = document.getElementById("timeryPanel");
+    const timeryConfigBtnEl = document.getElementById("timeryConfigBtn");
+    const timeryConfigPanelEl = document.getElementById("timeryConfigPanel");
+    const timeryLayoutSelectEl = document.getElementById("timeryLayoutSelect");
+    const timeryBgColorInputEl = document.getElementById("timeryBgColorInput");
+    const timeryShowTitleEl = document.getElementById("timeryShowTitle");
+    const timeryShowProgressEl = document.getElementById("timeryShowProgress");
+    const timeryShowStatusEl = document.getElementById("timeryShowStatus");
+    const licznikiPanelEl = document.getElementById("licznikiPanel");
+    const licznikiConfigBtnEl = document.getElementById("licznikiConfigBtn");
+    const licznikiConfigPanelEl = document.getElementById("licznikiConfigPanel");
+    const licznikiLayoutSelectEl = document.getElementById("licznikiLayoutSelect");
+    const licznikiBgColorInputEl = document.getElementById("licznikiBgColorInput");
+    const licznikiShowTitleEl = document.getElementById("licznikiShowTitle");
+    const licznikiShowStatusEl = document.getElementById("licznikiShowStatus");
+    const licznikiShowValueEl = document.getElementById("licznikiShowValue");
+    const adminPanelEl = document.getElementById("adminPanel");
+    const adminDashboardEl = document.getElementById("adminDashboard");
+    const adminLoginFormEl = document.getElementById("adminLoginForm");
+    const adminLoginStatusEl = document.getElementById("adminLoginStatus");
+    const adminDiscordStatusEl = document.getElementById("adminDiscordStatus");
+    const adminLoginPasswordEl = document.getElementById("adminLoginPassword");
+    const adminPasswordToggleEl = document.getElementById("adminPasswordToggle");
+    const adminPasswordToggleIconEl = document.getElementById("adminPasswordToggleIcon");
+    const adminRememberMeEl = document.getElementById("adminRememberMe");
+    const adminShowPasswordEl = document.getElementById("adminShowPassword");
+    const adminDiscordLoginBtnEl = document.getElementById("adminDiscordLoginBtn");
+    const adminLogoutBtnEl = document.getElementById("adminLogoutBtn");
+    const adminTabsWrapEl = document.querySelector(".admin-tabs");
+    const adminMembersTabEl = document.getElementById("adminMembersTab");
+    const adminKaryTabEl = document.getElementById("adminKaryTab");
+    const adminStreamObsTabEl = document.getElementById("adminStreamObsTab");
+    const adminAccountsTabEl = document.getElementById("adminAccountsTab");
+    const adminMemberFormEl = document.getElementById("adminMemberForm");
+    const adminMemberSubmitBtnEl = adminMemberFormEl ? adminMemberFormEl.querySelector('button[type="submit"]') : null;
+    const adminMemberStatusEl = document.getElementById("adminMemberStatus");
+    const adminMembersTableBodyEl = document.getElementById("adminMembersTableBody");
+    const adminTimerFormEl = document.getElementById("adminTimerForm");
+    const adminCounterFormEl = document.getElementById("adminCounterForm");
+    const adminTimerSelectEl = document.getElementById("adminTimerSelect");
+    const adminCounterSelectEl = document.getElementById("adminCounterSelect");
+    const adminKaryStatusEl = document.getElementById("adminKaryStatus");
+    const adminCennikFormEl = document.getElementById("adminCennikForm");
+    const adminCennikCancelBtnEl = document.getElementById("adminCennikCancelBtn");
+    const adminCennikTableBodyEl = document.getElementById("adminCennikTableBody");
+    const adminCennikStatusEl = document.getElementById("adminCennikStatus");
+    const adminAccountFormEl = document.getElementById("adminAccountForm");
+    const adminAccountStatusEl = document.getElementById("adminAccountStatus");
+    const adminAccountsTableBodyEl = document.getElementById("adminAccountsTableBody");
+    const mainWrapEl = document.querySelector("main.wrap");
+    const friendsEl = document.getElementById("friends");
+    const friendsGridEl = document.querySelector(".friends-grid");
+    const streamIntroActiveCountEl = document.getElementById("streamIntroActiveCount");
+    const streamIntroActiveTextEl = document.getElementById("streamIntroActiveText");
+    const streamIntroLiveEl = document.querySelector(".stream-intro-live");
+    const streamIntroTitleEl = document.querySelector(".stream-intro-title");
+    const streamIntroTitleAccentEl = streamIntroTitleEl ? streamIntroTitleEl.querySelector(".stream-intro-title-accent") : null;
+    const streamIntroSubtitleEl = document.querySelector(".stream-intro-subtitle");
+    const streamActiveKaryEl = document.getElementById("streamActiveKary");
+    const streamActiveKaryListEl = document.getElementById("streamActiveKaryList");
+    const karyCurrencySwitchEl = document.querySelector(".kary-currency-switch");
+    const karyPriceListChillEl = document.getElementById("karyPriceListChill");
+    const karyPriceListHardEl = document.getElementById("karyPriceListHard");
+    const karyPriceEmptyChillEl = document.getElementById("karyPriceEmptyChill");
+    const karyPriceEmptyHardEl = document.getElementById("karyPriceEmptyHard");
+    const karyJumpButtonEls = document.querySelectorAll("[data-kary-jump]");
+    const karyOpenWindowButtonEls = document.querySelectorAll("[data-kary-open-window]");
+    const karyTimerCardEls = document.querySelectorAll("[data-kary-timer]");
+    const karyCounterCardEls = document.querySelectorAll("[data-kary-counter]");
+    const karyNavEl = document.querySelector(".stream-nav-kary");
+    const homeNavEl = document.querySelector(".stream-nav-item-home");
+    const clipsNavEl = document.querySelector(".stream-nav-item-clips");
+    const soonNavEl = document.querySelector(".stream-nav-item-soon");
+    const statsNavEl = document.querySelector(".stream-nav-item-stats");
+    const adminNavEl = document.querySelector(".stream-log");
+    const ctaKaryLinkEl = document.querySelector(".stream-cta-btn-kary");
+    const ctaClipsLinkEl = document.querySelector(".stream-cta-btn-clips");
+    const downloadInProgress = new Set();
+    const ROUTE_BODY_CLASSES = ["route-home", "route-kary", "route-timery", "route-liczniki", "route-clips", "route-soon", "route-stats", "route-login", "route-admin"];
+    let menuOutsideCloserBound = false;
+    let clipsLoadedOnce = false;
+    let introTypingPlayed = false;
+    let introTypingTickId = null;
+    let introTypingStartDelayId = null;
+    let lastAppliedRouteName = "";
+    const FRIENDS_LIVE_POLL_MS = 5000;
+    const WHEEL_STATS_LIVE_REFRESH_MS = 1000;
+    let friendsLivePollId = null;
+    let friendsLivePollBusy = false;
+    let friendsLiveRequestSeq = 0;
+    let wheelStatsLiveRefreshId = null;
+    let wheelSyncChannel = null;
+    let wheelSyncPollId = null;
+    let wheelSyncSocket = null;
+    let wheelSyncSocketRetryId = null;
+    let wheelSyncApiDisabled = false;
+    let wheelStatsApiDisabled = false;
+    let wheelSyncLastEventId = 0;
+    let wheelStatsHistoryCache = [];
+    const processedWheelSyncEventIds = new Set();
+    const processedWheelSyncEventOrder = [];
+    const friendsLiveStateBySlug = new Map();
+    let timeryPopupRef = null;
+    let licznikiPopupRef = null;
+
+    const IS_FILE_PROTOCOL = window.location.protocol === "file:";
+    const HOME_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html" : "/";
+    const KARY_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=kary" : "/kary";
+    const TIMERY_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=timery" : "/timery";
+    const LICZNIKI_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=liczniki" : "/liczniki";
+    const CLIPS_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=klipy" : "/klipy";
+    const SOON_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=soon" : "/soon";
+    const STATS_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=stats" : "/stats";
+    const LOGIN_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=logowanie" : "/logowanie";
+    const ADMIN_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=admin" : "/admin";
+    function isObsOverlayFlagEnabled(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+    }
+    function detectObsOverlayMode() {
+      try {
+        const params = new URLSearchParams(window.location.search || "");
+        const raw = String(params.get("obs") || params.get("overlay") || "").trim().toLowerCase();
+        if (isObsOverlayFlagEnabled(raw)) {
+          return true;
+        }
+      } catch (_error) {
+        // Ignore URLSearchParams failures.
+      }
+
+      try {
+        const decodedHref = decodeURIComponent(String(window.location.href || ""));
+        const match = decodedHref.match(/(?:[?&#]|%3f|%26)(obs|overlay)=([^&#]+)/i);
+        if (match && isObsOverlayFlagEnabled(match[2])) {
+          return true;
+        }
+      } catch (_error) {
+        // Ignore URI decode failures.
+      }
+
+      try {
+        const hashRaw = String(window.location.hash || "").replace(/^#/, "");
+        if (hashRaw) {
+          const hashParams = new URLSearchParams(hashRaw.startsWith("?") ? hashRaw.slice(1) : hashRaw);
+          const hashValue = String(hashParams.get("obs") || hashParams.get("overlay") || "");
+          if (isObsOverlayFlagEnabled(hashValue)) {
+            return true;
+          }
+        }
+      } catch (_error) {
+        // Ignore hash parse failures.
+      }
+
+      const path = String(window.location.pathname || "").toLowerCase();
+      const isAdminPath = /(^|\/)admin(\/|$)/i.test(path);
+      const ua = String(window.navigator?.userAgent || "").toLowerCase();
+      const isObsUserAgent = ua.includes("obs") || ua.includes("obsbrowser") || ua.includes("obs-studio");
+      return isAdminPath && isObsUserAgent;
+    }
+    const OBS_OVERLAY_MODE = (() => {
+      return detectObsOverlayMode();
+    })();
+    try {
+      window.__takuuObsOverlayMode = OBS_OVERLAY_MODE;
+    } catch (_error) {
+      // Ignore global assignment failures.
+    }
+    try {
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "manual";
+      }
+    } catch (_error) {
+      // Ignore history API failures.
+    }
+
+    function decodeObfuscatedSecret(encodedValue) {
+      const key = "takuu_2026";
+      try {
+        const encoded = String(encodedValue || "");
+        const decoded = window.atob(encoded);
+        let output = "";
+        for (let i = 0; i < decoded.length; i += 1) {
+          const code = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+          output += String.fromCharCode(code);
+        }
+        return output;
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    const ADMIN_SESSION_KEY = "takuu_admin_auth";
+    const ADMIN_ACCOUNTS_KEY = "takuu_admin_accounts";
+    const CCI_MEMBERS_KEY = "takuu_custom_members";
+    const CCI_MEMBERS_ORDER_KEY = "takuu_members_order";
+    const KARY_STATE_KEY = "takuu_kary_live_state";
+    const KARY_CENNIK_KEY = "takuu_kary_cennik_items";
+    const KARY_CENNIK_MIGRATION_KEY = "takuu_kary_cennik_kicksy_migration_v1";
+    const TIMERY_CONFIG_KEY = "takuu_timery_view_config";
+    const LICZNIKI_CONFIG_KEY = "takuu_liczniki_view_config";
+    const WHEEL_CONFIG_STORAGE_KEY = "takuu_wheel_config";
+    const WHEEL_HISTORY_KEY = "takuu_wheel_history";
+    const WHEEL_SYNC_STORAGE_KEY = "takuu_wheel_sync_event";
+    const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
+    const WHEEL_SYNC_API_ENDPOINT = "/api/wheel/sync";
+    const WHEEL_STATS_API_ENDPOINT = "/api/wheel/stats";
+    const WHEEL_WS_URL = "wss://taku-live.pl/ws";
+    const WHEEL_SYNC_POLL_MS = 900;
+    const WHEEL_SYNC_SOCKET_RETRY_MS = 2500;
+    const WHEEL_SYNC_MAX_PROCESSED_EVENTS = 600;
+    const LAST_ROUTE_PATH_KEY = "takuu_last_route_path";
+    const LAST_RELOAD_SOURCE_KEY = "takuu_last_reload_source_path";
+    const ADMIN_REMEMBER_ME_KEY = "takuu_admin_remember_me";
+    const ADMIN_REMEMBER_ME_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+    const ROOT_ADMIN_ID = "root-admin";
+    const ROOT_ADMIN_LOGIN = decodeObfuscatedSecret("ElUnBA=="); // login właściciela
+    const ROOT_ADMIN_PASSWORD = decodeObfuscatedSecret("OQQHFBs2U3tdXQ=="); // hasło właściciela
+    const ROOT_ADMIN_DISCORD_ID = decodeObfuscatedSecret("QFZcTUVvBwQLA0RUWEVHagAJ"); // ID discord właściciela
+    let isAdminAuthenticated = false;
+    let currentAdminLogin = "";
+    let activeDiscordSession = null;
+    let activeAdminTab = "members";
+    let adminAccounts = [];
+    let baseMembers = [];
+    let customMembers = [];
+    let membersOrder = [];
+    let editingMemberId = "";
+    let draggingMemberId = "";
+    let draggingMemberRow = null;
+    let karyTimerTickId = null;
+    let karyExternalTimerBridgeBound = false;
+    let activeKaryCurrency = "pln";
+    let karyLiveState = { timers: {}, timerTotals: {}, counters: {}, lastTickAt: 0 };
+    let karyCennikItems = [];
+    let timeryConfigState = {
+      panelOpen: false,
+      layout: "list",
+      bgColor: "#101420",
+      showTitle: true,
+      showProgress: true,
+      showStatus: true
+    };
+    let licznikiConfigState = {
+      panelOpen: false,
+      layout: "grid",
+      bgColor: "#101420",
+      showTitle: true,
+      showStatus: true,
+      showValue: true
+    };
+    const INTRO_DEFAULT_TITLE = "Witaj u takuu";
+    const INTRO_DEFAULT_ACCENT = "takuu";
+    const INTRO_DEFAULT_SUBTITLE = "Wpłać donate lub zasubskrybuj, aby aktywować karę dla Taku na streamie!";
+    const normalizedIntroTitleTextRaw = streamIntroTitleEl ? String(streamIntroTitleEl.textContent || "").replace(/\s+/g, " ").trim() : "";
+    const normalizedIntroTitleText = normalizedIntroTitleTextRaw || INTRO_DEFAULT_TITLE;
+    const normalizedIntroAccentTextRaw = streamIntroTitleAccentEl ? String(streamIntroTitleAccentEl.textContent || "").replace(/\s+/g, " ").trim() : "";
+    const normalizedIntroAccentText = normalizedIntroAccentTextRaw || INTRO_DEFAULT_ACCENT;
+    let introAccentStartIndex =
+      normalizedIntroTitleText && normalizedIntroAccentText
+        ? normalizedIntroTitleText.toLowerCase().indexOf(normalizedIntroAccentText.toLowerCase())
+        : -1;
+    if (introAccentStartIndex < 0) {
+      introAccentStartIndex = normalizedIntroTitleText.toLowerCase().indexOf(INTRO_DEFAULT_ACCENT.toLowerCase());
+    }
+    const introTitleBeforeText =
+      introAccentStartIndex >= 0 ? normalizedIntroTitleText.slice(0, introAccentStartIndex) : normalizedIntroTitleText;
+    const introTitleAccentText =
+      introAccentStartIndex >= 0
+        ? normalizedIntroTitleText.slice(introAccentStartIndex, introAccentStartIndex + normalizedIntroAccentText.length)
+        : "";
+    const introTitleAfterText =
+      introAccentStartIndex >= 0
+        ? normalizedIntroTitleText.slice(introAccentStartIndex + introTitleAccentText.length)
+        : "";
+    const introSubtitleRaw = streamIntroSubtitleEl
+      ? String(streamIntroSubtitleEl.textContent || "").replace(/\s+/g, " ").trim()
+      : "";
+    const introSubtitleFullText = introSubtitleRaw || INTRO_DEFAULT_SUBTITLE;
+    const visibleAdminPasswords = new Set();
+    const karyTimerDefinitions = Array.from(
+      Array.from(karyTimerCardEls).reduce((map, card) => {
+        const key = String(card.dataset.karyTimer || "").trim();
+        const label = String(card.querySelector("h3")?.textContent || "").trim();
+        if (key && !map.has(key)) {
+          map.set(key, { key, label: label || key });
+        }
+        return map;
+      }, new Map()).values()
+    );
+    const karyCounterDefinitions = Array.from(
+      Array.from(karyCounterCardEls).reduce((map, card) => {
+        const key = String(card.dataset.karyCounter || "").trim();
+        const label = String(card.querySelector("h3")?.textContent || "").trim();
+        if (key && !map.has(key)) {
+          map.set(key, { key, label: label || key });
+        }
+        return map;
+      }, new Map()).values()
+    );
+
+    function normalizeTimerLookupToken(value) {
+      return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    function buildWheelTimerLookupMap() {
+      const tokenToTimerKey = new Map();
+      const register = (candidate, timerKey) => {
+        const cleanTimerKey = String(timerKey || "").trim();
+        if (!cleanTimerKey) {
+          return;
+        }
+        const token = normalizeTimerLookupToken(candidate);
+        if (!token || tokenToTimerKey.has(token)) {
+          return;
+        }
+        tokenToTimerKey.set(token, cleanTimerKey);
+      };
+
+      karyTimerDefinitions.forEach((timer) => {
+        const key = String(timer.key || "").trim();
+        const label = String(timer.label || "").trim();
+        if (!key) {
+          return;
+        }
+        register(key, key);
+        register(key.replace(/-/g, " "), key);
+        register(key.replace(/-/g, ""), key);
+        register(label, key);
+      });
+
+      return tokenToTimerKey;
+    }
+
+    const wheelTimerLookupByToken = buildWheelTimerLookupMap();
+
+    function resolveWheelTimerKey(timerCandidate, winnerName = "", minutesCandidate = 0) {
+      const directTimer = String(timerCandidate || "").trim();
+      const minutes = Math.max(0, Math.floor(Number(minutesCandidate) || 0));
+      const winnerToken = normalizeTimerLookupToken(winnerName);
+
+      if (directTimer) {
+        const directToken = normalizeTimerLookupToken(directTimer);
+        if (directToken && wheelTimerLookupByToken.has(directToken)) {
+          return String(wheelTimerLookupByToken.get(directToken) || "").trim();
+        }
+        if (minutes > 0 && winnerToken && wheelTimerLookupByToken.has(winnerToken)) {
+          return String(wheelTimerLookupByToken.get(winnerToken) || "").trim();
+        }
+        return directTimer;
+      }
+
+      if (minutes <= 0) {
+        return "";
+      }
+
+      if (winnerToken && wheelTimerLookupByToken.has(winnerToken)) {
+        return String(wheelTimerLookupByToken.get(winnerToken) || "").trim();
+      }
+
+      return "";
+    }
+
+    function normalizePath(path) {
+      return String(path || "")
+        .replace(/\\/g, "/")
+        .replace(/\/+$/, "")
+        .toLowerCase();
+    }
+
+    function getRouteFromHash(hash = window.location.hash) {
+      const clean = String(hash || "").trim().replace(/^#\/?/, "").toLowerCase();
+      if (!clean) {
+        return "";
+      }
+      if (clean === "home" || clean === "index" || clean === "index.html") {
+        return "home";
+      }
+      if (clean === "kary" || clean === "punishments") {
+        return "kary";
+      }
+      if (clean === "timery" || clean === "timers") {
+        return "timery";
+      }
+      if (clean === "liczniki" || clean === "counters") {
+        return "liczniki";
+      }
+      if (clean === "klipy" || clean === "clips") {
+        return "clips";
+      }
+      if (clean === "soon" || clean === "wkrotce") {
+        return "soon";
+      }
+      if (clean === "stats" || clean === "statystyki") {
+        return "stats";
+      }
+      if (clean === "logowanie" || clean === "login") {
+        return "login";
+      }
+      if (clean === "admin" || clean === "panel") {
+        return "admin";
+      }
+      return "";
+    }
+
+    function getRouteFromSearch(search = window.location.search) {
+      const params = new URLSearchParams(String(search || ""));
+      const view = String(params.get("view") || "").trim().toLowerCase();
+      if (!view) {
+        return "";
+      }
+      if (view === "home" || view === "index" || view === "index.html") {
+        return "home";
+      }
+      if (view === "kary" || view === "punishments") {
+        return "kary";
+      }
+      if (view === "timery" || view === "timers") {
+        return "timery";
+      }
+      if (view === "liczniki" || view === "counters") {
+        return "liczniki";
+      }
+      if (view === "klipy" || view === "clips") {
+        return "clips";
+      }
+      if (view === "soon" || view === "wkrotce") {
+        return "soon";
+      }
+      if (view === "stats" || view === "statystyki") {
+        return "stats";
+      }
+      if (view === "logowanie" || view === "login") {
+        return "login";
+      }
+      if (view === "admin" || view === "panel") {
+        return "admin";
+      }
+      return "";
+    }
+
+    function normalizePathAndSearch(value) {
+      const raw = String(value || "");
+      const hashCut = raw.split("#")[0];
+      const queryIndex = hashCut.indexOf("?");
+      const onlyPath = queryIndex === -1 ? hashCut : hashCut.slice(0, queryIndex);
+      const onlySearch = queryIndex === -1 ? "" : hashCut.slice(queryIndex).toLowerCase();
+      return `${normalizePath(onlyPath)}${onlySearch}`;
+    }
+
+    function persistLastRoutePath(path = window.location.pathname) {
+      if (IS_FILE_PROTOCOL) {
+        return;
+      }
+      const normalized = normalizePath(path) || "/";
+      try {
+        window.sessionStorage.setItem(LAST_ROUTE_PATH_KEY, normalized);
+      } catch (_error) {
+        // Ignore storage failures.
+      }
+    }
+
+    function getReloadType() {
+      try {
+        const entries = window.performance?.getEntriesByType?.("navigation");
+        if (Array.isArray(entries) && entries.length && entries[0] && entries[0].type) {
+          return String(entries[0].type);
+        }
+      } catch (_error) {
+        // Ignore performance API failures.
+      }
+      return "";
+    }
+
+    function saveReloadSourcePath(path = window.location.pathname) {
+      if (IS_FILE_PROTOCOL) {
+        return;
+      }
+
+      const normalized = normalizePath(path) || "/";
+
+      try {
+        window.sessionStorage.setItem(
+          LAST_RELOAD_SOURCE_KEY,
+          JSON.stringify({
+            path: normalized,
+            at: Date.now()
+          })
+        );
+      } catch (_error) {
+        // Ignore storage failures.
+      }
+    }
+
+    function getRestorableRoutePath() {
+      if (IS_FILE_PROTOCOL) {
+        return "";
+      }
+
+      if (getReloadType() !== "reload") {
+        return "";
+      }
+
+      const explicitRoute = getRouteFromSearch(window.location.search) || getRouteFromHash(window.location.hash);
+      if (explicitRoute) {
+        return "";
+      }
+
+      const currentPath = normalizePath(window.location.pathname);
+      const homePath = normalizePath(HOME_ROUTE_PATH);
+      const homeDirPath = normalizePath(HOME_ROUTE_PATH.replace(/\/index\.html$/i, ""));
+      const isCurrentHomePath =
+        currentPath === homePath ||
+        currentPath === homeDirPath ||
+        currentPath === "/" ||
+        currentPath.endsWith("/index.html") ||
+        currentPath.endsWith("/index.htm");
+
+      if (!isCurrentHomePath) {
+        return "";
+      }
+
+      try {
+        const rawReloadSource = String(window.sessionStorage.getItem(LAST_RELOAD_SOURCE_KEY) || "");
+        let sourcePath = "";
+        let sourceAt = 0;
+        if (rawReloadSource) {
+          const parsed = JSON.parse(rawReloadSource);
+          sourcePath = normalizePath(parsed?.path || "") || "/";
+          sourceAt = Math.max(0, Number(parsed?.at || 0));
+        }
+
+        window.sessionStorage.removeItem(LAST_RELOAD_SOURCE_KEY);
+
+        const isFreshReloadSource = sourceAt > 0 && Date.now() - sourceAt <= 2 * 60 * 1000;
+        if (!isFreshReloadSource || !sourcePath) {
+          return "";
+        }
+        if (
+          sourcePath === currentPath ||
+          sourcePath === homePath ||
+          sourcePath === homeDirPath ||
+          sourcePath === "/" ||
+          sourcePath.endsWith("/index.html") ||
+          sourcePath.endsWith("/index.htm")
+        ) {
+          return "";
+        }
+
+        const storedRoute = getRouteFromPath(sourcePath);
+        if (!storedRoute || storedRoute === "home") {
+          return "";
+        }
+
+        return getCanonicalRoutePath(storedRoute);
+      } catch (_error) {
+        // Ignore storage read failures.
+      }
+
+      return "";
+    }
+
+    function getRouteFromPath(path = window.location.pathname) {
+      const rawPath = String(path || "");
+      const pathOnly = rawPath.split("?")[0].split("#")[0];
+      const normalized = normalizePath(pathOnly);
+      const homePath = normalizePath(HOME_ROUTE_PATH);
+      const homeDirPath = normalizePath(HOME_ROUTE_PATH.replace(/\/index\.html$/i, ""));
+
+      const routeMatchers = [
+        { route: "kary", pattern: /(^|\/)(kary)(\/|$)/i },
+        { route: "timery", pattern: /(^|\/)(timery)(\/|$)/i },
+        { route: "liczniki", pattern: /(^|\/)(liczniki)(\/|$)/i },
+        { route: "clips", pattern: /(^|\/)(klipy|clips)(\/|$)/i },
+        { route: "stats", pattern: /(^|\/)(stats|statystyki)(\/|$)/i },
+        { route: "login", pattern: /(^|\/)(logowanie|login)(\/|$)/i },
+        { route: "admin", pattern: /(^|\/)(admin)(\/|$)/i },
+        { route: "soon", pattern: /(^|\/)(soon|wkrotce)(\/|$)/i }
+      ];
+
+      for (const entry of routeMatchers) {
+        if (entry.pattern.test(normalized)) {
+          return entry.route;
+        }
+      }
+
+      const embeddedSearch = rawPath.includes("?") ? `?${rawPath.split("?")[1].split("#")[0]}` : "";
+      const searchRoute = getRouteFromSearch(embeddedSearch || window.location.search);
+      if (searchRoute) {
+        return searchRoute;
+      }
+
+      const embeddedHash = rawPath.includes("#") ? `#${rawPath.split("#")[1]}` : "";
+      const hashRoute = getRouteFromHash(embeddedHash || window.location.hash);
+      if (hashRoute) {
+        return hashRoute;
+      }
+
+      if (
+        normalized === homePath ||
+        normalized === homeDirPath ||
+        normalized === "/" ||
+        normalized.endsWith("/index.html") ||
+        normalized.endsWith("/index.htm")
+      ) {
+        return "home";
+      }
+      return "soon";
+    }
+
+    function getPopupRouteHint() {
+      const popupName = String(window.name || "").toLowerCase();
+      if (popupName === "takuu_timery_popup") {
+        return "timery";
+      }
+      if (popupName === "takuu_liczniki_popup") {
+        return "liczniki";
+      }
+      return "";
+    }
+
+    function scrollToRouteTop() {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      } catch (_error) {
+        window.scrollTo(0, 0);
+      }
+      if (document.documentElement) {
+        document.documentElement.scrollTop = 0;
+      }
+      if (document.body) {
+        document.body.scrollTop = 0;
+      }
+    }
+
+    function renderFullIntroText() {
+      if (streamIntroTitleEl) {
+        streamIntroTitleEl.innerHTML =
+          `${escapeHtml(introTitleBeforeText)}` +
+          `<span class="stream-intro-title-accent">${escapeHtml(introTitleAccentText)}</span>` +
+          `${escapeHtml(introTitleAfterText)}`;
+      }
+      if (streamIntroSubtitleEl) {
+        streamIntroSubtitleEl.textContent = introSubtitleFullText;
+      }
+    }
+
+    function stopIntroTypingAnimation() {
+      if (introTypingStartDelayId) {
+        window.clearTimeout(introTypingStartDelayId);
+        introTypingStartDelayId = null;
+      }
+      if (introTypingTickId) {
+        window.clearInterval(introTypingTickId);
+        introTypingTickId = null;
+      }
+      if (streamIntroTitleEl) {
+        streamIntroTitleEl.classList.remove("is-typing");
+      }
+      if (streamIntroSubtitleEl) {
+        streamIntroSubtitleEl.classList.remove("is-typing");
+      }
+    }
+
+    function renderTypedIntroTitle(charCount) {
+      if (!streamIntroTitleEl) {
+        return;
+      }
+
+      const beforeLen = introTitleBeforeText.length;
+      const accentLen = introTitleAccentText.length;
+      const safeCount = Math.max(0, Math.floor(charCount));
+      let html = "";
+
+      if (safeCount <= beforeLen) {
+        html = escapeHtml(introTitleBeforeText.slice(0, safeCount));
+      } else if (safeCount <= beforeLen + accentLen) {
+        html =
+          `${escapeHtml(introTitleBeforeText)}` +
+          `<span class="stream-intro-title-accent">${escapeHtml(
+            introTitleAccentText.slice(0, safeCount - beforeLen)
+          )}</span>`;
+      } else {
+        html =
+          `${escapeHtml(introTitleBeforeText)}` +
+          `<span class="stream-intro-title-accent">${escapeHtml(introTitleAccentText)}</span>` +
+          `${escapeHtml(introTitleAfterText.slice(0, safeCount - beforeLen - accentLen))}`;
+      }
+
+      streamIntroTitleEl.innerHTML = html;
+    }
+
+    function startIntroTypingAnimation() {
+      if (!streamIntroTitleEl || !streamIntroSubtitleEl) {
+        return false;
+      }
+      if (!introTitleBeforeText && !introTitleAccentText && !introTitleAfterText) {
+        return false;
+      }
+
+      try {
+        window.__takuuIntroTypingTriggered = true;
+      } catch (_error) {
+        // Ignore global flag write failures.
+      }
+
+      stopIntroTypingAnimation();
+
+      const titleTotalLength = introTitleBeforeText.length + introTitleAccentText.length + introTitleAfterText.length;
+      const subtitleTotalLength = introSubtitleFullText.length;
+      let phase = "title";
+      let titleCount = 0;
+      let subtitleCount = 0;
+      let holdTicks = 0;
+
+      streamIntroTitleEl.style.opacity = "1";
+      streamIntroTitleEl.style.transform = "none";
+      streamIntroSubtitleEl.style.opacity = "1";
+      streamIntroSubtitleEl.style.transform = "none";
+      streamIntroTitleEl.classList.add("is-typing");
+      streamIntroSubtitleEl.classList.remove("is-typing");
+      streamIntroTitleEl.innerHTML = "";
+      streamIntroSubtitleEl.textContent = "";
+
+      introTypingTickId = window.setInterval(() => {
+        if (phase === "title") {
+          if (titleCount < titleTotalLength) {
+            titleCount += 1;
+            renderTypedIntroTitle(titleCount);
+            return;
+          }
+          phase = "hold";
+          streamIntroTitleEl.classList.remove("is-typing");
+          holdTicks = 0;
+          return;
+        }
+
+        if (phase === "hold") {
+          holdTicks += 1;
+          if (holdTicks < 5) {
+            return;
+          }
+          if (subtitleTotalLength <= 0) {
+            renderFullIntroText();
+            stopIntroTypingAnimation();
+            return;
+          }
+          phase = "subtitle";
+          streamIntroSubtitleEl.classList.add("is-typing");
+          return;
+        }
+
+        if (phase === "subtitle") {
+          if (subtitleCount < subtitleTotalLength) {
+            subtitleCount += 1;
+            streamIntroSubtitleEl.textContent = introSubtitleFullText.slice(0, subtitleCount);
+            return;
+          }
+
+          streamIntroTitleEl.innerHTML =
+            `${escapeHtml(introTitleBeforeText)}` +
+            `<span class="stream-intro-title-accent">${escapeHtml(introTitleAccentText)}</span>` +
+            `${escapeHtml(introTitleAfterText)}`;
+          streamIntroSubtitleEl.textContent = introSubtitleFullText;
+          stopIntroTypingAnimation();
+        }
+      }, 38);
+
+      return true;
+    }
+
+    function queueIntroTypingAnimation(delayMs = 0) {
+      stopIntroTypingAnimation();
+      const normalizedDelay = Math.max(0, Math.floor(delayMs));
+      if (normalizedDelay <= 0) {
+        return startIntroTypingAnimation();
+      }
+      introTypingStartDelayId = window.setTimeout(() => {
+        introTypingStartDelayId = null;
+        startIntroTypingAnimation();
+      }, normalizedDelay);
+      return true;
+    }
+
+    function setActiveNavState(routeName) {
+      if (karyNavEl) {
+        karyNavEl.classList.toggle("is-active", routeName === "kary" || routeName === "timery" || routeName === "liczniki");
+      }
+      if (homeNavEl) {
+        homeNavEl.classList.toggle("is-active", routeName === "home");
+      }
+      if (clipsNavEl) {
+        clipsNavEl.classList.toggle("is-active", routeName === "clips");
+      }
+      if (soonNavEl) {
+        soonNavEl.classList.toggle("is-active", routeName === "soon");
+      }
+      if (statsNavEl) {
+        statsNavEl.classList.toggle("is-active", routeName === "stats");
+      }
+      if (adminNavEl) {
+        adminNavEl.classList.toggle("is-active", routeName === "login" || routeName === "admin");
+      }
+    }
+
+    function updatePlaceholder(routeName) {
+      if (!routePlaceholderEl) {
+        return;
+      }
+
+      const shouldShow = routeName === "soon";
+      routePlaceholderEl.hidden = !shouldShow;
+
+      if (routeBadgeEl && shouldShow) {
+        routeBadgeEl.textContent = "WKRÓTCE...";
+      }
+    }
+
+    function safeWheelStatNumber(value, fallback = 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function formatWheelStatsPercent(value) {
+      const numeric = Math.max(0, safeWheelStatNumber(value, 0));
+      return `${numeric.toFixed(1).replace(".", ",")}%`;
+    }
+
+    function formatWheelStatsDateTime(timestamp) {
+      const value = safeWheelStatNumber(timestamp, 0);
+      if (value <= 0) {
+        return "-";
+      }
+      try {
+        return new Intl.DateTimeFormat("pl-PL", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        }).format(new Date(value));
+      } catch (_error) {
+        return "-";
+      }
+    }
+
+    function normalizeWheelStatName(value, fallback = "Bez nazwy") {
+      const clean = String(value || "").trim();
+      return clean || fallback;
+    }
+
+    function readWheelConfigStats() {
+      const parsed = readStorageJson(WHEEL_CONFIG_STORAGE_KEY, []);
+      let sourceItems = Array.isArray(parsed) ? parsed : [];
+
+      if (!sourceItems.length && window.TakuuWheel && typeof window.TakuuWheel.getItems === "function") {
+        try {
+          const liveItems = window.TakuuWheel.getItems();
+          if (Array.isArray(liveItems)) {
+            sourceItems = liveItems;
+          }
+        } catch (_error) {
+          // Ignore unavailable wheel API.
+        }
+      }
+
+      if (!Array.isArray(sourceItems) || !sourceItems.length) {
+        return [];
+      }
+      return sourceItems.map((item, index) => {
+        const source = item && typeof item === "object" ? item : {};
+        return {
+          name: normalizeWheelStatName(source.name, `Segment ${index + 1}`),
+          chance: Math.max(0, Math.floor(safeWheelStatNumber(source.chance, 0))),
+          minutes: Math.max(0, Math.floor(safeWheelStatNumber(source.minutes, 0)))
+        };
+      });
+    }
+
+    function normalizeWheelHistoryEntry(rawEntry) {
+      const source = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+      const idRaw = source.id != null ? source.id : source.eventId;
+      const id = idRaw == null ? "" : String(idRaw).trim();
+      const name = normalizeWheelStatName(source.name || source.winnerName, "");
+      const numericTime = safeWheelStatNumber(source.time ?? source.timestamp, Number.NaN);
+      const parsedTime = Number.isFinite(numericTime)
+        ? numericTime
+        : Date.parse(String(source.time ?? source.timestamp ?? ""));
+      if (!name || !Number.isFinite(parsedTime) || parsedTime <= 0) {
+        return null;
+      }
+      const normalized = {
+        name,
+        time: Math.max(1, Math.floor(parsedTime))
+      };
+      if (id) {
+        normalized.id = id;
+      }
+      return normalized;
+    }
+
+    function mergeWheelHistoryEntries(baseEntries, incomingEntries) {
+      const merged = [];
+      const seen = new Set();
+      const appendEntry = (rawEntry) => {
+        const normalized = normalizeWheelHistoryEntry(rawEntry);
+        if (!normalized) {
+          return;
+        }
+        const key = normalized.id
+          ? `id:${normalized.id}`
+          : `time:${normalized.time}|name:${normalized.name}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        merged.push(normalized);
+      };
+
+      if (Array.isArray(baseEntries)) {
+        baseEntries.forEach(appendEntry);
+      }
+      if (Array.isArray(incomingEntries)) {
+        incomingEntries.forEach(appendEntry);
+      }
+
+      merged.sort((a, b) => a.time - b.time);
+      return merged;
+    }
+
+    function applyWheelHistoryEntryToStatsCache(rawEntry) {
+      const normalized = normalizeWheelHistoryEntry(rawEntry);
+      if (!normalized) {
+        return false;
+      }
+      const merged = mergeWheelHistoryEntries(wheelStatsHistoryCache, [normalized]);
+      if (JSON.stringify(merged) === JSON.stringify(wheelStatsHistoryCache)) {
+        return false;
+      }
+      wheelStatsHistoryCache = merged;
+      return true;
+    }
+
+    function persistWheelHistoryEntryToApi(rawEntry) {
+      if (wheelStatsApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return;
+      }
+      const normalized = normalizeWheelHistoryEntry(rawEntry);
+      if (!normalized) {
+        return;
+      }
+
+      fetch(WHEEL_STATS_API_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "append",
+          entry: normalized
+        }),
+        keepalive: true
+      })
+        .then(async (response) => {
+          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+          if (response.ok) {
+            if (!contentType.includes("application/json")) {
+              let preview = "";
+              try {
+                preview = String(await response.text()).slice(0, 220);
+              } catch (_error) {
+                preview = "";
+              }
+              console.warn("[TakuuScript] POST /api/wheel/stats returned non-JSON response", {
+                status: response.status,
+                contentType,
+                preview
+              });
+              return;
+            }
+
+            let payload = null;
+            try {
+              payload = await response.json();
+            } catch (_error) {
+              payload = null;
+            }
+            if (!payload || payload.ok !== true) {
+              console.warn("[TakuuScript] POST /api/wheel/stats returned unexpected payload", payload);
+            }
+            return;
+          }
+
+          if (!response.ok && (response.status === 404 || response.status === 405 || response.status === 501)) {
+            wheelStatsApiDisabled = true;
+          }
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] POST /api/wheel/stats failed", {
+            status: response.status,
+            details
+          });
+        })
+        .catch((error) => {
+          console.warn("[TakuuScript] POST /api/wheel/stats request error", error);
+        });
+    }
+
+    async function fetchWheelStatsFromApiOnce() {
+      if (wheelStatsApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return false;
+      }
+
+      let response;
+      try {
+        response = await fetch(`${WHEEL_STATS_API_ENDPOINT}?limit=5000`, { cache: "no-store" });
+      } catch (_error) {
+        console.warn("[TakuuScript] GET /api/wheel/stats request error", _error);
+        return false;
+      }
+
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 405 || response.status === 501) {
+          wheelStatsApiDisabled = true;
+        }
+        let details = "";
+        try {
+          details = await response.text();
+        } catch (_error) {
+          details = "";
+        }
+        console.warn("[TakuuScript] GET /api/wheel/stats failed", {
+          status: response.status,
+          details
+        });
+        return false;
+      }
+
+      const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+      if (!contentType.includes("application/json")) {
+        let preview = "";
+        try {
+          preview = String(await response.text()).slice(0, 220);
+        } catch (_error) {
+          preview = "";
+        }
+        console.warn("[TakuuScript] GET /api/wheel/stats returned non-JSON response", {
+          status: response.status,
+          contentType,
+          preview
+        });
+        return false;
+      }
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (_error) {
+        console.warn("[TakuuScript] GET /api/wheel/stats invalid JSON", _error);
+        return false;
+      }
+      if (!data || typeof data !== "object") {
+        return false;
+      }
+
+      const remoteHistoryRaw = Array.isArray(data?.history)
+        ? data.history
+        : (Array.isArray(data) ? data : []);
+      const normalized = mergeWheelHistoryEntries([], remoteHistoryRaw);
+      if (JSON.stringify(normalized) !== JSON.stringify(wheelStatsHistoryCache)) {
+        wheelStatsHistoryCache = normalized;
+        return true;
+      }
+      return false;
+    }
+
+    function readWheelHistoryStats() {
+      const localHistory = readStorageJson(WHEEL_HISTORY_KEY, []);
+      const localEntries = Array.isArray(localHistory) ? localHistory : [];
+      return mergeWheelHistoryEntries(wheelStatsHistoryCache, localEntries);
+    }
+
+    function renderWheelStats() {
+      if (!wheelStatsSummaryEl || !wheelStatsSegmentBodyEl || !wheelStatsRecentListEl) {
+        return;
+      }
+
+      const configItems = readWheelConfigStats();
+      const historyItems = readWheelHistoryStats();
+      const totalSpins = historyItems.length;
+      const now = Date.now();
+      const since24h = now - 24 * 60 * 60 * 1000;
+
+      const countsByName = historyItems.reduce((map, entry) => {
+        const key = normalizeWheelStatName(entry.name, "Bez nazwy");
+        map.set(key, (map.get(key) || 0) + 1);
+        return map;
+      }, new Map());
+
+      const configByName = configItems.reduce((map, item) => {
+        map.set(normalizeWheelStatName(item.name), item);
+        return map;
+      }, new Map());
+
+      const rowNames = new Set([
+        ...configItems.map((item) => normalizeWheelStatName(item.name)),
+        ...Array.from(countsByName.keys())
+      ]);
+
+      const longestStreakByName = new Map();
+      let currentStreakName = "";
+      let currentStreakCount = 0;
+      historyItems.forEach((entry) => {
+        const name = normalizeWheelStatName(entry.name, "Bez nazwy");
+        if (name === currentStreakName) {
+          currentStreakCount += 1;
+        } else {
+          currentStreakName = name;
+          currentStreakCount = 1;
+        }
+        const prevRecord = Math.max(0, Math.floor(safeWheelStatNumber(longestStreakByName.get(name), 0)));
+        if (currentStreakCount > prevRecord) {
+          longestStreakByName.set(name, currentStreakCount);
+        }
+      });
+
+      const statsRows = Array.from(rowNames).map((name) => {
+        const count = Math.max(0, Math.floor(safeWheelStatNumber(countsByName.get(name), 0)));
+        const item = configByName.get(name) || null;
+        const baseMinutes = item ? Math.max(0, Math.floor(safeWheelStatNumber(item.minutes, 0))) : null;
+        const longestStreakCount = Math.max(0, Math.floor(safeWheelStatNumber(longestStreakByName.get(name), 0)));
+        const totalPenaltyMinutesByRow = baseMinutes == null ? null : count * baseMinutes;
+        const longestStreakMinutes = baseMinutes == null ? null : longestStreakCount * baseMinutes;
+        return {
+          name,
+          count,
+          share: totalSpins > 0 ? (count / totalSpins) * 100 : 0,
+          totalPenaltyMinutes: totalPenaltyMinutesByRow,
+          longestStreakMinutes
+        };
+      });
+
+      statsRows.sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.name.localeCompare(b.name, "pl");
+      });
+
+      const topRow = statsRows.find((row) => row.count > 0) || null;
+      const spins24h = historyItems.filter((entry) => entry.time >= since24h).length;
+      const firstSpinAt = totalSpins ? historyItems[0].time : 0;
+      const lastSpin = totalSpins ? historyItems[historyItems.length - 1] : null;
+      const daysSinceStart = firstSpinAt > 0 ? Math.max(1, (now - firstSpinAt) / (24 * 60 * 60 * 1000)) : 1;
+      const spinsPerDay = totalSpins > 0 ? totalSpins / daysSinceStart : 0;
+      const totalPenaltyMinutes = historyItems.reduce((sum, entry) => {
+        const linked = configByName.get(normalizeWheelStatName(entry.name));
+        const minutes = linked ? Math.max(0, Math.floor(safeWheelStatNumber(linked.minutes, 0))) : 0;
+        return sum + minutes;
+      }, 0);
+
+      wheelStatsSummaryEl.innerHTML = [
+        {
+          label: "Łącznie kręceń",
+          value: totalSpins.toLocaleString("pl-PL")
+        },
+        {
+          label: "Top segment",
+          value: topRow ? topRow.name : "-"
+        },
+        {
+          label: "Losowania 24h",
+          value: spins24h.toLocaleString("pl-PL")
+        },
+        {
+          label: "Średnio / dzień",
+          value: totalSpins > 0 ? spinsPerDay.toFixed(2).replace(".", ",") : "0,00"
+        },
+        {
+          label: "Suma minut kary",
+          value: totalPenaltyMinutes.toLocaleString("pl-PL")
+        },
+        {
+          label: "Ostatnie losowanie",
+          value: lastSpin ? `${lastSpin.name} (${formatWheelStatsDateTime(lastSpin.time)})` : "-"
+        }
+      ]
+        .map(
+          (item) => `
+            <article class="wheel-stats-card">
+              <p class="wheel-stats-card-label">${escapeHtml(item.label)}</p>
+              <p class="wheel-stats-card-value">${escapeHtml(item.value)}</p>
+            </article>`
+        )
+        .join("");
+
+      if (!statsRows.length) {
+        wheelStatsSegmentBodyEl.innerHTML = `
+          <tr>
+            <td colspan="5" class="wheel-stats-empty">Brak segmentów do wyświetlenia.</td>
+          </tr>`;
+      } else {
+        wheelStatsSegmentBodyEl.innerHTML = statsRows
+          .map((row) => {
+            const totalPenaltyMinutesText = row.totalPenaltyMinutes == null ? "-" : `${row.totalPenaltyMinutes} min`;
+            const longestStreakText = row.longestStreakMinutes == null ? "-" : `${row.longestStreakMinutes} min`;
+            return `
+              <tr>
+                <td>${escapeHtml(row.name)}</td>
+                <td>${row.count.toLocaleString("pl-PL")}</td>
+                <td>${escapeHtml(formatWheelStatsPercent(row.share))}</td>
+                <td>${escapeHtml(totalPenaltyMinutesText)}</td>
+                <td>${escapeHtml(longestStreakText)}</td>
+              </tr>`;
+          })
+          .join("");
+      }
+
+      const recentItems = historyItems.slice(-15).reverse();
+      if (!recentItems.length) {
+        wheelStatsRecentListEl.innerHTML = `<li class="wheel-stats-empty">Brak historii losowań.</li>`;
+      } else {
+        wheelStatsRecentListEl.innerHTML = recentItems
+          .map((entry) => {
+            const iso = new Date(entry.time).toISOString();
+            const formatted = formatWheelStatsDateTime(entry.time);
+            const relative = formatRelativeTime(iso);
+            const meta = relative ? `${formatted} (${relative})` : formatted;
+            return `
+              <li class="wheel-stats-recent-item">
+                <span class="wheel-stats-recent-name">${escapeHtml(entry.name)}</span>
+                <time datetime="${escapeHtml(iso)}">${escapeHtml(meta)}</time>
+              </li>`;
+          })
+          .join("");
+      }
+    }
+
+    function stopWheelStatsLiveUpdates() {
+      if (!wheelStatsLiveRefreshId) {
+        return;
+      }
+      window.clearInterval(wheelStatsLiveRefreshId);
+      wheelStatsLiveRefreshId = null;
+    }
+
+    function startWheelStatsLiveUpdates() {
+      if (!statsPanelEl || !wheelStatsSummaryEl || !wheelStatsSegmentBodyEl || !wheelStatsRecentListEl) {
+        return;
+      }
+      void fetchWheelStatsFromApiOnce().finally(() => {
+        renderWheelStats();
+      });
+      if (wheelStatsLiveRefreshId) {
+        return;
+      }
+      wheelStatsLiveRefreshId = window.setInterval(() => {
+        if (document.hidden || lastAppliedRouteName !== "stats") {
+          return;
+        }
+        void fetchWheelStatsFromApiOnce().finally(() => {
+          renderWheelStats();
+        });
+      }, WHEEL_STATS_LIVE_REFRESH_MS);
+    }
+
+    function markWheelSyncEventProcessed(eventId) {
+      const key = String(eventId || "").trim();
+      if (!key) {
+        return false;
+      }
+      if (processedWheelSyncEventIds.has(key)) {
+        return false;
+      }
+      processedWheelSyncEventIds.add(key);
+      processedWheelSyncEventOrder.push(key);
+      if (processedWheelSyncEventOrder.length > WHEEL_SYNC_MAX_PROCESSED_EVENTS) {
+        const stale = processedWheelSyncEventOrder.shift();
+        if (stale) {
+          processedWheelSyncEventIds.delete(stale);
+        }
+      }
+      return true;
+    }
+
+    function normalizeWheelSyncWinnerPayload(rawPayload) {
+      const source = rawPayload && typeof rawPayload === "object" ? rawPayload : {};
+      const type = String(source.type || "winner").trim().toLowerCase();
+      if (type !== "winner") {
+        return null;
+      }
+
+      const winnerName = String(source.winnerName || source.name || "").trim();
+      if (!winnerName) {
+        return null;
+      }
+
+      const minutes = Math.max(0, Math.floor(Number(source.minutes) || 0));
+      const timerRaw = source.timerKey != null ? source.timerKey : source.timer;
+      const timerKey = resolveWheelTimerKey(timerRaw, winnerName, minutes);
+      const timestamp = Math.max(
+        1,
+        Math.floor(Number(source.timestamp || source.time || source.serverTimestamp || Date.now()) || Date.now())
+      );
+      let eventId = String(source.eventId || source.id || source.serverEventId || "").trim();
+      if (!eventId) {
+        const winnerToken = normalizeTimerLookupToken(winnerName) || "winner";
+        const timerToken = normalizeTimerLookupToken(timerKey || "none") || "none";
+        eventId = `sync-${timestamp}-${winnerToken}-${timerToken}`;
+      }
+      const sourceId = String(source.sourceId || "").trim();
+
+      return {
+        type: "winner",
+        eventId,
+        sourceId,
+        winnerName,
+        timerKey,
+        minutes,
+        timestamp
+      };
+    }
+
+    function isWheelSyncFromCurrentWheelSource(sourceId) {
+      const incomingSourceId = String(sourceId || "").trim();
+      const currentWheelSourceId = String(window.__takuuWheelSyncSourceId || "").trim();
+      if (!incomingSourceId || !currentWheelSourceId) {
+        return false;
+      }
+      return incomingSourceId === currentWheelSourceId;
+    }
+
+    function appendWheelHistorySyncEntry(payload) {
+      const normalized = normalizeWheelSyncWinnerPayload(payload);
+      if (!normalized) {
+        return false;
+      }
+
+      const incomingEntry = {
+        id: normalized.eventId,
+        source: "wheel-sync",
+        name: normalized.winnerName,
+        time: normalized.timestamp
+      };
+      const changed = applyWheelHistoryEntryToStatsCache(incomingEntry);
+      if (!changed) {
+        return false;
+      }
+
+      persistWheelHistoryEntryToApi(incomingEntry);
+
+      try {
+        window.dispatchEvent(
+          new CustomEvent("takuu:wheel-history-updated", {
+            detail: {
+              winner: normalized.winnerName,
+              entry: {
+                id: normalized.eventId,
+                name: normalized.winnerName,
+                time: normalized.timestamp
+              }
+            }
+          })
+        );
+      } catch (_error) {
+        // Ignore dispatch failures.
+      }
+
+      return true;
+    }
+
+    function applyWheelWinnerSync(rawPayload, source = "sync") {
+      const payload = normalizeWheelSyncWinnerPayload(rawPayload);
+      if (!payload) {
+        return false;
+      }
+      if (!markWheelSyncEventProcessed(payload.eventId)) {
+        return false;
+      }
+      if (isWheelSyncFromCurrentWheelSource(payload.sourceId)) {
+        return false;
+      }
+
+      if (payload.timerKey && payload.minutes > 0) {
+        addTimerTimeFromExternal(payload.timerKey, payload.minutes, "minutes", {
+          silentStatus: true,
+          emitWebhook: false,
+          source: `wheel-sync-${source}`
+        });
+      }
+
+      appendWheelHistorySyncEntry(payload);
+      renderWheelStats();
+      return true;
+    }
+
+    function consumeWheelSyncMessage(rawMessage, source = "bridge") {
+      const message = rawMessage && typeof rawMessage === "object" ? rawMessage : null;
+      if (!message) {
+        return false;
+      }
+
+      const candidate =
+        message.payload && typeof message.payload === "object"
+          ? {
+              ...message.payload,
+              serverEventId:
+                message.payload.serverEventId != null
+                  ? message.payload.serverEventId
+                  : (message.id != null ? message.id : ""),
+              serverTimestamp:
+                message.payload.serverTimestamp != null
+                  ? message.payload.serverTimestamp
+                  : (message.time != null ? message.time : "")
+            }
+          : message;
+
+      return applyWheelWinnerSync(candidate, source);
+    }
+
+    function stopWheelSyncApiPolling() {
+      if (wheelSyncPollId) {
+        window.clearInterval(wheelSyncPollId);
+        wheelSyncPollId = null;
+      }
+    }
+
+    async function pollWheelSyncApiOnce() {
+      if (wheelSyncApiDisabled || typeof fetch !== "function") {
+        return;
+      }
+
+      const query = wheelSyncLastEventId > 0 ? `?after=${wheelSyncLastEventId}` : "";
+      let response;
+      try {
+        response = await fetch(`${WHEEL_SYNC_API_ENDPOINT}${query}`, { cache: "no-store" });
+      } catch (_error) {
+        console.warn("[TakuuScript] GET /api/wheel/sync request error", _error);
+        return;
+      }
+
+      if (!response.ok) {
+        let details = "";
+        try {
+          details = await response.text();
+        } catch (_error) {
+          details = "";
+        }
+        console.warn("[TakuuScript] GET /api/wheel/sync failed", {
+          status: response.status,
+          details
+        });
+        if (response.status === 404 || response.status === 405 || response.status === 501) {
+          wheelSyncApiDisabled = true;
+          stopWheelSyncApiPolling();
+        }
+        return;
+      }
+
+      const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+      if (!contentType.includes("application/json")) {
+        let preview = "";
+        try {
+          preview = String(await response.text()).slice(0, 220);
+        } catch (_error) {
+          preview = "";
+        }
+        console.warn("[TakuuScript] GET /api/wheel/sync returned non-JSON response", {
+          status: response.status,
+          contentType,
+          preview
+        });
+        return;
+      }
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (_error) {
+        console.warn("[TakuuScript] GET /api/wheel/sync invalid JSON", _error);
+        return;
+      }
+
+      if (!data || typeof data !== "object") {
+        return;
+      }
+
+      const events = Array.isArray(data.events) ? data.events : [];
+      let maxProcessedEventId = wheelSyncLastEventId;
+      events.forEach((eventItem) => {
+        if (!eventItem || typeof eventItem !== "object") {
+          return;
+        }
+        const serverId = Math.max(0, Math.floor(Number(eventItem.id || 0)));
+        if (serverId > maxProcessedEventId) {
+          maxProcessedEventId = serverId;
+        }
+        consumeWheelSyncMessage(eventItem, "api");
+      });
+
+      const nextAfterFromResponse = Math.max(0, Math.floor(Number(data.nextAfter || 0)));
+      const lastIdFromResponse = Math.max(0, Math.floor(Number(data.lastId || 0)));
+
+      if (nextAfterFromResponse > maxProcessedEventId) {
+        maxProcessedEventId = nextAfterFromResponse;
+      }
+
+      if (!events.length && lastIdFromResponse > maxProcessedEventId) {
+        maxProcessedEventId = lastIdFromResponse;
+      }
+
+      if (maxProcessedEventId > wheelSyncLastEventId) {
+        wheelSyncLastEventId = maxProcessedEventId;
+      }
+    }
+
+    function clearWheelSyncSocketReconnect() {
+      if (wheelSyncSocketRetryId) {
+        window.clearTimeout(wheelSyncSocketRetryId);
+        wheelSyncSocketRetryId = null;
+      }
+    }
+
+    function scheduleWheelSyncSocketReconnect() {
+      if (wheelSyncSocketRetryId || IS_FILE_PROTOCOL || typeof WebSocket !== "function") {
+        return;
+      }
+      wheelSyncSocketRetryId = window.setTimeout(() => {
+        wheelSyncSocketRetryId = null;
+        connectWheelSyncSocket();
+      }, WHEEL_SYNC_SOCKET_RETRY_MS);
+    }
+
+    function consumeWheelSyncSocketMessage(rawMessage) {
+      const message = rawMessage && typeof rawMessage === "object" ? rawMessage : null;
+      if (!message) {
+        return false;
+      }
+      const messageType = String(message.type || "").trim().toLowerCase();
+      const isSyncEnvelope =
+        messageType === "wheel_sync_result" ||
+        messageType === "wheel_sync" ||
+        messageType === "wheel_result";
+
+      if (isSyncEnvelope && message.payload && typeof message.payload === "object") {
+        return consumeWheelSyncMessage(message.payload, "ws");
+      }
+      if (messageType === "winner") {
+        return consumeWheelSyncMessage(message, "ws");
+      }
+      return false;
+    }
+
+    function connectWheelSyncSocket() {
+      if (IS_FILE_PROTOCOL || typeof WebSocket !== "function") {
+        return;
+      }
+      if (wheelSyncSocket && (wheelSyncSocket.readyState === 0 || wheelSyncSocket.readyState === 1)) {
+        return;
+      }
+      clearWheelSyncSocketReconnect();
+
+      try {
+        wheelSyncSocket = new WebSocket(WHEEL_WS_URL);
+        wheelSyncSocket.onopen = () => {
+          clearWheelSyncSocketReconnect();
+        };
+        wheelSyncSocket.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            consumeWheelSyncSocketMessage(message);
+          } catch (_error) {
+            // Ignore malformed websocket messages.
+          }
+        };
+        wheelSyncSocket.onclose = () => {
+          wheelSyncSocket = null;
+          scheduleWheelSyncSocketReconnect();
+        };
+        wheelSyncSocket.onerror = () => {
+          // Ignore websocket errors. Reconnect is handled by onclose.
+        };
+      } catch (_error) {
+        wheelSyncSocket = null;
+        scheduleWheelSyncSocketReconnect();
+      }
+    }
+
+    function startWheelSyncBridge() {
+      if ("BroadcastChannel" in window) {
+        try {
+          wheelSyncChannel = new BroadcastChannel(WHEEL_SYNC_CHANNEL_NAME);
+          wheelSyncChannel.addEventListener("message", (event) => {
+            consumeWheelSyncMessage(event?.data, "broadcast");
+          });
+        } catch (_error) {
+          wheelSyncChannel = null;
+        }
+      }
+
+      pollWheelSyncApiOnce();
+      if (!wheelSyncApiDisabled && !wheelSyncPollId) {
+        wheelSyncPollId = window.setInterval(() => {
+          pollWheelSyncApiOnce();
+        }, WHEEL_SYNC_POLL_MS);
+      }
+      connectWheelSyncSocket();
+    }
+
+    function readStorageJson(key, fallback) {
+      try {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) {
+          return fallback;
+        }
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+      } catch (_error) {
+        return fallback;
+      }
+    }
+
+    function saveStorageJson(key, value) {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      } catch (_error) {
+        // Ignore storage write failures.
+      }
+    }
+
+    function setPanelStatus(element, text, type = "info") {
+      if (!element) {
+        return;
+      }
+
+      element.textContent = text;
+      element.classList.toggle("is-error", type === "error");
+      element.classList.toggle("is-success", type === "success");
+    }
+
+    function setAdminStatus(text, type = "info") {
+      setPanelStatus(adminLoginStatusEl, text, type);
+    }
+
+    function setDiscordStatus(text, type = "info") {
+      setPanelStatus(adminDiscordStatusEl, text, type);
+    }
+
+    function getAdminActorContext() {
+      if (window.TakuuWebhook && typeof window.TakuuWebhook.getActorIdentity === "function") {
+        const actor = window.TakuuWebhook.getActorIdentity(currentAdminLogin);
+        if (actor && typeof actor === "object") {
+          return actor;
+        }
+      }
+      const fallbackLogin = String(currentAdminLogin || "").trim() || "unknown-admin";
+      return {
+        type: "local",
+        login: fallbackLogin,
+        label: fallbackLogin
+      };
+    }
+
+    function sendAdminWebhookEvent(action, target, details = {}) {
+      if (!window.TakuuWebhook || typeof window.TakuuWebhook.sendAdminAudit !== "function") {
+        return;
+      }
+      const payload = {
+        action: String(action || "admin_change"),
+        target: String(target || "Panel Administratora"),
+        details: details && typeof details === "object" ? details : {},
+        actor: getAdminActorContext(),
+        route: window.location.href
+      };
+      Promise.resolve(window.TakuuWebhook.sendAdminAudit(payload)).catch(() => {
+        // Ignore webhook failures in UI flow.
+      });
+    }
+
+    function canAccountAccessAnyAdminArea(account) {
+      if (!account || typeof account !== "object") {
+        return false;
+      }
+      if (account.isRoot) {
+        return true;
+      }
+      if (normalizeDiscordUserId(account.discordUserId) === ROOT_ADMIN_DISCORD_ID) {
+        return true;
+      }
+      return Boolean(account.canAccessAdmin || account.canAccessStreamObs);
+    }
+
+    function hasOwnerAdminAccess() {
+      if (!isAdminAuthenticated) {
+        return false;
+      }
+
+      const currentLogin = String(currentAdminLogin || "").trim().toLowerCase();
+      if (currentLogin && currentLogin === String(ROOT_ADMIN_LOGIN).toLowerCase()) {
+        return true;
+      }
+
+      const currentAccount = adminAccounts.find(
+        (item) => String(item.login || "").trim().toLowerCase() === currentLogin
+      );
+      if (
+        currentAccount &&
+        (
+          currentAccount.isRoot ||
+          currentAccount.canAccessAdmin ||
+          normalizeDiscordUserId(currentAccount.discordUserId) === ROOT_ADMIN_DISCORD_ID
+        )
+      ) {
+        return true;
+      }
+
+      if (activeDiscordSession && normalizeDiscordUserId(activeDiscordSession.id) === ROOT_ADMIN_DISCORD_ID) {
+        return true;
+      }
+      if (
+        activeDiscordSession &&
+        adminAccounts.some(
+          (item) =>
+            normalizeDiscordUserId(item.discordUserId) === normalizeDiscordUserId(activeDiscordSession.id) &&
+            item.canAccessAdmin
+        )
+      ) {
+        return true;
+      }
+      if (!activeDiscordSession) {
+        return false;
+      }
+      return Boolean(
+        window.TakuuWebhook &&
+          typeof window.TakuuWebhook.isDiscordOwnerSession === "function" &&
+          window.TakuuWebhook.isDiscordOwnerSession(activeDiscordSession)
+      );
+    }
+
+    function hasStreamObsAccess() {
+      if (OBS_OVERLAY_MODE) {
+        return true;
+      }
+      if (!isAdminAuthenticated) {
+        return false;
+      }
+
+      const currentLogin = String(currentAdminLogin || "").trim().toLowerCase();
+      if (currentLogin && currentLogin === String(ROOT_ADMIN_LOGIN).toLowerCase()) {
+        return true;
+      }
+
+      const currentAccount = adminAccounts.find(
+        (item) => String(item.login || "").trim().toLowerCase() === currentLogin
+      );
+      if (
+        currentAccount &&
+        (
+          currentAccount.isRoot ||
+          currentAccount.canAccessStreamObs ||
+          normalizeDiscordUserId(currentAccount.discordUserId) === ROOT_ADMIN_DISCORD_ID
+        )
+      ) {
+        return true;
+      }
+
+      if (activeDiscordSession && normalizeDiscordUserId(activeDiscordSession.id) === ROOT_ADMIN_DISCORD_ID) {
+        return true;
+      }
+      if (
+        activeDiscordSession &&
+        adminAccounts.some(
+          (item) =>
+            normalizeDiscordUserId(item.discordUserId) === normalizeDiscordUserId(activeDiscordSession.id) &&
+            (item.canAccessStreamObs || item.isRoot)
+        )
+      ) {
+        return true;
+      }
+      if (!activeDiscordSession) {
+        return false;
+      }
+      return Boolean(
+        window.TakuuWebhook &&
+          typeof window.TakuuWebhook.isDiscordOwnerSession === "function" &&
+          window.TakuuWebhook.isDiscordOwnerSession(activeDiscordSession)
+      );
+    }
+
+    function setLoginPasswordVisibility(visible) {
+      if (adminLoginPasswordEl) {
+        adminLoginPasswordEl.type = visible ? "text" : "password";
+      }
+      if (adminPasswordToggleEl) {
+        adminPasswordToggleEl.setAttribute("aria-pressed", visible ? "true" : "false");
+        adminPasswordToggleEl.setAttribute("aria-label", visible ? "Ukryj hasło" : "Pokaż hasło");
+      }
+      if (adminPasswordToggleIconEl) {
+        adminPasswordToggleIconEl.classList.toggle("fa-eye", !visible);
+        adminPasswordToggleIconEl.classList.toggle("fa-eye-slash", visible);
+      }
+      if (adminShowPasswordEl && adminShowPasswordEl.type === "checkbox") {
+        adminShowPasswordEl.checked = Boolean(visible);
+      }
+    }
+
+    function normalizeDiscordUserId(value) {
+      if (window.TakuuWebhook && typeof window.TakuuWebhook.normalizeDiscordUserId === "function") {
+        return window.TakuuWebhook.normalizeDiscordUserId(value);
+      }
+      return "";
+    }
+
+    function canDiscordSessionAccessAdmin(session) {
+      if (window.TakuuWebhook && typeof window.TakuuWebhook.canDiscordSessionAccessAdmin === "function") {
+        return window.TakuuWebhook.canDiscordSessionAccessAdmin(session, adminAccounts);
+      }
+      return false;
+    }
+
+    function upsertAdminAccountFromDiscordSession(session) {
+      if (!window.TakuuWebhook || typeof window.TakuuWebhook.upsertAdminAccountFromDiscordSession !== "function") {
+        return null;
+      }
+      const result = window.TakuuWebhook.upsertAdminAccountFromDiscordSession(session, adminAccounts);
+      if (!result || !result.account) {
+        return null;
+      }
+      if (result.changed) {
+        saveAdminAccounts();
+      }
+      return result.account;
+    }
+
+    function sanitizeMemberUrl(rawUrl) {
+      const clean = String(rawUrl || "").trim();
+      if (!clean) {
+        return "";
+      }
+      if (/^https?:\/\//i.test(clean)) {
+        return clean;
+      }
+      return `https://kick.com/${clean.replace(/^@+/, "")}`;
+    }
+
+    function loadAdminAccounts() {
+      const fallback = [
+        {
+          id: ROOT_ADMIN_ID,
+          login: ROOT_ADMIN_LOGIN,
+          password: ROOT_ADMIN_PASSWORD,
+          discordUserId: ROOT_ADMIN_DISCORD_ID,
+          discordName: "",
+          canAccessAdmin: true,
+          canAccessStreamObs: true,
+          isRoot: true,
+          isDiscordAccount: false
+        }
+      ];
+
+      const raw = readStorageJson(ADMIN_ACCOUNTS_KEY, fallback);
+      const accounts = Array.isArray(raw)
+        ? raw
+            .filter((item) => item && (item.discordUserId || (item.login && item.password)))
+            .map((item) => ({
+              id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+              login: String(item.login || ""),
+              password: String(item.password || ""),
+              discordUserId: normalizeDiscordUserId(item.discordUserId),
+              discordName: String(item.discordName || ""),
+              canAccessAdmin: Boolean(item.canAccessAdmin),
+              canAccessStreamObs:
+                item.canAccessStreamObs == null ? Boolean(item.canAccessAdmin) : Boolean(item.canAccessStreamObs),
+              isRoot: Boolean(item.isRoot),
+              isDiscordAccount: Boolean(item.isDiscordAccount || item.discordUserId)
+            }))
+        : fallback;
+
+      accounts.forEach((account) => {
+        if (!account.login && account.discordUserId) {
+          account.login = `discord:${account.discordUserId}`;
+        }
+        if (!account.password) {
+          account.password = account.isDiscordAccount ? "DISCORD_ONLY" : "";
+        }
+      });
+
+      const rootIndex = accounts.findIndex((item) => item.id === ROOT_ADMIN_ID || item.login === ROOT_ADMIN_LOGIN);
+      const rootDiscordName = rootIndex !== -1 ? String(accounts[rootIndex].discordName || "") : "";
+      if (rootIndex === -1) {
+        accounts.unshift({
+          id: ROOT_ADMIN_ID,
+          login: ROOT_ADMIN_LOGIN,
+          password: ROOT_ADMIN_PASSWORD,
+          discordUserId: ROOT_ADMIN_DISCORD_ID,
+          discordName: rootDiscordName,
+          canAccessAdmin: true,
+          canAccessStreamObs: true,
+          isRoot: true,
+          isDiscordAccount: false
+        });
+      } else {
+        accounts[rootIndex] = {
+          id: ROOT_ADMIN_ID,
+          login: ROOT_ADMIN_LOGIN,
+          password: ROOT_ADMIN_PASSWORD,
+          discordUserId: ROOT_ADMIN_DISCORD_ID,
+          discordName: rootDiscordName,
+          canAccessAdmin: true,
+          canAccessStreamObs: true,
+          isRoot: true,
+          isDiscordAccount: false
+        };
+      }
+
+      return accounts;
+    }
+
+    function saveAdminAccounts() {
+      saveStorageJson(ADMIN_ACCOUNTS_KEY, adminAccounts);
+    }
+
+    function loadCustomMembers() {
+      const raw = readStorageJson(CCI_MEMBERS_KEY, []);
+      if (!Array.isArray(raw)) {
+        return [];
+      }
+
+      return raw
+        .filter((item) => item && item.id && item.name && item.url)
+        .map((item) => ({
+          id: String(item.id),
+          name: String(item.name),
+          url: sanitizeMemberUrl(item.url),
+          avatar: String(item.avatar || CHANNEL_AVATAR_FALLBACK)
+        }));
+    }
+
+    function loadBaseMembersFromGrid() {
+      if (!friendsGridEl) {
+        return [];
+      }
+
+      const nodes = Array.from(friendsGridEl.querySelectorAll(".friend-card:not(.custom-member)"));
+      return nodes
+        .map((card, index) => {
+          const name = String(card.querySelector(".friend-name")?.textContent || "").trim();
+          const href = String(card.getAttribute("href") || "").trim();
+          const url = sanitizeMemberUrl(href);
+          const avatar = String(card.querySelector(".friend-avatar")?.getAttribute("src") || "").trim() || CHANNEL_AVATAR_FALLBACK;
+
+          return {
+            id: `base-${index + 1}`,
+            name: name || `Członek ${index + 1}`,
+            url,
+            avatar
+          };
+        })
+        .filter((item) => item.name && item.url);
+    }
+
+    function saveCustomMembers() {
+      saveStorageJson(CCI_MEMBERS_KEY, customMembers);
+    }
+
+    function loadMembersOrder() {
+      const raw = readStorageJson(CCI_MEMBERS_ORDER_KEY, []);
+      if (!Array.isArray(raw)) {
+        return [];
+      }
+      return raw.map((item) => String(item || "").trim()).filter(Boolean);
+    }
+
+    function saveMembersOrder() {
+      saveStorageJson(CCI_MEMBERS_ORDER_KEY, membersOrder);
+    }
+
+    function getAllMembers() {
+      return [
+        ...baseMembers.map((member) => ({ ...member, builtIn: true })),
+        ...customMembers.map((member) => ({ ...member, builtIn: false }))
+      ];
+    }
+
+    function normalizeMembersOrder(orderList, members = getAllMembers()) {
+      const availableIds = members.map((member) => String(member.id || "").trim()).filter(Boolean);
+      const availableSet = new Set(availableIds);
+      const nextOrder = [];
+      const seen = new Set();
+
+      if (Array.isArray(orderList)) {
+        orderList.forEach((id) => {
+          const cleanId = String(id || "").trim();
+          if (!cleanId || seen.has(cleanId) || !availableSet.has(cleanId)) {
+            return;
+          }
+          seen.add(cleanId);
+          nextOrder.push(cleanId);
+        });
+      }
+
+      availableIds.forEach((id) => {
+        if (seen.has(id)) {
+          return;
+        }
+        seen.add(id);
+        nextOrder.push(id);
+      });
+
+      return nextOrder;
+    }
+
+    function refreshMembersOrder(persist = false) {
+      membersOrder = normalizeMembersOrder(membersOrder);
+      const orderIndex = new Map(membersOrder.map((id, index) => [id, index]));
+      const getPosition = (member) => (orderIndex.has(member.id) ? orderIndex.get(member.id) : Number.MAX_SAFE_INTEGER);
+
+      baseMembers = baseMembers.slice().sort((left, right) => getPosition(left) - getPosition(right));
+      customMembers = customMembers.slice().sort((left, right) => getPosition(left) - getPosition(right));
+
+      if (persist) {
+        saveMembersOrder();
+        saveCustomMembers();
+      }
+    }
+
+    function getOrderedMembers() {
+      const allMembers = getAllMembers();
+      const order = normalizeMembersOrder(membersOrder, allMembers);
+      const membersById = new Map(allMembers.map((member) => [member.id, member]));
+      return order.map((id) => membersById.get(id)).filter(Boolean);
+    }
+
+    function setMemberFormEditingState(memberId = "") {
+      editingMemberId = String(memberId || "").trim();
+      if (adminMemberSubmitBtnEl) {
+        adminMemberSubmitBtnEl.textContent = editingMemberId ? "Zapisz zmiany członka CCI" : "Dodaj Członka CCI";
+      }
+    }
+
+    function stopMemberEdit(options = {}) {
+      const shouldResetForm = options.resetForm === true;
+      const statusText = String(options.statusText || "").trim();
+      const statusType = String(options.statusType || "info");
+
+      setMemberFormEditingState("");
+      if (adminMemberFormEl && shouldResetForm) {
+        adminMemberFormEl.reset();
+      }
+      if (statusText) {
+        setPanelStatus(adminMemberStatusEl, statusText, statusType);
+      }
+    }
+
+    function startMemberEdit(memberId) {
+      if (!adminMemberFormEl) {
+        return;
+      }
+
+      const cleanId = String(memberId || "").trim();
+      if (!cleanId) {
+        return;
+      }
+
+      if (editingMemberId && editingMemberId === cleanId) {
+        stopMemberEdit({
+          resetForm: true,
+          statusText: "Anulowano edycję członka CCI.",
+          statusType: "info"
+        });
+        return;
+      }
+
+      const member = customMembers.find((item) => item.id === cleanId);
+      if (!member) {
+        setPanelStatus(adminMemberStatusEl, "Nie znaleziono członka do edycji.", "error");
+        return;
+      }
+
+      const nameInput = adminMemberFormEl.querySelector('input[name="memberName"]');
+      const kickInput = adminMemberFormEl.querySelector('input[name="memberKick"]');
+      const avatarInput = adminMemberFormEl.querySelector('input[name="memberAvatar"]');
+
+      if (nameInput) {
+        nameInput.value = member.name;
+      }
+      if (kickInput) {
+        kickInput.value = member.url;
+      }
+      if (avatarInput) {
+        avatarInput.value = member.avatar === CHANNEL_AVATAR_FALLBACK ? "" : member.avatar;
+      }
+
+      setMemberFormEditingState(cleanId);
+      setPanelStatus(adminMemberStatusEl, `Edytujesz członka CCI: ${member.name}.`, "info");
+      if (nameInput) {
+        nameInput.focus();
+      }
+    }
+
+    function applyMembersOrderFromDom() {
+      if (!adminMembersTableBodyEl) {
+        return false;
+      }
+
+      const orderedIds = Array.from(adminMembersTableBodyEl.querySelectorAll("tr[data-member-id]"))
+        .map((row) => String(row.dataset.memberId || "").trim())
+        .filter(Boolean);
+      if (!orderedIds.length) {
+        return false;
+      }
+
+      const previousOrder = normalizeMembersOrder(membersOrder);
+      const nextOrder = normalizeMembersOrder(orderedIds);
+      const changed =
+        previousOrder.length !== nextOrder.length || previousOrder.some((id, index) => id !== nextOrder[index]);
+
+      if (!changed) {
+        return false;
+      }
+
+      membersOrder = nextOrder;
+      refreshMembersOrder(true);
+      return true;
+    }
+
+    function findDropTargetMemberRow(pointerY) {
+      if (!adminMembersTableBodyEl) {
+        return null;
+      }
+
+      const rows = Array.from(adminMembersTableBodyEl.querySelectorAll("tr[data-member-id]")).filter((row) => {
+        const rowId = String(row.dataset.memberId || "");
+        return rowId && rowId !== draggingMemberId;
+      });
+      let dropTarget = null;
+      let closestOffset = Number.NEGATIVE_INFINITY;
+
+      rows.forEach((row) => {
+        const rect = row.getBoundingClientRect();
+        const offset = pointerY - rect.top - rect.height / 2;
+        if (offset < 0 && offset > closestOffset) {
+          closestOffset = offset;
+          dropTarget = row;
+        }
+      });
+
+      return dropTarget;
+    }
+
+    function getRememberMeState() {
+      const state = { enabled: false, expired: false };
+      const now = Date.now();
+      try {
+        const rawValue = String(window.localStorage.getItem(ADMIN_REMEMBER_ME_KEY) || "").trim();
+        if (!rawValue) {
+          return state;
+        }
+
+        // Backward compatibility for older boolean storage format.
+        if (rawValue === "1") {
+          const migratedExpiresAt = now + ADMIN_REMEMBER_ME_MAX_AGE_MS;
+          window.localStorage.setItem(ADMIN_REMEMBER_ME_KEY, String(migratedExpiresAt));
+          state.enabled = true;
+          return state;
+        }
+
+        const expiresAt = Number(rawValue);
+        if (!Number.isFinite(expiresAt)) {
+          window.localStorage.removeItem(ADMIN_REMEMBER_ME_KEY);
+          return state;
+        }
+        if (expiresAt <= now) {
+          window.localStorage.removeItem(ADMIN_REMEMBER_ME_KEY);
+          state.expired = true;
+          return state;
+        }
+        state.enabled = true;
+      } catch (_error) {
+        // Ignore storage read failures.
+      }
+      return state;
+    }
+
+    function isRememberMeEnabled() {
+      return getRememberMeState().enabled;
+    }
+
+    function setRememberMeEnabled(enabled) {
+      const normalized = Boolean(enabled);
+      try {
+        if (normalized) {
+          const expiresAt = Date.now() + ADMIN_REMEMBER_ME_MAX_AGE_MS;
+          window.localStorage.setItem(ADMIN_REMEMBER_ME_KEY, String(expiresAt));
+        } else {
+          window.localStorage.removeItem(ADMIN_REMEMBER_ME_KEY);
+        }
+      } catch (_error) {
+        // Ignore storage write failures.
+      }
+
+      if (adminRememberMeEl) {
+        adminRememberMeEl.checked = normalized;
+      }
+    }
+
+    function isReloadNavigation() {
+      try {
+        if (window.performance && typeof window.performance.getEntriesByType === "function") {
+          const entries = window.performance.getEntriesByType("navigation");
+          if (entries && entries.length) {
+            return entries[0].type === "reload";
+          }
+        }
+      } catch (_error) {
+        // Ignore navigation timing read failures.
+      }
+
+      try {
+        if (window.performance && window.performance.navigation) {
+          return window.performance.navigation.type === window.performance.navigation.TYPE_RELOAD;
+        }
+      } catch (_error) {
+        // Ignore legacy navigation timing failures.
+      }
+
+      return false;
+    }
+
+    function clearAdminSessionOnReload() {
+      const rememberState = getRememberMeState();
+
+      if (rememberState.expired) {
+        try {
+          window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+        } catch (_error) {
+          // Ignore session storage failures.
+        }
+
+        if (window.TakuuWebhook && typeof window.TakuuWebhook.clearDiscordSession === "function") {
+          window.TakuuWebhook.clearDiscordSession();
+        }
+
+        isAdminAuthenticated = false;
+        currentAdminLogin = "";
+        activeDiscordSession = null;
+        return;
+      }
+
+      if (!isReloadNavigation()) {
+        return;
+      }
+
+      if (rememberState.enabled) {
+        return;
+      }
+
+      try {
+        window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      } catch (_error) {
+        // Ignore session storage failures.
+      }
+
+      if (window.TakuuWebhook && typeof window.TakuuWebhook.clearDiscordSession === "function") {
+        window.TakuuWebhook.clearDiscordSession();
+      }
+
+      isAdminAuthenticated = false;
+      currentAdminLogin = "";
+      activeDiscordSession = null;
+    }
+
+    function restoreAdminSession() {
+      activeDiscordSession = null;
+      if (window.TakuuWebhook && typeof window.TakuuWebhook.getStoredDiscordSession === "function") {
+        const discordSession = window.TakuuWebhook.getStoredDiscordSession();
+        if (discordSession && discordSession.isAuthorized && discordSession.username) {
+          activeDiscordSession = discordSession;
+          upsertAdminAccountFromDiscordSession(discordSession);
+          isAdminAuthenticated = canDiscordSessionAccessAdmin(discordSession);
+          currentAdminLogin = isAdminAuthenticated ? `discord:${discordSession.username}` : "";
+          if (!isAdminAuthenticated) {
+            setAdminStatus("Konto Discord nie ma permisji do zadnej zakladki admina.", "error");
+          }
+          return;
+        }
+      }
+
+      try {
+        const savedLogin = String(window.sessionStorage.getItem(ADMIN_SESSION_KEY) || "");
+        if (!savedLogin) {
+          isAdminAuthenticated = false;
+          currentAdminLogin = "";
+          return;
+        }
+
+        const matched = adminAccounts.find((item) => item.login === savedLogin && canAccountAccessAnyAdminArea(item));
+        isAdminAuthenticated = Boolean(matched);
+        currentAdminLogin = matched ? matched.login : "";
+      } catch (_error) {
+        isAdminAuthenticated = false;
+        currentAdminLogin = "";
+      }
+    }
+
+    function renderCustomMembersCards() {
+      if (!friendsGridEl) {
+        return;
+      }
+
+      const orderedMembers = getOrderedMembers();
+      friendsGridEl.innerHTML = "";
+
+      orderedMembers.forEach((member) => {
+        const card = document.createElement("a");
+        card.className = member.builtIn ? "friend-card" : "friend-card custom-member";
+        card.href = member.url;
+        card.target = "_blank";
+        card.rel = "noopener noreferrer";
+        const avatar = String(member.avatar || "").trim() || CHANNEL_AVATAR_FALLBACK;
+
+        card.innerHTML = `
+          <span class="friend-avatar-wrap">
+            <img class="friend-avatar" src="${escapeHtml(avatar)}" alt="${escapeHtml(member.name)}">
+            <img class="friend-k" src="${escapeHtml(KICK_ICON_URL)}" alt="">
+          </span>
+          <span class="friend-name">${escapeHtml(member.name)}</span>
+        `;
+
+        friendsGridEl.appendChild(card);
+      });
+
+      updateFriendsLiveBadges();
+    }
+
+    function getKickSlugFromUrl(rawUrl) {
+      const clean = sanitizeMemberUrl(rawUrl);
+      try {
+        const parsed = new URL(clean);
+        const parts = parsed.pathname.split("/").map((part) => part.trim()).filter(Boolean);
+        if (!parts.length) {
+          return "";
+        }
+        if (parts[0].toLowerCase() === "popout" && parts[1]) {
+          return parts[1].toLowerCase();
+        }
+        return parts[0].toLowerCase();
+      } catch (_error) {
+        return String(clean)
+          .replace(/^https?:\/\/(?:www\.)?kick\.com\//i, "")
+          .split(/[/?#]/)[0]
+          .trim()
+          .toLowerCase();
+      }
+    }
+
+    function isKickChannelLive(channelData) {
+      if (!channelData || typeof channelData !== "object") {
+        return false;
+      }
+
+      const candidates = [channelData];
+      if (channelData.data && typeof channelData.data === "object") {
+        candidates.push(channelData.data);
+      }
+      if (channelData.channel && typeof channelData.channel === "object") {
+        candidates.push(channelData.channel);
+      }
+
+      for (const data of candidates) {
+        if (!data || typeof data !== "object") {
+          continue;
+        }
+
+        if (typeof data.is_live === "boolean") {
+          return data.is_live;
+        }
+        if (typeof data.isLive === "boolean") {
+          return data.isLive;
+        }
+        if (typeof data.livestream !== "undefined") {
+          return Boolean(data.livestream);
+        }
+        if (typeof data.stream !== "undefined") {
+          return Boolean(data.stream);
+        }
+        if (typeof data.current_live_session !== "undefined") {
+          return Boolean(data.current_live_session);
+        }
+      }
+
+      return false;
+    }
+
+    function setFriendLiveBadge(card, isLive) {
+      if (!card) {
+        return;
+      }
+      card.classList.toggle("is-live", Boolean(isLive));
+
+      let badge = card.querySelector(".friend-live-badge");
+      if (!isLive) {
+        if (badge) {
+          badge.remove();
+        }
+        return;
+      }
+
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "friend-live-badge";
+        badge.innerHTML = `<span class="friend-live-dot" aria-hidden="true"></span>LIVE`;
+        card.appendChild(badge);
+      }
+    }
+
+    function buildChannelApiUrl(channelSlug) {
+      return `https://kick.com/api/v2/channels/${encodeURIComponent(String(channelSlug || "").trim())}`;
+    }
+
+    async function fetchKickChannelJson(channelSlug) {
+      const directUrl = `${buildChannelApiUrl(channelSlug)}?_=${Date.now()}`;
+
+      try {
+        const directResponse = await fetch(directUrl, {
+          mode: "cors",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json"
+          }
+        });
+        if (directResponse.ok) {
+          return await directResponse.json();
+        }
+      } catch (_error) {
+        // Fall back to proxy options below.
+      }
+
+      const proxyPrefixes = [ALL_ORIGINS_RAW_PREFIX, CORS_PROXY_PREFIX];
+      for (const proxyPrefix of proxyPrefixes) {
+        try {
+          const proxyPayload = await fetchViaProxyJson(directUrl, proxyPrefix);
+          if (proxyPayload && typeof proxyPayload === "object") {
+            return proxyPayload;
+          }
+        } catch (_error) {
+          // Try next proxy.
+        }
+      }
+
+      // Last fallback for environments where proxy CORS works but direct/proxy API calls are blocked.
+      return fetchJinaJson(directUrl.replace(/^https:\/\//i, "http://"));
+    }
+
+    async function updateFriendsLiveBadges(force = false) {
+      if (!friendsGridEl) {
+        return;
+      }
+      if (friendsLivePollBusy && !force) {
+        return;
+      }
+
+      friendsLivePollBusy = true;
+      try {
+        const cards = Array.from(friendsGridEl.querySelectorAll(".friend-card"));
+        if (!cards.length) {
+          return;
+        }
+
+        const requestSeq = ++friendsLiveRequestSeq;
+        const slugToCards = new Map();
+
+        cards.forEach((card) => {
+          const href = String(card.getAttribute("href") || "").trim();
+          const slug = getKickSlugFromUrl(href);
+          if (!slug) {
+            setFriendLiveBadge(card, false);
+            return;
+          }
+          if (!slugToCards.has(slug)) {
+            slugToCards.set(slug, []);
+          }
+          slugToCards.get(slug).push(card);
+
+          // Apply cached state immediately to avoid visual lag.
+          if (friendsLiveStateBySlug.has(slug)) {
+            setFriendLiveBadge(card, Boolean(friendsLiveStateBySlug.get(slug)));
+          }
+        });
+
+        if (!slugToCards.size) {
+          return;
+        }
+
+        const liveBySlug = new Map();
+        await Promise.all(
+          Array.from(slugToCards.keys()).map(async (slug) => {
+            try {
+              const channelData = await fetchKickChannelJson(slug);
+              liveBySlug.set(slug, isKickChannelLive(channelData));
+            } catch (_error) {
+              if (friendsLiveStateBySlug.has(slug)) {
+                liveBySlug.set(slug, Boolean(friendsLiveStateBySlug.get(slug)));
+              } else {
+                liveBySlug.set(slug, false);
+              }
+            }
+          })
+        );
+
+        if (requestSeq !== friendsLiveRequestSeq) {
+          return;
+        }
+
+        slugToCards.forEach((cardList, slug) => {
+          const isLive = Boolean(liveBySlug.get(slug));
+          friendsLiveStateBySlug.set(slug, isLive);
+          cardList.forEach((card) => setFriendLiveBadge(card, isLive));
+        });
+      } finally {
+        friendsLivePollBusy = false;
+      }
+    }
+
+    function startFriendsLivePolling() {
+      updateFriendsLiveBadges(true);
+      if (friendsLivePollId) {
+        return;
+      }
+
+      friendsLivePollId = window.setInterval(() => {
+        if (document.hidden) {
+          return;
+        }
+        updateFriendsLiveBadges();
+      }, FRIENDS_LIVE_POLL_MS);
+    }
+
+    function renderAdminMembersTable() {
+      if (!adminMembersTableBodyEl) {
+        return;
+      }
+
+      const allMembers = getOrderedMembers();
+
+      adminMembersTableBodyEl.innerHTML = "";
+      if (!allMembers.length) {
+        adminMembersTableBodyEl.innerHTML = `
+          <tr>
+            <td colspan="3" class="admin-table-empty">Brak dodanych członków.</td>
+          </tr>
+        `;
+        return;
+      }
+
+      allMembers.forEach((member) => {
+        const row = document.createElement("tr");
+        row.dataset.memberId = member.id;
+        row.draggable = true;
+        row.innerHTML = `
+          <td>
+            <button
+              class="admin-row-btn"
+              type="button"
+              data-member-drag-handle="1"
+              title="Przeciągnij, aby ustawić kolejność"
+              aria-label="Przeciągnij, aby ustawić kolejność"
+              style="padding: 2px 8px; margin-right: 8px; cursor: grab;"
+            >⇅</button>${escapeHtml(member.name)}
+          </td>
+          <td><a href="${escapeHtml(member.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(member.url)}</a></td>
+          <td>
+            ${
+              member.builtIn
+                ? "-"
+                : `
+                  <span style="display: inline-flex; flex-wrap: wrap; gap: 8px;">
+                    <button class="admin-row-btn" type="button" data-member-edit="${escapeHtml(member.id)}">Edytuj</button>
+                    <button class="admin-row-btn admin-row-btn-danger" type="button" data-member-remove="${escapeHtml(member.id)}">Usuń</button>
+                  </span>
+                `
+            }
+          </td>
+        `;
+        adminMembersTableBodyEl.appendChild(row);
+      });
+    }
+
+    function renderAdminAccountsTable() {
+      if (!adminAccountsTableBodyEl) {
+        return;
+      }
+
+      adminAccountsTableBodyEl.innerHTML = "";
+      adminAccounts.forEach((account) => {
+        const visible = !account.isRoot && visibleAdminPasswords.has(account.id);
+        const discordUserId = normalizeDiscordUserId(account.discordUserId);
+        const discordName = String(account.discordName || "").trim();
+        const panelPermissionLabel = account.canAccessAdmin ? "Zabierz Panel" : "Nadaj Panel";
+        const streamObsPermissionLabel = account.canAccessStreamObs ? "Zabierz StreamOBS" : "Nadaj StreamOBS";
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${escapeHtml(account.login)}</td>
+          <td>${escapeHtml(discordUserId || "-")}</td>
+          <td>${escapeHtml(discordName || "-")}</td>
+          <td>${escapeHtml(visible ? account.password : "********")}</td>
+          <td>
+            ${
+              account.isRoot
+                ? "-"
+                : `<button class="admin-row-btn" type="button" data-account-toggle="${escapeHtml(account.id)}">${visible ? "Ukryj" : "Pokaż"}</button>`
+            }
+          </td>
+          <td>${account.canAccessAdmin ? "Tak" : "Nie"}</td>
+          <td>${account.canAccessStreamObs ? "Tak" : "Nie"}</td>
+          <td>
+            ${
+              account.isRoot
+                ? "-"
+                : `
+                  <button class="admin-row-btn" type="button" data-account-permission-admin="${escapeHtml(account.id)}">${escapeHtml(panelPermissionLabel)}</button>
+                  <button class="admin-row-btn" type="button" data-account-permission-streamobs="${escapeHtml(account.id)}">${escapeHtml(streamObsPermissionLabel)}</button>
+                  <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtml(account.id)}">Usuń</button>
+                `
+            }
+          </td>
+        `;
+        adminAccountsTableBodyEl.appendChild(row);
+      });
+    }
+
+    function setActiveAdminTab(tabName) {
+      const ownerAccess = hasOwnerAdminAccess();
+      const streamObsAccess = hasStreamObsAccess();
+      const requestedTab =
+        tabName === "accounts" || tabName === "kary" || tabName === "members" || tabName === "streamobs" ? tabName : "members";
+      if (requestedTab === "accounts" && !ownerAccess) {
+        activeAdminTab = "members";
+        setPanelStatus(adminAccountStatusEl, "Brak permisji do zakładki Panel Admina.", "error");
+      } else if (requestedTab === "streamobs" && !streamObsAccess) {
+        activeAdminTab = "members";
+        setPanelStatus(adminAccountStatusEl, "Brak permisji do zakładki StreamOBS.", "error");
+      } else {
+        activeAdminTab = requestedTab;
+      }
+
+      if (adminTabsWrapEl) {
+        const accountsBtn = adminTabsWrapEl.querySelector('[data-tab="accounts"]');
+        const streamObsBtn = adminTabsWrapEl.querySelector('[data-tab="streamobs"]');
+        if (accountsBtn) {
+          accountsBtn.hidden = !ownerAccess;
+        }
+        if (streamObsBtn) {
+          streamObsBtn.hidden = !streamObsAccess;
+        }
+      }
+
+      if (adminTabsWrapEl) {
+        const buttons = adminTabsWrapEl.querySelectorAll(".admin-tab-btn");
+        buttons.forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.tab === activeAdminTab);
+        });
+      }
+
+      if (adminMembersTabEl) {
+        const isMembers = activeAdminTab === "members";
+        adminMembersTabEl.hidden = !isMembers;
+        adminMembersTabEl.classList.toggle("is-active", isMembers);
+      }
+      if (adminKaryTabEl) {
+        const isKary = activeAdminTab === "kary";
+        adminKaryTabEl.hidden = !isKary;
+        adminKaryTabEl.classList.toggle("is-active", isKary);
+      }
+      if (adminAccountsTabEl) {
+        const isAccounts = activeAdminTab === "accounts";
+        adminAccountsTabEl.hidden = !isAccounts;
+        adminAccountsTabEl.classList.toggle("is-active", isAccounts);
+      }
+      if (adminStreamObsTabEl) {
+        const isStreamObs = activeAdminTab === "streamobs";
+        adminStreamObsTabEl.hidden = !isStreamObs;
+        adminStreamObsTabEl.classList.toggle("is-active", isStreamObs);
+      }
+    }
+
+    function getKaryPricePairs() {
+      return [
+        { list: karyPriceListChillEl, empty: karyPriceEmptyChillEl },
+        { list: karyPriceListHardEl, empty: karyPriceEmptyHardEl }
+      ].filter((pair) => pair.list);
+    }
+
+    function getKaryPriceValueElements() {
+      return document.querySelectorAll(".kary-price-value");
+    }
+
+    function normalizeKarySection(value) {
+      return String(value || "").toLowerCase() === "hard" ? "hard" : "chill";
+    }
+
+    function formatKaryPln(value) {
+      const number = Math.max(0, Math.floor(Number(value) || 0));
+      return `${number} PLN`;
+    }
+
+    function formatKarySuby(value) {
+      const number = Math.max(0, Math.floor(Number(value) || 0));
+      return `${number} Suby`;
+    }
+
+    function formatKaryKicksy(value) {
+      const number = Math.max(0, Math.floor(Number(value) || 0));
+      return `${number} Kicksy`;
+    }
+
+    function parseFirstInteger(value) {
+      const match = String(value || "").match(/-?\d+/);
+      if (!match) {
+        return 0;
+      }
+      const parsed = Number.parseInt(match[0], 10);
+      return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    }
+
+    function extractDefaultKaryCennikItems() {
+      const result = [];
+      const readColumn = (listEl, section) => {
+        if (!listEl) {
+          return;
+        }
+        const rows = Array.from(listEl.querySelectorAll("li"));
+        rows.forEach((row, index) => {
+          const name = String(row.querySelector("strong")?.textContent || "").trim();
+          const desc = String(row.querySelector("small")?.textContent || "").trim();
+          const priceEl = row.querySelector(".kary-price-value");
+          const plnRaw = priceEl ? String(priceEl.dataset.pln || priceEl.textContent || "") : "";
+          const subyRaw = priceEl ? String(priceEl.dataset.suby || "") : "";
+          const kicksyRaw = priceEl ? String(priceEl.dataset.kicksy || "") : "";
+          if (!name) {
+            return;
+          }
+          result.push({
+            id: `default-${section}-${index + 1}`,
+            section,
+            name,
+            description: desc,
+            pricePln: parseFirstInteger(plnRaw),
+            priceSuby: parseFirstInteger(subyRaw),
+            priceKicksy: parseFirstInteger(kicksyRaw),
+            sortOrder: index
+          });
+        });
+      };
+
+      readColumn(karyPriceListChillEl, "chill");
+      readColumn(karyPriceListHardEl, "hard");
+      return result;
+    }
+
+    function normalizeKaryCennikItem(item, index) {
+      const safe = item && typeof item === "object" ? item : {};
+      const section = normalizeKarySection(safe.section);
+      const name = String(safe.name || "").trim();
+      if (!name) {
+        return null;
+      }
+
+      return {
+        id: String(safe.id || `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`),
+        section,
+        name,
+        description: String(safe.description || "").trim(),
+        pricePln: Math.max(0, Math.floor(Number(safe.pricePln) || 0)),
+        priceSuby: Math.max(0, Math.floor(Number(safe.priceSuby) || 0)),
+        priceKicksy: Math.max(0, Math.floor(Number(safe.priceKicksy) || 0)),
+        sortOrder: Math.max(0, Math.floor(Number(safe.sortOrder) || index))
+      };
+    }
+
+    function getSortedKaryCennikItems() {
+      const sectionPriority = { chill: 0, hard: 1 };
+      return [...karyCennikItems].sort((left, right) => {
+        const sectionDiff = (sectionPriority[left.section] ?? 0) - (sectionPriority[right.section] ?? 0);
+        if (sectionDiff !== 0) {
+          return sectionDiff;
+        }
+        return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
+      });
+    }
+
+    function loadKaryCennikItems() {
+      const fallback = extractDefaultKaryCennikItems();
+      const raw = readStorageJson(KARY_CENNIK_KEY, null);
+      if (!Array.isArray(raw)) {
+        karyCennikItems = fallback;
+        return;
+      }
+
+      karyCennikItems = raw
+        .map((item, index) => normalizeKaryCennikItem(item, index))
+        .filter(Boolean);
+    }
+
+    function migrateDuplicatedKicksyPrices() {
+      try {
+        if (window.localStorage.getItem(KARY_CENNIK_MIGRATION_KEY) === "1") {
+          return;
+        }
+      } catch (_error) {
+        // Ignore storage read failures.
+      }
+
+      if (!Array.isArray(karyCennikItems) || !karyCennikItems.length) {
+        return;
+      }
+
+      const hasAnySuby = karyCennikItems.some((item) => Number(item.priceSuby) > 0);
+      const allKicksyDuplicated = karyCennikItems.every(
+        (item) => Number(item.priceKicksy) === Number(item.priceSuby)
+      );
+
+      if (hasAnySuby && allKicksyDuplicated) {
+        karyCennikItems = karyCennikItems.map((item) => ({
+          ...item,
+          priceKicksy: 0
+        }));
+        saveKaryCennikItems();
+      }
+
+      try {
+        window.localStorage.setItem(KARY_CENNIK_MIGRATION_KEY, "1");
+      } catch (_error) {
+        // Ignore storage write failures.
+      }
+    }
+
+    function saveKaryCennikItems() {
+      saveStorageJson(KARY_CENNIK_KEY, karyCennikItems);
+    }
+
+    function renderPublicKaryCennik() {
+      const sorted = getSortedKaryCennikItems();
+      const grouped = {
+        chill: sorted.filter((item) => item.section === "chill"),
+        hard: sorted.filter((item) => item.section === "hard")
+      };
+
+      const fillList = (listEl, items) => {
+        if (!listEl) {
+          return;
+        }
+        listEl.innerHTML = items
+          .map(
+            (item) => `
+          <li data-cennik-id="${escapeHtml(item.id)}">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span class="kary-price-value" data-pln="${escapeHtml(formatKaryPln(item.pricePln))}" data-suby="${escapeHtml(formatKarySuby(item.priceSuby))}" data-kicksy="${escapeHtml(formatKaryKicksy(item.priceKicksy))}">${escapeHtml(formatKaryPln(item.pricePln))}</span>
+            <small>${escapeHtml(item.description || "—")}</small>
+          </li>
+        `
+          )
+          .join("");
+      };
+
+      fillList(karyPriceListChillEl, grouped.chill);
+      fillList(karyPriceListHardEl, grouped.hard);
+      setKaryCurrency(activeKaryCurrency);
+    }
+
+    function renderAdminKaryCennikTable() {
+      if (!adminCennikTableBodyEl) {
+        return;
+      }
+
+      const rows = getSortedKaryCennikItems();
+      adminCennikTableBodyEl.innerHTML = "";
+
+      if (!rows.length) {
+        adminCennikTableBodyEl.innerHTML = `
+          <tr>
+            <td colspan="6" class="admin-table-empty">Brak pozycji cennika.</td>
+          </tr>
+        `;
+        return;
+      }
+
+      rows.forEach((item) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(item.section === "hard" ? "Tortury" : "Opcje widza")}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(formatKaryPln(item.pricePln))}</td>
+          <td>${escapeHtml(formatKarySuby(item.priceSuby))}</td>
+          <td>${escapeHtml(formatKaryKicksy(item.priceKicksy))}</td>
+          <td>
+            <button class="admin-row-btn" type="button" data-cennik-edit="${escapeHtml(item.id)}">Edytuj</button>
+            <button class="admin-row-btn admin-row-btn-danger" type="button" data-cennik-remove="${escapeHtml(item.id)}">Usuń</button>
+          </td>
+        `;
+        adminCennikTableBodyEl.appendChild(tr);
+      });
+    }
+
+    function setKaryCurrency(currency) {
+      if (!karyCurrencySwitchEl) {
+        return;
+      }
+
+      const normalized = String(currency || "").toLowerCase();
+      const allowed = ["pln", "suby", "kicksy"];
+      const nextCurrency = allowed.includes(normalized) ? normalized : "pln";
+      activeKaryCurrency = nextCurrency;
+
+      const switchButtons = karyCurrencySwitchEl.querySelectorAll("button[data-currency]");
+      switchButtons.forEach((button) => {
+        const isActive = button.dataset.currency === nextCurrency;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+
+      const dataKey = nextCurrency === "suby" ? "suby" : nextCurrency === "kicksy" ? "kicksy" : "pln";
+      getKaryPriceValueElements().forEach((price) => {
+        const nextValue = String(price.dataset[dataKey] || "").trim();
+        if (nextValue) {
+          price.textContent = nextValue;
+          return;
+        }
+
+        // Never keep stale value from previous currency tab.
+        if (dataKey === "suby") {
+          price.textContent = formatKarySuby(0);
+          return;
+        }
+        if (dataKey === "kicksy") {
+          price.textContent = formatKaryKicksy(0);
+          return;
+        }
+        price.textContent = formatKaryPln(0);
+      });
+
+      const listPairs = getKaryPricePairs();
+      listPairs.forEach((pair) => {
+        const rows = Array.from(pair.list.querySelectorAll("li"));
+        let visibleCount = 0;
+
+        rows.forEach((row) => {
+          const priceEl = row.querySelector(".kary-price-value");
+          if (!priceEl) {
+            row.hidden = false;
+            visibleCount += 1;
+            return;
+          }
+
+          if (dataKey === "pln") {
+            row.hidden = false;
+            visibleCount += 1;
+            return;
+          }
+
+          const rawValue = String(priceEl.dataset[dataKey] || "");
+          const numericValue = parseFirstInteger(rawValue);
+          const shouldShow = numericValue > 0;
+          row.hidden = !shouldShow;
+          if (shouldShow) {
+            visibleCount += 1;
+          }
+        });
+
+        const hasItems = visibleCount > 0;
+        pair.list.hidden = !hasItems;
+        pair.list.style.display = hasItems ? "grid" : "none";
+        if (pair.empty) {
+          pair.empty.hidden = hasItems;
+          pair.empty.style.display = hasItems ? "none" : "block";
+        }
+      });
+    }
+
+    function setKaryStatus(text, type = "info") {
+      setPanelStatus(adminKaryStatusEl, text, type);
+    }
+
+    function setKaryCennikStatus(text, type = "info") {
+      setPanelStatus(adminCennikStatusEl, text, type);
+    }
+
+    function loadTimeryConfig() {
+      const raw = readStorageJson(TIMERY_CONFIG_KEY, timeryConfigState);
+      const asObject = raw && typeof raw === "object" ? raw : {};
+      const layoutRaw = String(asObject.layout || "list").toLowerCase();
+      const layout = layoutRaw === "grid" || layoutRaw === "compact" ? layoutRaw : "list";
+      timeryConfigState = {
+        panelOpen: Boolean(asObject.panelOpen),
+        layout,
+        bgColor: /^#[\da-f]{6}$/i.test(String(asObject.bgColor || "")) ? String(asObject.bgColor) : "#101420",
+        showTitle: asObject.showTitle !== false,
+        showProgress: asObject.showProgress !== false,
+        showStatus: asObject.showStatus !== false
+      };
+    }
+
+    function saveTimeryConfig() {
+      saveStorageJson(TIMERY_CONFIG_KEY, timeryConfigState);
+    }
+
+    function applyTimeryConfig() {
+      if (!timeryPanelEl) {
+        return;
+      }
+
+      timeryPanelEl.classList.toggle("timery-layout-grid", timeryConfigState.layout === "grid");
+      timeryPanelEl.classList.toggle("timery-layout-compact", timeryConfigState.layout === "compact");
+      timeryPanelEl.classList.toggle("timery-hide-title", !timeryConfigState.showTitle);
+      timeryPanelEl.classList.toggle("timery-hide-progress", !timeryConfigState.showProgress);
+      timeryPanelEl.classList.toggle("timery-hide-status", !timeryConfigState.showStatus);
+      timeryPanelEl.style.setProperty("--timery-card-bg", timeryConfigState.bgColor);
+
+      if (timeryConfigPanelEl) {
+        timeryConfigPanelEl.hidden = !timeryConfigState.panelOpen;
+      }
+      if (timeryConfigBtnEl) {
+        timeryConfigBtnEl.textContent = timeryConfigState.panelOpen ? "Ukryj konfigurację" : "Konfiguracja";
+      }
+
+      if (timeryLayoutSelectEl) {
+        timeryLayoutSelectEl.value = timeryConfigState.layout;
+      }
+      if (timeryBgColorInputEl) {
+        timeryBgColorInputEl.value = timeryConfigState.bgColor;
+      }
+      if (timeryShowTitleEl) {
+        timeryShowTitleEl.checked = timeryConfigState.showTitle;
+      }
+      if (timeryShowProgressEl) {
+        timeryShowProgressEl.checked = timeryConfigState.showProgress;
+      }
+      if (timeryShowStatusEl) {
+        timeryShowStatusEl.checked = timeryConfigState.showStatus;
+      }
+    }
+
+    function loadLicznikiConfig() {
+      const raw = readStorageJson(LICZNIKI_CONFIG_KEY, licznikiConfigState);
+      const asObject = raw && typeof raw === "object" ? raw : {};
+      const layoutRaw = String(asObject.layout || "grid").toLowerCase();
+      const layout =
+        layoutRaw === "list" || layoutRaw === "compact" ? layoutRaw : "grid";
+      licznikiConfigState = {
+        panelOpen: Boolean(asObject.panelOpen),
+        layout,
+        bgColor: /^#[\da-f]{6}$/i.test(String(asObject.bgColor || "")) ? String(asObject.bgColor) : "#101420",
+        showTitle: asObject.showTitle !== false,
+        showStatus: asObject.showStatus !== false,
+        showValue: asObject.showValue !== false
+      };
+    }
+
+    function saveLicznikiConfig() {
+      saveStorageJson(LICZNIKI_CONFIG_KEY, licznikiConfigState);
+    }
+
+    function applyLicznikiConfig() {
+      if (!licznikiPanelEl) {
+        return;
+      }
+
+      licznikiPanelEl.classList.toggle("liczniki-layout-list", licznikiConfigState.layout === "list");
+      licznikiPanelEl.classList.toggle("liczniki-layout-grid", licznikiConfigState.layout === "grid");
+      licznikiPanelEl.classList.toggle("liczniki-layout-compact", licznikiConfigState.layout === "compact");
+      licznikiPanelEl.classList.toggle("liczniki-hide-title", !licznikiConfigState.showTitle);
+      licznikiPanelEl.classList.toggle("liczniki-hide-status", !licznikiConfigState.showStatus);
+      licznikiPanelEl.classList.toggle("liczniki-hide-value", !licznikiConfigState.showValue);
+      licznikiPanelEl.style.setProperty("--liczniki-card-bg", licznikiConfigState.bgColor);
+
+      if (licznikiConfigPanelEl) {
+        licznikiConfigPanelEl.hidden = !licznikiConfigState.panelOpen;
+      }
+      if (licznikiConfigBtnEl) {
+        licznikiConfigBtnEl.textContent = licznikiConfigState.panelOpen ? "Ukryj konfigurację" : "Konfiguracja";
+      }
+      if (licznikiLayoutSelectEl) {
+        licznikiLayoutSelectEl.value = licznikiConfigState.layout;
+      }
+      if (licznikiBgColorInputEl) {
+        licznikiBgColorInputEl.value = licznikiConfigState.bgColor;
+      }
+      if (licznikiShowTitleEl) {
+        licznikiShowTitleEl.checked = licznikiConfigState.showTitle;
+      }
+      if (licznikiShowStatusEl) {
+        licznikiShowStatusEl.checked = licznikiConfigState.showStatus;
+      }
+      if (licznikiShowValueEl) {
+        licznikiShowValueEl.checked = licznikiConfigState.showValue;
+      }
+    }
+
+    function resetAdminCennikForm() {
+      if (!adminCennikFormEl) {
+        return;
+      }
+      adminCennikFormEl.reset();
+      const idInput = adminCennikFormEl.querySelector('input[name="cennikId"]');
+      if (idInput) {
+        idInput.value = "";
+      }
+      const sectionInput = adminCennikFormEl.querySelector('select[name="cennikSection"]');
+      if (sectionInput) {
+        sectionInput.value = "chill";
+      }
+    }
+
+    function fillAdminCennikForm(item) {
+      if (!adminCennikFormEl || !item) {
+        return;
+      }
+      const idInput = adminCennikFormEl.querySelector('input[name="cennikId"]');
+      const sectionInput = adminCennikFormEl.querySelector('select[name="cennikSection"]');
+      const nameInput = adminCennikFormEl.querySelector('input[name="cennikName"]');
+      const descriptionInput = adminCennikFormEl.querySelector('input[name="cennikDescription"]');
+      const plnInput = adminCennikFormEl.querySelector('input[name="cennikPricePln"]');
+      const subyInput = adminCennikFormEl.querySelector('input[name="cennikPriceSuby"]');
+      const kicksyInput = adminCennikFormEl.querySelector('input[name="cennikPriceKicksy"]');
+
+      if (idInput) {
+        idInput.value = item.id;
+      }
+      if (sectionInput) {
+        sectionInput.value = item.section;
+      }
+      if (nameInput) {
+        nameInput.value = item.name;
+      }
+      if (descriptionInput) {
+        descriptionInput.value = item.description || "";
+      }
+      if (plnInput) {
+        plnInput.value = String(item.pricePln);
+      }
+      if (subyInput) {
+        subyInput.value = String(item.priceSuby);
+      }
+      if (kicksyInput) {
+        kicksyInput.value = String(item.priceKicksy);
+      }
+    }
+
+    function getNextKarySortOrder(section) {
+      const values = karyCennikItems
+        .filter((item) => item.section === section)
+        .map((item) => Number(item.sortOrder) || 0);
+      const maxValue = values.length ? Math.max(...values) : -1;
+      return maxValue + 1;
+    }
+
+    function upsertKaryCennikFromForm() {
+      if (!adminCennikFormEl) {
+        return;
+      }
+
+      const formData = new FormData(adminCennikFormEl);
+      const editingId = String(formData.get("cennikId") || "").trim();
+      const section = normalizeKarySection(formData.get("cennikSection"));
+      const name = String(formData.get("cennikName") || "").trim();
+      const description = String(formData.get("cennikDescription") || "").trim();
+      const pricePlnRaw = Number(formData.get("cennikPricePln"));
+      const priceSubyRaw = Number(formData.get("cennikPriceSuby"));
+      const priceKicksyRaw = Number(formData.get("cennikPriceKicksy"));
+
+      if (!name) {
+        setKaryCennikStatus("Podaj nazwe pozycji cennika.", "error");
+        return;
+      }
+      if (
+        !Number.isFinite(pricePlnRaw) ||
+        pricePlnRaw < 0 ||
+        !Number.isFinite(priceSubyRaw) ||
+        priceSubyRaw < 0 ||
+        !Number.isFinite(priceKicksyRaw) ||
+        priceKicksyRaw < 0
+      ) {
+        setKaryCennikStatus("Podaj poprawne ceny (PLN, Suby i Kicksy).", "error");
+        return;
+      }
+
+      const pricePln = Math.floor(pricePlnRaw);
+      const priceSuby = Math.floor(priceSubyRaw);
+      const priceKicksy = Math.floor(priceKicksyRaw);
+
+      if (editingId) {
+        const index = karyCennikItems.findIndex((item) => item.id === editingId);
+        if (index !== -1) {
+          const previous = karyCennikItems[index];
+          const previousSnapshot = {
+            section: previous.section,
+            name: previous.name,
+            description: previous.description,
+            pricePln: previous.pricePln,
+            priceSuby: previous.priceSuby,
+            priceKicksy: previous.priceKicksy
+          };
+          karyCennikItems[index] = {
+            ...previous,
+            section,
+            name,
+            description,
+            pricePln,
+            priceSuby,
+            priceKicksy,
+            sortOrder: previous.section === section ? previous.sortOrder : getNextKarySortOrder(section)
+          };
+          saveKaryCennikItems();
+          renderPublicKaryCennik();
+          renderAdminKaryCennikTable();
+          resetAdminCennikForm();
+          setKaryCennikStatus("Zaktualizowano pozycje cennika.", "success");
+          sendAdminWebhookEvent("cennik_update", name, {
+            section,
+            description,
+            pricePln,
+            priceSuby,
+            priceKicksy,
+            previous: previousSnapshot
+          });
+          return;
+        }
+      }
+
+      karyCennikItems.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        section,
+        name,
+        description,
+        pricePln,
+        priceSuby,
+        priceKicksy,
+        sortOrder: getNextKarySortOrder(section)
+      });
+
+      saveKaryCennikItems();
+      renderPublicKaryCennik();
+      renderAdminKaryCennikTable();
+      resetAdminCennikForm();
+      setKaryCennikStatus("Dodano nowa pozycje cennika.", "success");
+      sendAdminWebhookEvent("cennik_add", name, {
+        section,
+        description,
+        pricePln,
+        priceSuby,
+        priceKicksy
+      });
+    }
+
+    function formatTimerClock(totalSeconds) {
+      const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      const hours = Math.floor(safe / 3600);
+      const minutes = Math.floor((safe % 3600) / 60);
+      const seconds = safe % 60;
+      return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
+    }
+
+    function getTimerSecondsFromInput(formData) {
+      const amountRaw = Number(formData.get("timerAmount"));
+      const unit = String(formData.get("timerUnit") || "minutes");
+      if (!Number.isFinite(amountRaw) || amountRaw <= 0) {
+        return null;
+      }
+
+      const amount = Math.floor(amountRaw);
+      if (unit === "hours") {
+        return amount * 3600;
+      }
+      if (unit === "seconds") {
+        return amount;
+      }
+      return amount * 60;
+    }
+
+    function ensureKaryStateShape() {
+      if (!karyLiveState || typeof karyLiveState !== "object") {
+        karyLiveState = { timers: {}, timerTotals: {}, counters: {}, lastTickAt: 0 };
+      }
+      if (!karyLiveState.timers || typeof karyLiveState.timers !== "object") {
+        karyLiveState.timers = {};
+      }
+      if (!karyLiveState.timerTotals || typeof karyLiveState.timerTotals !== "object") {
+        karyLiveState.timerTotals = {};
+      }
+      if (!karyLiveState.counters || typeof karyLiveState.counters !== "object") {
+        karyLiveState.counters = {};
+      }
+      const lastTickRaw = Number(karyLiveState.lastTickAt || 0);
+      karyLiveState.lastTickAt = Number.isFinite(lastTickRaw) && lastTickRaw > 0 ? Math.floor(lastTickRaw) : Date.now();
+
+      karyTimerDefinitions.forEach((timer) => {
+        const currentValue = Number(karyLiveState.timers[timer.key] || 0);
+        const normalizedCurrent = Number.isFinite(currentValue) && currentValue > 0 ? Math.floor(currentValue) : 0;
+        const totalValue = Number(karyLiveState.timerTotals[timer.key] || 0);
+        let normalizedTotal = Number.isFinite(totalValue) && totalValue > 0 ? Math.floor(totalValue) : 0;
+        if (normalizedCurrent > normalizedTotal) {
+          normalizedTotal = normalizedCurrent;
+        }
+
+        karyLiveState.timers[timer.key] = normalizedCurrent;
+        karyLiveState.timerTotals[timer.key] = normalizedTotal;
+      });
+      karyCounterDefinitions.forEach((counter) => {
+        const currentValue = Number(karyLiveState.counters[counter.key] || 0);
+        karyLiveState.counters[counter.key] = Number.isFinite(currentValue) && currentValue > 0 ? Math.floor(currentValue) : 0;
+      });
+    }
+
+    function loadKaryState() {
+      karyLiveState = readStorageJson(KARY_STATE_KEY, { timers: {}, timerTotals: {}, counters: {}, lastTickAt: 0 });
+      ensureKaryStateShape();
+    }
+
+    function saveKaryState() {
+      ensureKaryStateShape();
+      saveStorageJson(KARY_STATE_KEY, karyLiveState);
+    }
+
+    function renderKaryLiveState() {
+      ensureKaryStateShape();
+      const activeTimerKeys = new Set();
+
+      karyTimerCardEls.forEach((card) => {
+        const key = String(card.dataset.karyTimer || "");
+        if (!key) {
+          return;
+        }
+        const remaining = Math.max(0, Math.floor(Number(karyLiveState.timers[key] || 0)));
+        const total = Math.max(0, Math.floor(Number(karyLiveState.timerTotals[key] || 0)));
+        const progress = total > 0 ? Math.max(0, Math.min(100, (remaining / total) * 100)) : 0;
+        const stateEl = card.querySelector("[data-kary-timer-state]");
+        const timeEl = card.querySelector("[data-kary-timer-time]");
+
+        if (stateEl) {
+          stateEl.textContent = remaining > 0 ? "AKTYWNY" : "IDLE";
+        }
+        if (timeEl) {
+          const nextClock = formatTimerClock(remaining);
+          const prevClock = String(timeEl.dataset.clock || timeEl.textContent || "");
+          if (prevClock !== nextClock) {
+            timeEl.textContent = nextClock;
+            timeEl.dataset.clock = nextClock;
+            if (remaining > 0) {
+              if (!timeEl.dataset.tickAnimationBound) {
+                timeEl.dataset.tickAnimationBound = "1";
+                timeEl.addEventListener("animationend", () => {
+                  timeEl.classList.remove("time-tick");
+                });
+              }
+              timeEl.classList.remove("time-tick");
+              void timeEl.offsetWidth;
+              timeEl.classList.add("time-tick");
+            } else {
+              timeEl.classList.remove("time-tick");
+            }
+          }
+        }
+        card.style.setProperty("--timer-progress", `${progress}%`);
+        card.classList.toggle("is-active", remaining > 0);
+        if (remaining > 0) {
+          activeTimerKeys.add(key);
+        }
+      });
+
+      const activeTimersCount = activeTimerKeys.size;
+      const activeTimerItems = karyTimerDefinitions
+        .map((timer) => {
+          const remaining = Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0)));
+          return { ...timer, remaining };
+        })
+        .filter((timer) => timer.remaining > 0);
+
+      if (streamIntroActiveCountEl) {
+        streamIntroActiveCountEl.textContent = String(activeTimersCount);
+      }
+      if (streamIntroLiveEl) {
+        streamIntroLiveEl.classList.toggle("is-inactive", activeTimersCount <= 0);
+      }
+      if (streamIntroActiveTextEl) {
+        if (activeTimersCount === 1) {
+          streamIntroActiveTextEl.textContent = "aktywna kara teraz";
+        } else if (activeTimersCount >= 2 && activeTimersCount <= 4) {
+          streamIntroActiveTextEl.textContent = "aktywne kary teraz";
+        } else {
+          streamIntroActiveTextEl.textContent = "aktywnych kar teraz";
+        }
+      }
+      if (streamActiveKaryEl) {
+        streamActiveKaryEl.classList.toggle("is-empty", activeTimerItems.length === 0);
+      }
+      if (streamActiveKaryListEl) {
+        if (!activeTimerItems.length) {
+          streamActiveKaryListEl.innerHTML = '<p class="stream-active-kary-empty">Brak aktywnych kar.</p>';
+        } else {
+          streamActiveKaryListEl.innerHTML = activeTimerItems
+            .map(
+              (timer) => `
+                <article class="stream-active-kary-item">
+                  <p class="stream-active-kary-name">${escapeHtml(timer.label)}</p>
+                  <span class="stream-active-kary-time time-tick">${formatTimerClock(timer.remaining)}</span>
+                </article>
+              `
+            )
+            .join("");
+        }
+      }
+
+      karyCounterCardEls.forEach((card) => {
+        const key = String(card.dataset.karyCounter || "");
+        if (!key) {
+          return;
+        }
+        const value = Math.max(0, Math.floor(Number(karyLiveState.counters[key] || 0)));
+        const valueEl = card.querySelector("[data-kary-counter-value]");
+        if (valueEl) {
+          valueEl.textContent = String(value);
+        }
+      });
+    }
+
+    function tickKaryTimers() {
+      // Keep multiple opened windows in sync without manual refresh.
+      loadKaryState();
+      ensureKaryStateShape();
+      const now = Date.now();
+      const lastTickAt = Math.max(0, Math.floor(Number(karyLiveState.lastTickAt || now)));
+      const elapsedSeconds = Math.max(0, Math.floor((now - lastTickAt) / 1000));
+
+      if (elapsedSeconds <= 0) {
+        renderKaryLiveState();
+        return;
+      }
+
+      let changed = false;
+      karyTimerDefinitions.forEach((timer) => {
+        const current = Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0)));
+        if (current > 0) {
+          const nextValue = Math.max(0, current - elapsedSeconds);
+          if (nextValue !== current) {
+            changed = true;
+            karyLiveState.timers[timer.key] = nextValue;
+          }
+        }
+      });
+
+      karyLiveState.lastTickAt = now;
+      if (changed) {
+        saveKaryState();
+      } else {
+        ensureKaryStateShape();
+      }
+      renderKaryLiveState();
+    }
+
+    function startKaryTimerTick() {
+      if (karyTimerTickId || !karyTimerDefinitions.length) {
+        return;
+      }
+      karyTimerTickId = window.setInterval(tickKaryTimers, 1000);
+    }
+
+    function populateKaryAdminControls() {
+      if (adminTimerSelectEl) {
+        adminTimerSelectEl.innerHTML = karyTimerDefinitions
+          .map((timer) => `<option value="${escapeHtml(timer.key)}">${escapeHtml(timer.label)}</option>`)
+          .join("");
+      }
+      if (adminCounterSelectEl) {
+        adminCounterSelectEl.innerHTML = karyCounterDefinitions
+          .map((counter) => `<option value="${escapeHtml(counter.key)}">${escapeHtml(counter.label)}</option>`)
+          .join("");
+      }
+    }
+
+    function getTimerLabel(timerKey) {
+      const match = karyTimerDefinitions.find((item) => item.key === timerKey);
+      return match ? match.label : timerKey;
+    }
+
+    function getCounterLabel(counterKey) {
+      const match = karyCounterDefinitions.find((item) => item.key === counterKey);
+      return match ? match.label : counterKey;
+    }
+
+    async function handleDiscordOAuthCallback() {
+      if (!window.TakuuWebhook || typeof window.TakuuWebhook.completeDiscordAdminLogin !== "function") {
+        return;
+      }
+
+      const callbackResult = await window.TakuuWebhook.completeDiscordAdminLogin(adminAccounts);
+      if (!callbackResult || callbackResult.skipped) {
+        return;
+      }
+
+      if (!callbackResult.ok) {
+        setDiscordStatus(callbackResult.error || "Nie udało się zalogować przez Discord.", "error");
+        return;
+      }
+
+      const session = callbackResult.session || null;
+      if (!session) {
+        setDiscordStatus("Nie udało się odczytać sesji Discord.", "error");
+        return;
+      }
+
+      const linkedAccount = callbackResult.linkedAccount || null;
+      if (callbackResult.accountsChanged) {
+        saveAdminAccounts();
+      }
+      const hasAnyAdminAccess = Boolean(
+        callbackResult.hasAnyAdminAccess == null ? callbackResult.canAccessAdmin : callbackResult.hasAnyAdminAccess
+      );
+      const canAccessPanelAdmin = Boolean(callbackResult.canAccessPanelAdmin);
+      const canAccessStreamObs = Boolean(callbackResult.canAccessStreamObs);
+      activeDiscordSession = session;
+      isAdminAuthenticated = hasAnyAdminAccess;
+      currentAdminLogin = isAdminAuthenticated ? `discord:${session.username}` : "";
+      try {
+        window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      } catch (_error) {
+        // Ignore session storage failures.
+      }
+
+      sendAdminWebhookEvent("admin_login_discord", "Panel Administratora", {
+        discordId: session.id,
+        discordUser: session.username,
+        discordDisplayName: session.displayName,
+        canAccessAnyAdminArea: hasAnyAdminAccess,
+        canAccessPanelAdmin,
+        canAccessStreamObs
+      });
+      renderAdminAccountsTable();
+
+      if (!isAdminAuthenticated) {
+        setAdminStatus("Konto Discord zapisane, ale nie ma permisji do Panelu Admina ani StreamOBS.", "error");
+        setDiscordStatus("Brak permisji. Owner ma dostep automatyczny, pozostale ID musza dostac permisje.", "error");
+        sendAdminWebhookEvent("admin_login_discord_denied", "Panel Administratora", {
+          discordId: session.id,
+          discordUser: session.username,
+          linkedAccountId: linkedAccount ? linkedAccount.id : ""
+        });
+        return;
+      }
+
+      setAdminStatus(`Zalogowano przez Discord jako ${session.displayName || session.username}.`, "success");
+      setDiscordStatus("Logowanie Discord zakończone pomyślnie.", "success");
+      navigateTo(ADMIN_ROUTE_PATH, "admin");
+    }
+
+    async function startDiscordLoginFlow() {
+      if (!window.TakuuWebhook || typeof window.TakuuWebhook.startDiscordLogin !== "function") {
+        setDiscordStatus("Brak modułu webhook.js dla logowania Discord.", "error");
+        return;
+      }
+
+      setRememberMeEnabled(Boolean(adminRememberMeEl && adminRememberMeEl.checked));
+
+      if (typeof window.TakuuWebhook.isDiscordLoginAvailable === "function") {
+        const availability = window.TakuuWebhook.isDiscordLoginAvailable();
+        if (!availability.ok) {
+          setDiscordStatus(availability.error || "Logowanie Discord jest niedostepne.", "error");
+          return;
+        }
+      }
+
+      setDiscordStatus("Przekierowanie do logowania Discord...", "info");
+      const result = await window.TakuuWebhook.startDiscordLogin();
+      if (result && result.ok === false) {
+        setDiscordStatus(result.error || "Nie udało się uruchomić logowania Discord.", "error");
+      }
+    }
+
+    function addTimerTimeToLiveState(timerKey, deltaSeconds, options = {}) {
+      ensureKaryStateShape();
+
+      const normalizedKey = String(timerKey || "").trim();
+      if (!normalizedKey || !Object.prototype.hasOwnProperty.call(karyLiveState.timers, normalizedKey)) {
+        return {
+          ok: false,
+          error: "INVALID_TIMER_KEY"
+        };
+      }
+
+      const normalizedDeltaSeconds = Math.max(0, Math.floor(Number(deltaSeconds) || 0));
+      if (normalizedDeltaSeconds <= 0) {
+        return {
+          ok: false,
+          error: "INVALID_DELTA_SECONDS"
+        };
+      }
+
+      const current = Math.max(0, Math.floor(Number(karyLiveState.timers[normalizedKey] || 0)));
+      const currentTotal = Math.max(current, Math.floor(Number(karyLiveState.timerTotals[normalizedKey] || 0)));
+      const nextRemaining = current + normalizedDeltaSeconds;
+      const nextTotal = current > 0 ? currentTotal + normalizedDeltaSeconds : nextRemaining;
+
+      karyLiveState.timers[normalizedKey] = nextRemaining;
+      karyLiveState.timerTotals[normalizedKey] = nextTotal;
+      karyLiveState.lastTickAt = Date.now();
+
+      saveKaryState();
+      renderKaryLiveState();
+
+      const timerLabel = getTimerLabel(normalizedKey);
+      const silentStatus = options.silentStatus === true;
+      if (!silentStatus) {
+        const statusText =
+          String(options.statusText || "").trim() || "Dodano czas do timera.";
+        setKaryStatus(statusText, "success");
+      }
+
+      if (options.emitWebhook === true) {
+        const webhookAction = String(options.webhookAction || "").trim() || "timer_add_time";
+        sendAdminWebhookEvent(webhookAction, timerLabel, {
+          timerKey: normalizedKey,
+          timerLabel,
+          deltaSeconds: normalizedDeltaSeconds,
+          remainingSeconds: nextRemaining,
+          source: String(options.source || "manual")
+        });
+      }
+
+      return {
+        ok: true,
+        timerKey: normalizedKey,
+        timerLabel,
+        deltaSeconds: normalizedDeltaSeconds,
+        remainingSeconds: nextRemaining
+      };
+    }
+
+    function addTimerTimeFromExternal(timerKey, amount, unit = "minutes", options = {}) {
+      const normalizedUnit = String(unit || "minutes").trim().toLowerCase();
+      const amountValue = Math.max(0, Math.floor(Number(amount) || 0));
+      let deltaSeconds = 0;
+
+      if (normalizedUnit === "seconds" || normalizedUnit === "second") {
+        deltaSeconds = amountValue;
+      } else if (normalizedUnit === "hours" || normalizedUnit === "hour") {
+        deltaSeconds = amountValue * 3600;
+      } else {
+        deltaSeconds = amountValue * 60;
+      }
+
+      return addTimerTimeToLiveState(timerKey, deltaSeconds, {
+        silentStatus: options.silentStatus !== false,
+        emitWebhook: options.emitWebhook === true,
+        webhookAction: options.webhookAction,
+        source: options.source || "external"
+      });
+    }
+
+    function normalizeExternalTimerPayload(payload, defaultSource = "external-event") {
+      if (!payload || typeof payload !== "object") {
+        return null;
+      }
+
+      const timerKey = String(payload.timerKey || payload.key || payload.timer || "").trim();
+      if (!timerKey) {
+        return null;
+      }
+
+      let unit = String(payload.unit || "").trim().toLowerCase();
+      let amount = null;
+
+      if (payload.amount != null) {
+        amount = Number(payload.amount);
+      } else if (payload.value != null) {
+        amount = Number(payload.value);
+      } else if (payload.minutes != null) {
+        amount = Number(payload.minutes);
+        unit = unit || "minutes";
+      } else if (payload.seconds != null) {
+        amount = Number(payload.seconds);
+        unit = unit || "seconds";
+      } else if (payload.hours != null) {
+        amount = Number(payload.hours);
+        unit = unit || "hours";
+      }
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return null;
+      }
+
+      if (
+        unit !== "minutes" &&
+        unit !== "minute" &&
+        unit !== "hours" &&
+        unit !== "hour" &&
+        unit !== "seconds" &&
+        unit !== "second"
+      ) {
+        unit = "minutes";
+      }
+
+      return {
+        timerKey,
+        amount: Math.floor(amount),
+        unit: unit || "minutes",
+        options: {
+          silentStatus: payload.silentStatus !== false,
+          emitWebhook: payload.emitWebhook === true,
+          webhookAction: payload.webhookAction,
+          source: String(payload.source || defaultSource || "external-event")
+        }
+      };
+    }
+
+    function applyExternalTimerPayload(payload, defaultSource = "external-event") {
+      const normalized = normalizeExternalTimerPayload(payload, defaultSource);
+      if (!normalized) {
+        return {
+          ok: false,
+          error: "INVALID_EXTERNAL_TIMER_PAYLOAD"
+        };
+      }
+
+      return addTimerTimeFromExternal(
+        normalized.timerKey,
+        normalized.amount,
+        normalized.unit,
+        normalized.options
+      );
+    }
+
+    function flushPendingExternalTimerQueue() {
+      if (!Array.isArray(window.__takuuPendingTimerAdds) || !window.__takuuPendingTimerAdds.length) {
+        return;
+      }
+
+      const pendingQueue = window.__takuuPendingTimerAdds.slice();
+      window.__takuuPendingTimerAdds.length = 0;
+
+      pendingQueue.forEach((payload) => {
+        applyExternalTimerPayload(payload, "pending-queue");
+      });
+    }
+
+    function bindExternalTimerBridge() {
+      const previousApi =
+        window.TakuuKaryLive && typeof window.TakuuKaryLive === "object" ? window.TakuuKaryLive : {};
+
+      const addTimerTime = (timerKey, amount, unit = "minutes", options = {}) => {
+        return addTimerTimeFromExternal(timerKey, amount, unit, {
+          silentStatus: options.silentStatus !== false,
+          emitWebhook: options.emitWebhook === true,
+          webhookAction: options.webhookAction,
+          source: options.source || "external-api"
+        });
+      };
+
+      window.TakuuKaryLive = {
+        ...previousApi,
+        addTimerTime,
+        addTimerMinutes: (timerKey, minutes, options = {}) => addTimerTime(timerKey, minutes, "minutes", options),
+        addTimerSeconds: (timerKey, seconds, options = {}) => addTimerTime(timerKey, seconds, "seconds", options),
+        getStateSnapshot: () => {
+          ensureKaryStateShape();
+          return {
+            timers: { ...karyLiveState.timers },
+            timerTotals: { ...karyLiveState.timerTotals },
+            counters: { ...karyLiveState.counters },
+            lastTickAt: Math.max(0, Math.floor(Number(karyLiveState.lastTickAt || 0)))
+          };
+        }
+      };
+
+      if (!karyExternalTimerBridgeBound) {
+        window.addEventListener("takuu:add-timer-time", (event) => {
+          const detail = event && event.detail ? event.detail : null;
+          applyExternalTimerPayload(detail, "custom-event");
+        });
+        karyExternalTimerBridgeBound = true;
+      }
+
+      flushPendingExternalTimerQueue();
+    }
+
+    function applyTimerAction(action, formData) {
+      ensureKaryStateShape();
+      const normalizedAction =
+        action === "set" || action === "reset" || action === "remove" ? action : "add";
+
+      const timerKey = String(formData.get("timerKey") || "").trim();
+      if (!timerKey || !Object.prototype.hasOwnProperty.call(karyLiveState.timers, timerKey)) {
+        setKaryStatus("Wybierz poprawny timer.", "error");
+        return;
+      }
+      const timerLabel = getTimerLabel(timerKey);
+
+      if (normalizedAction === "reset") {
+        karyLiveState.timers[timerKey] = 0;
+        karyLiveState.timerTotals[timerKey] = 0;
+        karyLiveState.lastTickAt = Date.now();
+        saveKaryState();
+        renderKaryLiveState();
+        setKaryStatus("Timer zresetowany.", "success");
+        sendAdminWebhookEvent("timer_reset", timerLabel, {
+          timerKey,
+          timerLabel,
+          remainingSeconds: 0
+        });
+        return;
+      }
+
+      const deltaSeconds = getTimerSecondsFromInput(formData);
+      if (!deltaSeconds) {
+        setKaryStatus("Podaj poprawną wartość czasu.", "error");
+        return;
+      }
+
+      const current = Math.max(0, Math.floor(Number(karyLiveState.timers[timerKey] || 0)));
+      const currentTotal = Math.max(current, Math.floor(Number(karyLiveState.timerTotals[timerKey] || 0)));
+      if (normalizedAction === "set") {
+        karyLiveState.timers[timerKey] = deltaSeconds;
+        karyLiveState.timerTotals[timerKey] = deltaSeconds;
+      } else if (normalizedAction === "remove") {
+        const nextRemaining = Math.max(0, current - deltaSeconds);
+        karyLiveState.timers[timerKey] = nextRemaining;
+        karyLiveState.timerTotals[timerKey] = nextRemaining > 0 ? Math.max(nextRemaining, currentTotal) : 0;
+      } else {
+        const addResult = addTimerTimeToLiveState(timerKey, deltaSeconds, {
+          silentStatus: false,
+          statusText: "Dodano czas do timera.",
+          emitWebhook: true,
+          webhookAction: "timer_add_time",
+          source: "admin-panel"
+        });
+        if (!addResult.ok) {
+          setKaryStatus("Nie udało się dodać czasu do timera.", "error");
+          return;
+        }
+        return;
+      }
+      karyLiveState.lastTickAt = Date.now();
+      saveKaryState();
+      renderKaryLiveState();
+      if (normalizedAction === "set") {
+        setKaryStatus("Ustawiono czas timera.", "success");
+        sendAdminWebhookEvent("timer_set", timerLabel, {
+          timerKey,
+          timerLabel,
+          deltaSeconds,
+          remainingSeconds: Math.max(0, Math.floor(Number(karyLiveState.timers[timerKey] || 0)))
+        });
+      } else if (normalizedAction === "remove") {
+        setKaryStatus("Usunięto czas z timera.", "success");
+        sendAdminWebhookEvent("timer_remove_time", timerLabel, {
+          timerKey,
+          timerLabel,
+          deltaSeconds,
+          remainingSeconds: Math.max(0, Math.floor(Number(karyLiveState.timers[timerKey] || 0)))
+        });
+      } else {
+        setKaryStatus("Dodano czas do timera.", "success");
+        sendAdminWebhookEvent("timer_add_time", timerLabel, {
+          timerKey,
+          timerLabel,
+          deltaSeconds,
+          remainingSeconds: Math.max(0, Math.floor(Number(karyLiveState.timers[timerKey] || 0)))
+        });
+      }
+    }
+
+    function applyCounterAction(action, formData) {
+      ensureKaryStateShape();
+      const normalizedAction = action === "set" || action === "reset" ? action : "add";
+
+      const counterKey = String(formData.get("counterKey") || "").trim();
+      if (!counterKey || !Object.prototype.hasOwnProperty.call(karyLiveState.counters, counterKey)) {
+        setKaryStatus("Wybierz poprawny licznik.", "error");
+        return;
+      }
+      const counterLabel = getCounterLabel(counterKey);
+
+      if (normalizedAction === "reset") {
+        karyLiveState.counters[counterKey] = 0;
+        saveKaryState();
+        renderKaryLiveState();
+        setKaryStatus("Licznik zresetowany.", "success");
+        sendAdminWebhookEvent("counter_reset", counterLabel, {
+          counterKey,
+          counterLabel,
+          value: 0
+        });
+        return;
+      }
+
+      const inputValue = Number(formData.get("counterAmount"));
+      if (!Number.isFinite(inputValue) || inputValue < 0) {
+        setKaryStatus("Podaj poprawną liczbę.", "error");
+        return;
+      }
+      const deltaValue = Math.floor(inputValue);
+
+      const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)));
+      karyLiveState.counters[counterKey] = normalizedAction === "set" ? deltaValue : current + deltaValue;
+      saveKaryState();
+      renderKaryLiveState();
+      setKaryStatus(normalizedAction === "set" ? "Ustawiono licznik." : "Dodano wartość do licznika.", "success");
+      sendAdminWebhookEvent(normalizedAction === "set" ? "counter_set" : "counter_add", counterLabel, {
+        counterKey,
+        counterLabel,
+        deltaValue,
+        value: Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)))
+      });
+    }
+
+    function applyView(routeName) {
+      const isRouteChanged = lastAppliedRouteName !== routeName;
+      lastAppliedRouteName = routeName;
+
+      const showObsOverlay = OBS_OVERLAY_MODE;
+      const showKary = routeName === "kary";
+      const showTimery = routeName === "timery";
+      const showLiczniki = routeName === "liczniki";
+      const showClips = routeName === "clips";
+      const showStats = routeName === "stats" && !showObsOverlay;
+      const showHome = routeName === "home";
+      const showLogin = routeName === "login" && !showObsOverlay;
+      const showAdmin = routeName === "admin" || showObsOverlay;
+
+      if (showAdmin && !showObsOverlay && !isAdminAuthenticated) {
+        setAdminStatus("Zaloguj się, aby otworzyć panel administratora.", "error");
+        navigateTo(LOGIN_ROUTE_PATH, "login");
+        return;
+      }
+
+      if (showLogin && isAdminAuthenticated) {
+        navigateTo(ADMIN_ROUTE_PATH, "admin");
+        return;
+      }
+
+      if (mainWrapEl) {
+        mainWrapEl.hidden = !showClips;
+        mainWrapEl.style.display = showClips ? "" : "none";
+      }
+      if (karyPanelEl) {
+        karyPanelEl.hidden = !showKary;
+        karyPanelEl.style.display = showKary ? "" : "none";
+      }
+      if (timeryPanelEl) {
+        timeryPanelEl.hidden = !showTimery;
+        timeryPanelEl.style.display = showTimery ? "" : "none";
+      }
+      if (licznikiPanelEl) {
+        licznikiPanelEl.hidden = !showLiczniki;
+        licznikiPanelEl.style.display = showLiczniki ? "" : "none";
+      }
+      if (statsPanelEl) {
+        statsPanelEl.hidden = !showStats;
+        statsPanelEl.style.display = showStats ? "" : "none";
+      }
+      if (streamShellEl) {
+        streamShellEl.style.display = "";
+      }
+      if (streamLayoutEl) {
+        streamLayoutEl.style.display = showHome ? "" : "none";
+      }
+      if (friendsEl) {
+        friendsEl.style.display = showHome ? "" : "none";
+      }
+      if (adminPanelEl) {
+        adminPanelEl.hidden = !showLogin;
+      }
+      if (adminDashboardEl) {
+        adminDashboardEl.hidden = !showAdmin;
+      }
+
+      if (document.body) {
+        document.body.classList.remove(...ROUTE_BODY_CLASSES);
+        document.body.classList.add(`route-${routeName}`);
+        document.body.classList.toggle("obs-wheel-overlay", showObsOverlay);
+      }
+
+      setActiveNavState(routeName);
+      updatePlaceholder(routeName);
+
+      if (showAdmin) {
+        renderAdminMembersTable();
+        renderAdminAccountsTable();
+        renderAdminKaryCennikTable();
+        setActiveAdminTab(showObsOverlay ? "streamobs" : activeAdminTab);
+      }
+
+      if (showStats) {
+        startWheelStatsLiveUpdates();
+      } else {
+        stopWheelStatsLiveUpdates();
+      }
+
+      if (showHome || showKary || showTimery || showLiczniki || showAdmin) {
+        renderKaryLiveState();
+      }
+
+      if (showTimery) {
+        loadTimeryConfig();
+        applyTimeryConfig();
+      }
+
+      if (showLiczniki) {
+        loadLicznikiConfig();
+        applyLicznikiConfig();
+      }
+
+      if (!IS_FILE_PROTOCOL) {
+        if (showTimery && normalizePath(window.location.pathname) !== normalizePath("/timery")) {
+          try {
+            window.history.replaceState({ view: "timery" }, "", "/timery");
+          } catch (_error) {
+            // Ignore URL replace failures.
+          }
+        }
+        if (showLiczniki && normalizePath(window.location.pathname) !== normalizePath("/liczniki")) {
+          try {
+            window.history.replaceState({ view: "liczniki" }, "", "/liczniki");
+          } catch (_error) {
+            // Ignore URL replace failures.
+          }
+        }
+      }
+
+      if (showClips && !clipsLoadedOnce) {
+        clipsLoadedOnce = true;
+        loadClips();
+      }
+
+      if (showHome && (isRouteChanged || !introTypingPlayed)) {
+        const typingScheduled = queueIntroTypingAnimation(0);
+        introTypingPlayed = introTypingPlayed || typingScheduled;
+      }
+      if (showHome) {
+        updateFriendsLiveBadges(true);
+      }
+
+      if (!showHome) {
+        stopIntroTypingAnimation();
+      }
+
+      persistLastRoutePath(window.location.pathname);
+    }
+
+    function navigateTo(path, routeName) {
+      const current = normalizePathAndSearch(`${window.location.pathname}${window.location.search}`);
+      const target = normalizePathAndSearch(path);
+      const nextRoute = routeName || getRouteFromPath(path);
+      const currentRoute = getRouteFromPath(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+      const shouldResetScroll = current !== target || currentRoute !== nextRoute;
+
+      if (current !== target) {
+        try {
+          window.history.pushState({ view: nextRoute }, "", path);
+        } catch (_error) {
+          window.location.href = path;
+          return;
+        }
+
+        const afterPush = normalizePathAndSearch(`${window.location.pathname}${window.location.search}`);
+        if (afterPush !== target) {
+          window.location.href = path;
+          return;
+        }
+      }
+
+      applyView(nextRoute);
+      if (shouldResetScroll) {
+        scrollToRouteTop();
+      }
+      persistLastRoutePath(path);
+    }
+
+    function getCanonicalRoutePath(routeName) {
+      if (routeName === "kary") {
+        return KARY_ROUTE_PATH;
+      }
+      if (routeName === "timery") {
+        return TIMERY_ROUTE_PATH;
+      }
+      if (routeName === "liczniki") {
+        return LICZNIKI_ROUTE_PATH;
+      }
+      if (routeName === "clips") {
+        return CLIPS_ROUTE_PATH;
+      }
+      if (routeName === "soon") {
+        return SOON_ROUTE_PATH;
+      }
+      if (routeName === "stats") {
+        return STATS_ROUTE_PATH;
+      }
+      if (routeName === "login") {
+        return LOGIN_ROUTE_PATH;
+      }
+      if (routeName === "admin") {
+        return ADMIN_ROUTE_PATH;
+      }
+      return HOME_ROUTE_PATH;
+    }
+
+    function resolveRouteFromUrl(url) {
+      if (!url || typeof url !== "object") {
+        return null;
+      }
+
+      const path = String(url.pathname || "");
+      const search = String(url.search || "");
+      const hash = String(url.hash || "");
+
+      const pathRoute = getRouteFromPath(`${path}${search}${hash}`);
+      const explicitSearchRoute = getRouteFromSearch(search);
+      const explicitHashRoute = getRouteFromHash(hash);
+      const normalizedPath = normalizePath(path);
+      const normalizedHomePath = normalizePath(HOME_ROUTE_PATH);
+      const normalizedHomeDirPath = normalizePath(HOME_ROUTE_PATH.replace(/\/index\.html$/i, ""));
+      const isHomePath =
+        normalizedPath === normalizedHomePath ||
+        normalizedPath === normalizedHomeDirPath ||
+        normalizedPath === "/" ||
+        normalizedPath.endsWith("/index.html") ||
+        normalizedPath.endsWith("/index.htm");
+      const isPathRoute =
+        /(^|\/)(kary|timery|liczniki|klipy|clips|soon|wkrotce|stats|statystyki|logowanie|login|admin)(\/|$)/i.test(normalizedPath);
+
+      const routeName = explicitSearchRoute || explicitHashRoute || pathRoute;
+      if (!routeName) {
+        return null;
+      }
+      if (!isPathRoute && !isHomePath && !explicitSearchRoute && !explicitHashRoute) {
+        return null;
+      }
+
+      return routeName;
+    }
+
+    function bindInternalRouteLinks() {
+      document.addEventListener("click", (event) => {
+        if (event.defaultPrevented) {
+          return;
+        }
+        if (event.button !== 0) {
+          return;
+        }
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+
+        const clickTarget = event.target;
+        if (!clickTarget || typeof clickTarget.closest !== "function") {
+          return;
+        }
+
+        const link = clickTarget.closest("a[href]");
+        if (!link) {
+          return;
+        }
+        if (link.hasAttribute("download")) {
+          return;
+        }
+
+        const targetAttr = String(link.getAttribute("target") || "").toLowerCase();
+        if (targetAttr && targetAttr !== "_self") {
+          return;
+        }
+
+        let url;
+        try {
+          url = new URL(link.getAttribute("href"), window.location.href);
+        } catch (_error) {
+          return;
+        }
+
+        if (url.origin !== window.location.origin) {
+          return;
+        }
+
+        const routeName = resolveRouteFromUrl(url);
+        if (!routeName) {
+          return;
+        }
+
+        event.preventDefault();
+        navigateTo(getCanonicalRoutePath(routeName), routeName);
+      });
+    }
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatViews(views) {
+      if (typeof views === "number" && Number.isFinite(views)) {
+        return `${views.toLocaleString("pl-PL")} wyswietlen`;
+      }
+
+      const clean = String(views ?? "").trim().replace(/\s+/g, " ");
+      const match = clean.match(/^([\d.,KkMm]+)\s+views$/i);
+      if (match) {
+        return `${match[1]} wyswietlen`;
+      }
+      if (!clean) {
+        return "0 wyswietlen";
+      }
+      if (/^\d+$/.test(clean)) {
+        return `${Number(clean).toLocaleString("pl-PL")} wyswietlen`;
+      }
+      if (/wyswietlen$/i.test(clean)) {
+        return clean || "0 wyswietlen";
+      }
+      return `${clean} wyswietlen`;
+    }
+
+    function formatRelativeTime(relativeTime) {
+      const clean = String(relativeTime ?? "").trim();
+      if (!clean) {
+        return "";
+      }
+
+      const isoTime = Date.parse(clean);
+      if (!Number.isNaN(isoTime)) {
+        const diffSeconds = Math.max(0, Math.floor((Date.now() - isoTime) / 1000));
+        if (diffSeconds < 60) {
+          return "przed chwila";
+        }
+
+        const minutes = Math.floor(diffSeconds / 60);
+        if (minutes < 60) {
+          return `${minutes} min temu`;
+        }
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) {
+          return `${hours} godz. temu`;
+        }
+
+        const days = Math.floor(hours / 24);
+        if (days < 7) {
+          return days === 1 ? "1 dzien temu" : `${days} dni temu`;
+        }
+
+        const weeks = Math.floor(days / 7);
+        if (weeks < 5) {
+          return weeks === 1 ? "1 tydz. temu" : `${weeks} tyg. temu`;
+        }
+
+        const months = Math.floor(days / 30);
+        return months <= 1 ? "1 mies. temu" : `${months} mies. temu`;
+      }
+
+      const match = clean.match(/^(\d+)\s+(day|days|hour|hours|minute|minutes|week|weeks|month|months)\s+ago$/i);
+      if (!match) {
+        return clean;
+      }
+
+      const count = Number(match[1]);
+      const unit = match[2].toLowerCase();
+
+      if (unit.startsWith("day")) {
+        return count === 1 ? "1 dzien temu" : `${count} dni temu`;
+      }
+      if (unit.startsWith("hour")) {
+        return count === 1 ? "1 godz. temu" : `${count} godz. temu`;
+      }
+      if (unit.startsWith("minute")) {
+        return count === 1 ? "1 min temu" : `${count} min temu`;
+      }
+      if (unit.startsWith("week")) {
+        return count === 1 ? "1 tydz. temu" : `${count} tyg. temu`;
+      }
+      if (unit.startsWith("month")) {
+        return count === 1 ? "1 mies. temu" : `${count} mies. temu`;
+      }
+
+      return clean;
+    }
+
+    function formatDuration(seconds) {
+      const totalSeconds = Number(seconds);
+      if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+        return "00:00";
+      }
+
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = Math.floor(totalSeconds % 60);
+      return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function shortenCategory(category) {
+      const clean = String(category ?? "").trim();
+      if (!clean) {
+        return "";
+      }
+      if (clean.length <= 12) {
+        return clean;
+      }
+      const firstWord = clean.split(/\s+/)[0] || "";
+      if (firstWord.length >= 4) {
+        return `${firstWord} ...`;
+      }
+      return `${clean.slice(0, 9)}...`;
+    }
+
+    function extractJsonFromJinaResponse(rawText) {
+      const text = String(rawText ?? "").trim();
+      if (!text) {
+        throw new Error("Pusta odpowiedz proxy.");
+      }
+
+      const tryParse = (value) => {
+        try {
+          return JSON.parse(value);
+        } catch (_error) {
+          return null;
+        }
+      };
+
+      const direct = tryParse(text);
+      if (direct) {
+        return direct;
+      }
+
+      const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (fencedMatch && fencedMatch[1]) {
+        const fencedParsed = tryParse(fencedMatch[1].trim());
+        if (fencedParsed) {
+          return fencedParsed;
+        }
+      }
+
+      const markerCandidates = ["Markdown Content:", "Content:", "content:"];
+      for (const marker of markerCandidates) {
+        const markerIndex = text.indexOf(marker);
+        if (markerIndex === -1) {
+          continue;
+        }
+        const payload = text.slice(markerIndex + marker.length).trim();
+        const payloadParsed = tryParse(payload);
+        if (payloadParsed) {
+          return payloadParsed;
+        }
+      }
+
+      const jsonStart = text.indexOf("{");
+      const jsonEnd = text.lastIndexOf("}");
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        const slicedParsed = tryParse(text.slice(jsonStart, jsonEnd + 1));
+        if (slicedParsed) {
+          return slicedParsed;
+        }
+      }
+
+      throw new Error("Nieprawidłowy format danych klipów.");
+    }
+
+    function buildApiUrl(cursor = "") {
+      const params = new URLSearchParams({
+        sort: "date",
+        range: "month"
+      });
+
+      if (cursor) {
+        params.set("cursor", cursor);
+      }
+
+      return `https://kick.com/api/v2/channels/${CHANNEL_SLUG}/clips?${params.toString()}`;
+    }
+
+    function buildLocalApiUrl(cursor = "") {
+      const params = new URLSearchParams({
+        sort: "date",
+        range: "month"
+      });
+
+      if (cursor) {
+        params.set("cursor", cursor);
+      }
+
+      return `${LOCAL_KICK_CLIPS_ENDPOINT}?${params.toString()}`;
+    }
+
+    async function fetchDirectKickJson(sourceUrl) {
+      const response = await fetch(sourceUrl, {
+        mode: "cors",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json"
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`KICK_HTTP_${response.status}`);
+      }
+      return response.json();
+    }
+
+    async function fetchLocalKickJson(cursor = "") {
+      if (IS_FILE_PROTOCOL) {
+        throw new Error("LOCAL_PROXY_UNAVAILABLE_FILE_PROTOCOL");
+      }
+
+      const response = await fetch(buildLocalApiUrl(cursor), {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json"
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`LOCAL_PROXY_HTTP_${response.status}`);
+      }
+      const payload = await response.json();
+      if (!payload || typeof payload !== "object") {
+        throw new Error("LOCAL_PROXY_INVALID_JSON");
+      }
+      return payload;
+    }
+
+    async function fetchJinaJson(sourceUrl) {
+      const response = await fetch(`${JINA_PREFIX}${sourceUrl}`, {
+        mode: "cors",
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const rawText = await response.text();
+      return extractJsonFromJinaResponse(rawText);
+    }
+
+    async function fetchViaProxyJson(sourceUrl, proxyPrefix) {
+      const response = await fetch(`${proxyPrefix}${encodeURIComponent(sourceUrl)}`, {
+        mode: "cors",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json, text/plain;q=0.9, */*;q=0.8"
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const rawText = await response.text();
+      const parsed = extractJsonFromJinaResponse(rawText);
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error("Niepoprawny format JSON proxy.");
+      }
+      return parsed;
+    }
+
+    async function fetchClipsPageJson(sourceUrl, cursor = "") {
+      const errors = [];
+
+      try {
+        return await fetchLocalKickJson(cursor);
+      } catch (localError) {
+        errors.push(`local:${localError?.message || "fail"}`);
+      }
+
+      try {
+        return await fetchDirectKickJson(sourceUrl);
+      } catch (directError) {
+        errors.push(`direct:${directError?.message || "fail"}`);
+      }
+
+      try {
+        return await fetchViaProxyJson(sourceUrl, ALL_ORIGINS_RAW_PREFIX);
+      } catch (proxyError) {
+        errors.push(`allorigins:${proxyError?.message || "fail"}`);
+      }
+
+      try {
+        return await fetchViaProxyJson(sourceUrl, CORS_PROXY_PREFIX);
+      } catch (proxyError) {
+        errors.push(`corsproxy:${proxyError?.message || "fail"}`);
+      }
+
+      try {
+        return await fetchJinaJson(sourceUrl);
+      } catch (jinaError) {
+        errors.push(`jina:${jinaError?.message || "fail"}`);
+      }
+
+      throw new Error(errors.join(" | "));
+    }
+
+    function normalizeClipMediaUrl(value) {
+      const raw = String(value ?? "").trim();
+      if (!raw) {
+        return "";
+      }
+
+      try {
+        return new URL(raw, window.location.origin).toString();
+      } catch (_error) {
+        return raw;
+      }
+    }
+
+    function isPlayableClipMediaUrl(value) {
+      const raw = String(value ?? "").trim().toLowerCase();
+      if (!raw) {
+        return false;
+      }
+
+      const path = raw.split("#")[0].split("?")[0];
+      return (
+        /\.m3u8$/.test(path) ||
+        /\.(mp4|m4v|webm|mov|ts)$/.test(path) ||
+        /\/playlist(?:[./]|$)/.test(path) ||
+        /\/manifest(?:[./]|$)/.test(path)
+      );
+    }
+
+    function pickClipPlaybackUrl(apiClip, thumbnail) {
+      const candidates = [
+        apiClip?.video_url,
+        apiClip?.clip_url,
+        apiClip?.playback_url,
+        apiClip?.playbackUrl,
+        apiClip?.playlist_url,
+        apiClip?.playlistUrl,
+        apiClip?.stream_url,
+        apiClip?.streamUrl,
+        apiClip?.video?.url,
+        apiClip?.media?.url
+      ]
+        .map(normalizeClipMediaUrl)
+        .filter(Boolean);
+
+      const directCandidate = candidates.find(isPlayableClipMediaUrl);
+      if (directCandidate) {
+        return directCandidate;
+      }
+
+      const thumb = String(thumbnail ?? "").trim();
+      if (thumb) {
+        const derived = normalizeClipMediaUrl(thumb.replace("/thumbnail.webp", "/playlist.m3u8"));
+        if (isPlayableClipMediaUrl(derived)) {
+          return derived;
+        }
+      }
+
+      return "";
+    }
+
+    function mapApiClip(apiClip) {
+      if (!apiClip) {
+        return null;
+      }
+
+      const clipId = apiClip.id || apiClip.clip_id || apiClip.uuid || apiClip.slug || "";
+      if (!clipId) {
+        return null;
+      }
+
+      const channel = apiClip.channel || {};
+      const channelSlug = channel.slug || CHANNEL_SLUG;
+      const titleRaw = String(apiClip.title ?? "").trim();
+      const thumbnail = apiClip.thumbnail_url || apiClip.thumbnail || "";
+      const durationSeconds = apiClip.duration ?? apiClip.duration_seconds ?? apiClip.length ?? 0;
+      const createdAt = apiClip.created_at || apiClip.createdAt || apiClip.published_at || "";
+      const viewCount = apiClip.view_count ?? apiClip.views ?? apiClip.viewers ?? 0;
+      const playlistUrl = pickClipPlaybackUrl(apiClip, thumbnail);
+
+      return {
+        id: clipId,
+        title: !titleRaw || titleRaw === "." ? "Bez tytulu" : titleRaw,
+        duration: formatDuration(durationSeconds),
+        views: viewCount,
+        category: apiClip.category?.name || "",
+        createdAt,
+        pageUrl: `https://kick.com/${channelSlug}/clips/${clipId}`,
+        thumbnail,
+        playlistUrl,
+        authorName: channel.username || CHANNEL_SLUG,
+        authorAvatar: channel.profile_picture || CHANNEL_AVATAR_FALLBACK
+      };
+    }
+
+    async function fetchAllClips(maxPages = 40, maxClips = CLIPS_MAX_ITEMS) {
+      const allClips = [];
+      const seenIds = new Set();
+      const clipsLimit = Math.max(1, Math.floor(Number(maxClips) || CLIPS_MAX_ITEMS));
+      let cursor = "";
+
+      for (let page = 1; page <= maxPages; page += 1) {
+        let data;
+        try {
+          data = await fetchClipsPageJson(buildApiUrl(cursor), cursor);
+        } catch (error) {
+          if (allClips.length > 0) {
+            return { clips: allClips, partial: true };
+          }
+          throw error;
+        }
+
+        const pageItems = Array.isArray(data?.clips)
+          ? data.clips
+          : Array.isArray(data?.data)
+            ? data.data
+            : Array.isArray(data)
+              ? data
+              : [];
+        const mapped = pageItems.map(mapApiClip).filter(Boolean);
+        let added = 0;
+
+        for (const clip of mapped) {
+          if (seenIds.has(clip.id)) {
+            continue;
+          }
+          seenIds.add(clip.id);
+          allClips.push(clip);
+          added += 1;
+
+          if (allClips.length >= clipsLimit) {
+            setStatus(`Pobieram klipy... ${allClips.length}/${clipsLimit}`);
+            return { clips: allClips.slice(0, clipsLimit), partial: true, reachedLimit: true };
+          }
+        }
+
+        setStatus(`Pobieram klipy... ${allClips.length}/${clipsLimit}`);
+
+        const nextCursor = String(
+          data?.nextCursor ??
+          data?.next_cursor ??
+          data?.cursor ??
+          data?.pagination?.nextCursor ??
+          ""
+        ).trim();
+        if (!nextCursor || nextCursor === cursor || mapped.length === 0 || added === 0) {
+          return { clips: allClips, partial: false };
+        }
+        cursor = nextCursor;
+
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+
+      return { clips: allClips, partial: true, reachedLimit: false };
+    }
+
+    function sanitizeFileName(name) {
+      const safe = String(name ?? "clip")
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return (safe || "clip").slice(0, 80);
+    }
+
+    async function resolveBestPlaylist(playlistUrl) {
+      let currentUrl = playlistUrl;
+
+      for (let depth = 0; depth < 4; depth += 1) {
+        const response = await fetch(currentUrl, { mode: "cors", cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`PLAYLIST_HTTP_${response.status}`);
+        }
+
+        const text = await response.text();
+        const lines = text.replace(/\r/g, "").split("\n").map((line) => line.trim());
+        const hasVariants = lines.some((line) => line.startsWith("#EXT-X-STREAM-INF"));
+        if (!hasVariants) {
+          return { url: currentUrl, text };
+        }
+
+        let bestVariantUrl = "";
+        let bestBandwidth = -1;
+
+        for (let i = 0; i < lines.length; i += 1) {
+          const line = lines[i];
+          if (!line.startsWith("#EXT-X-STREAM-INF")) {
+            continue;
+          }
+
+          const next = lines[i + 1] ? lines[i + 1].trim() : "";
+          if (!next || next.startsWith("#")) {
+            continue;
+          }
+
+          const bwMatch = line.match(/BANDWIDTH=(\d+)/i);
+          const bandwidth = bwMatch ? Number(bwMatch[1]) : 0;
+          if (bandwidth > bestBandwidth) {
+            bestBandwidth = bandwidth;
+            bestVariantUrl = new URL(next, currentUrl).href;
+          }
+        }
+
+        if (!bestVariantUrl) {
+          return { url: currentUrl, text };
+        }
+
+        currentUrl = bestVariantUrl;
+      }
+
+      throw new Error("PLAYLIST_RESOLVE_FAILED");
+    }
+
+    function parseByteRange(rawValue) {
+      const match = String(rawValue ?? "").trim().match(/^(\d+)(?:@(\d+))?$/);
+      if (!match) {
+        return null;
+      }
+
+      return {
+        length: Number(match[1]),
+        offset: match[2] ? Number(match[2]) : null
+      };
+    }
+
+    function parseSegmentsFromMediaPlaylist(playlistText, playlistUrl) {
+      const lines = playlistText.replace(/\r/g, "").split("\n").map((line) => line.trim());
+      const segments = [];
+      const nextOffsetByUrl = new Map();
+      let pendingRange = null;
+
+      for (const line of lines) {
+        if (!line) {
+          continue;
+        }
+
+        if (line.startsWith("#EXT-X-BYTERANGE:")) {
+          pendingRange = parseByteRange(line.slice("#EXT-X-BYTERANGE:".length));
+          continue;
+        }
+
+        if (line.startsWith("#")) {
+          continue;
+        }
+
+        const segmentUrl = new URL(line, playlistUrl).href;
+        let range = null;
+
+        if (pendingRange) {
+          const start = pendingRange.offset ?? (nextOffsetByUrl.get(segmentUrl) ?? 0);
+          const end = start + pendingRange.length - 1;
+          range = { start, end };
+          nextOffsetByUrl.set(segmentUrl, end + 1);
+          pendingRange = null;
+        } else {
+          nextOffsetByUrl.delete(segmentUrl);
+        }
+
+        segments.push({ url: segmentUrl, range });
+      }
+
+      return segments;
+    }
+
+    async function fetchSegmentBytes(segment) {
+      const headers = {};
+      if (segment.range) {
+        headers.Range = `bytes=${segment.range.start}-${segment.range.end}`;
+      }
+
+      const response = await fetch(segment.url, {
+        mode: "cors",
+        cache: "no-store",
+        headers
+      });
+
+      if (!response.ok) {
+        throw new Error(`SEGMENT_HTTP_${response.status}`);
+      }
+
+      const data = await response.arrayBuffer();
+      return new Uint8Array(data);
+    }
+
+    function downloadBlob(blob, fileName) {
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+    }
+
+    async function downloadClipBestQuality(payload, button) {
+      const clipId = String(payload?.id ?? "");
+      const clipTitle = String(payload?.title ?? "clip");
+      const playlistUrl = String(payload?.playlistUrl ?? "").trim();
+
+      if (!clipId || !playlistUrl) {
+        throw new Error("MISSING_DOWNLOAD_DATA");
+      }
+
+      if (downloadInProgress.has(clipId)) {
+        return;
+      }
+      downloadInProgress.add(clipId);
+
+      const originalLabel = button ? button.textContent : "";
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Pobieranie...";
+      }
+
+      try {
+        setStatus(`Pobieram klip: ${clipTitle}...`);
+
+        const bestPlaylist = await resolveBestPlaylist(playlistUrl);
+        const segments = parseSegmentsFromMediaPlaylist(bestPlaylist.text, bestPlaylist.url);
+        if (!segments.length) {
+          throw new Error("NO_SEGMENTS");
+        }
+
+        const chunks = [];
+        for (let i = 0; i < segments.length; i += 1) {
+          const chunk = await fetchSegmentBytes(segments[i]);
+          chunks.push(chunk);
+
+          if (i === 0 || i === segments.length - 1 || (i + 1) % 4 === 0) {
+            setStatus(`Pobieram klip: ${i + 1}/${segments.length}`);
+          }
+        }
+
+        const blob = new Blob(chunks, { type: "video/mp2t" });
+        const fileName = `${sanitizeFileName(clipTitle || clipId)}.ts`;
+        downloadBlob(blob, fileName);
+        setStatus(`Pobrano klip: ${clipTitle}`);
+      } finally {
+        downloadInProgress.delete(clipId);
+
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalLabel || "Pobierz";
+        }
+      }
+    }
+
+    async function attachStream(video) {
+      if (video.dataset.ready === "1") {
+        return true;
+      }
+
+      const source = String(video.dataset.src ?? "").trim();
+      if (!source) {
+        setStatus("Ten klip nie ma bezpośredniego linku do odtworzenia na stronie.", true);
+        return false;
+      }
+
+      video.setAttribute("crossorigin", "anonymous");
+
+      const sourcePath = source.toLowerCase().split("#")[0].split("?")[0];
+      const isDirectVideoFile = /\.(mp4|m4v|webm|mov|ts)$/.test(sourcePath);
+      if (isDirectVideoFile) {
+        video.src = source;
+        video.dataset.ready = "1";
+        return true;
+      }
+
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = source;
+        video.dataset.ready = "1";
+        return true;
+      }
+
+      if (window.Hls && window.Hls.isSupported()) {
+        return new Promise((resolve, reject) => {
+          try {
+            if (video._hls && typeof video._hls.destroy === "function") {
+              video._hls.destroy();
+            }
+
+            const hls = new window.Hls({
+              enableWorker: true,
+              lowLatencyMode: false,
+              maxBufferLength: 30,
+              backBufferLength: 90
+            });
+
+            const onManifest = () => {
+              hls.off(window.Hls.Events.MANIFEST_PARSED, onManifest);
+              hls.off(window.Hls.Events.ERROR, onError);
+              video.dataset.ready = "1";
+              resolve(true);
+            };
+
+            const onError = (_event, data) => {
+              if (!data?.fatal) {
+                return;
+              }
+              hls.off(window.Hls.Events.MANIFEST_PARSED, onManifest);
+              hls.off(window.Hls.Events.ERROR, onError);
+              hls.destroy();
+              video._hls = null;
+              reject(new Error(data.type || "HLS_FATAL"));
+            };
+
+            hls.on(window.Hls.Events.MANIFEST_PARSED, onManifest);
+            hls.on(window.Hls.Events.ERROR, onError);
+            hls.loadSource(source);
+            hls.attachMedia(video);
+            video._hls = hls;
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }
+
+      video.src = source;
+      video.dataset.ready = "1";
+      return true;
+    }
+
+    function formatPlaybackTimeLabel(seconds, fallback = "0:00") {
+      const numeric = Number(seconds);
+      if (!Number.isFinite(numeric) || numeric < 0) {
+        return fallback;
+      }
+
+      const totalSeconds = Math.max(0, Math.floor(numeric));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const secs = totalSeconds % 60;
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+      }
+      return `${minutes}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function bindPlayers() {
+      if (!menuOutsideCloserBound) {
+        document.addEventListener("click", (event) => {
+          const detailsNodes = document.querySelectorAll(".clip-actions[open]");
+          detailsNodes.forEach((node) => {
+            if (!node.contains(event.target)) {
+              node.open = false;
+            }
+          });
+        });
+        menuOutsideCloserBound = true;
+      }
+
+      const cards = clipsEl.querySelectorAll(".clip-card");
+      cards.forEach((card) => {
+        const video = card.querySelector(".clip-player");
+        const btn = card.querySelector(".clip-play");
+        const toggleBtn = card.querySelector(".clip-control-toggle");
+        const muteBtn = card.querySelector(".clip-control-mute");
+        const fullBtn = card.querySelector(".clip-control-full");
+        const progressEl = card.querySelector(".clip-control-progress");
+        const currentTimeEl = card.querySelector(".clip-time-current");
+        const totalTimeEl = card.querySelector(".clip-time-total");
+        const downloadBtn = card.querySelector(".clip-action-download");
+
+        if (!video || !btn) {
+          return;
+        }
+
+        const fallbackDuration = String(video.dataset.durationLabel || "0:00").trim() || "0:00";
+        video.controls = false;
+        video.removeAttribute("controls");
+
+        const syncPlayUi = () => {
+          const isPlaying = !video.paused && !video.ended;
+          card.classList.toggle("is-playing", isPlaying);
+          btn.classList.toggle("is-hidden", isPlaying);
+          if (toggleBtn) {
+            toggleBtn.dataset.state = isPlaying ? "pause" : "play";
+            toggleBtn.setAttribute("aria-label", isPlaying ? "Pauza" : "Odtworz");
+            const toggleIcon = toggleBtn.querySelector("i");
+            if (toggleIcon) {
+              toggleIcon.className = isPlaying ? "fas fa-pause" : "fas fa-play";
+            }
+          }
+        };
+
+        const syncMuteUi = () => {
+          if (!muteBtn) {
+            return;
+          }
+          const isMuted = Boolean(video.muted || Number(video.volume) <= 0.01);
+          muteBtn.dataset.state = isMuted ? "muted" : "volume";
+          muteBtn.setAttribute("aria-label", isMuted ? "Wlacz dzwiek" : "Wycisz");
+          const muteIcon = muteBtn.querySelector("i");
+          if (muteIcon) {
+            muteIcon.className = isMuted ? "fas fa-volume-mute" : "fas fa-volume-up";
+          }
+        };
+
+        const syncTimeUi = () => {
+          const duration = Number(video.duration);
+          const current = Number(video.currentTime);
+          const hasDuration = Number.isFinite(duration) && duration > 0;
+          const safeCurrent = Number.isFinite(current) && current > 0 ? current : 0;
+
+          if (currentTimeEl) {
+            currentTimeEl.textContent = formatPlaybackTimeLabel(safeCurrent, "0:00");
+          }
+          if (totalTimeEl) {
+            totalTimeEl.textContent = hasDuration
+              ? formatPlaybackTimeLabel(duration, fallbackDuration)
+              : fallbackDuration;
+          }
+          if (progressEl) {
+            if (hasDuration) {
+              const progress = Math.max(0, Math.min(1000, Math.round((safeCurrent / duration) * 1000)));
+              progressEl.disabled = false;
+              progressEl.value = String(progress);
+            } else {
+              progressEl.disabled = true;
+              progressEl.value = "0";
+            }
+          }
+        };
+
+        const seekFromProgress = () => {
+          if (!progressEl) {
+            return;
+          }
+          const duration = Number(video.duration);
+          if (!Number.isFinite(duration) || duration <= 0) {
+            return;
+          }
+          const ratio = Math.max(0, Math.min(1, Number(progressEl.value || "0") / 1000));
+          video.currentTime = ratio * duration;
+          syncTimeUi();
+        };
+
+        const playNow = async () => {
+          try {
+            const ready = await attachStream(video);
+            if (!ready) {
+              card.classList.remove("is-playing");
+              btn.classList.remove("is-hidden");
+              syncPlayUi();
+              return;
+            }
+            card.classList.add("is-ready");
+            await video.play();
+            syncPlayUi();
+            syncTimeUi();
+          } catch (error) {
+            card.classList.remove("is-playing");
+            btn.classList.remove("is-hidden");
+            syncPlayUi();
+            setStatus(
+              "Nie udalo sie odtworzyc klipu na stronie. Uzyj opcji \"Otworz na Kick\" z menu (...).",
+              true
+            );
+          }
+        };
+
+        const togglePlayback = async () => {
+          if (video.paused || video.ended) {
+            await playNow();
+            return;
+          }
+          video.pause();
+          syncPlayUi();
+        };
+
+        btn.addEventListener("click", () => {
+          void playNow();
+        });
+        if (toggleBtn) {
+          toggleBtn.addEventListener("click", () => {
+            void togglePlayback();
+          });
+        }
+        video.addEventListener("click", () => {
+          void togglePlayback();
+        });
+        video.addEventListener("play", syncPlayUi);
+        video.addEventListener("pause", syncPlayUi);
+        video.addEventListener("ended", () => {
+          syncPlayUi();
+          syncTimeUi();
+        });
+        video.addEventListener("loadedmetadata", () => {
+          card.classList.add("is-ready");
+          syncTimeUi();
+        });
+        video.addEventListener("durationchange", syncTimeUi);
+        video.addEventListener("timeupdate", syncTimeUi);
+        video.addEventListener("volumechange", syncMuteUi);
+        if (progressEl) {
+          progressEl.addEventListener("input", seekFromProgress);
+          progressEl.addEventListener("change", seekFromProgress);
+        }
+        if (muteBtn) {
+          muteBtn.addEventListener("click", () => {
+            video.muted = !video.muted;
+            syncMuteUi();
+          });
+        }
+        if (fullBtn) {
+          fullBtn.addEventListener("click", () => {
+            const mediaRoot = card.querySelector(".clip-media");
+            const target = mediaRoot || video;
+            if (!target) {
+              return;
+            }
+            if (document.fullscreenElement) {
+              if (document.exitFullscreen) {
+                void document.exitFullscreen();
+              }
+              return;
+            }
+            if (target.requestFullscreen) {
+              void target.requestFullscreen();
+              return;
+            }
+            if (target.webkitRequestFullscreen) {
+              target.webkitRequestFullscreen();
+            }
+          });
+        }
+
+        syncPlayUi();
+        syncMuteUi();
+        syncTimeUi();
+
+        if (downloadBtn) {
+          downloadBtn.addEventListener("click", async (event) => {
+            event.preventDefault();
+
+            const clipData = {
+              id: downloadBtn.dataset.id,
+              title: downloadBtn.dataset.title,
+              playlistUrl: downloadBtn.dataset.playlist
+            };
+
+            const details = downloadBtn.closest(".clip-actions");
+            if (details) {
+              details.open = false;
+            }
+
+            try {
+              await downloadClipBestQuality(clipData, downloadBtn);
+            } catch (_error) {
+              setStatus("Nie udalo sie pobrac klipu w najlepszej jakosci.", true);
+            }
+          });
+        }
+      });
+    }
+
+    function renderClips(clips) {
+      clipsEl.innerHTML = "";
+
+      clips.forEach((clip, index) => {
+        const card = document.createElement("article");
+        card.className = "clip-card";
+        card.style.animationDelay = `${Math.min(index, 12) * 45}ms`;
+
+        const localizedViews = formatViews(clip.views);
+        const localizedTime = formatRelativeTime(clip.createdAt);
+        const shortCategory = shortenCategory(clip.category);
+        const metaLine = [shortCategory, localizedTime].filter(Boolean).join(" · ") || "Klip";
+        const duration = clip.duration || "00:00";
+        const clipPageUrl = clip.pageUrl || `https://kick.com/${CHANNEL_SLUG}`;
+        const authorName = clip.authorName || CHANNEL_SLUG;
+        const authorAvatar = clip.authorAvatar || CHANNEL_AVATAR_FALLBACK;
+        const playlistUrl = clip.playlistUrl || "";
+
+        card.innerHTML = `
+          <div class="clip-media">
+            <video
+              class="clip-player"
+              preload="none"
+              playsinline
+              poster="${escapeHtml(clip.thumbnail)}"
+              data-src="${escapeHtml(clip.playlistUrl)}"
+              data-clip="${escapeHtml(clipPageUrl)}"
+              data-duration-label="${escapeHtml(duration)}"
+            ></video>
+            <button class="clip-play" type="button" aria-label="Odtworz klip"></button>
+            <span class="clip-badge clip-views">${escapeHtml(localizedViews)}</span>
+            <div class="clip-controls" aria-label="Sterowanie klipem">
+              <button class="clip-control-btn clip-control-toggle" type="button" data-state="play" aria-label="Odtworz">
+                <i class="fas fa-play" aria-hidden="true"></i>
+              </button>
+              <span class="clip-control-time">
+                <span class="clip-time-current">0:00</span>
+                <span class="clip-time-sep">/</span>
+                <span class="clip-time-total">${escapeHtml(duration)}</span>
+              </span>
+              <input class="clip-control-progress" type="range" min="0" max="1000" step="1" value="0" aria-label="Postep klipu">
+              <button class="clip-control-btn clip-control-mute" type="button" data-state="volume" aria-label="Wycisz">
+                <i class="fas fa-volume-up" aria-hidden="true"></i>
+              </button>
+              <button class="clip-control-btn clip-control-full" type="button" aria-label="Pelny ekran">
+                <i class="fas fa-expand" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+          <div class="clip-row">
+            <img class="clip-avatar" src="${escapeHtml(authorAvatar)}" alt="${escapeHtml(authorName)}">
+            <div class="clip-copy">
+              <a class="clip-title" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clip.title)}</a>
+              <p class="clip-meta">${escapeHtml(metaLine)}</p>
+              <p class="clip-author">${escapeHtml(authorName)}</p>
+            </div>
+            <details class="clip-actions">
+              <summary class="clip-menu" aria-label="Opcje klipu">...</summary>
+              <div class="clip-actions-menu">
+                <a class="clip-action-link" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">Otworz na Kick</a>
+                <button
+                  class="clip-action-download"
+                  type="button"
+                  data-id="${escapeHtml(clip.id)}"
+                  data-title="${escapeHtml(clip.title)}"
+                  data-playlist="${escapeHtml(playlistUrl)}"
+                >Pobierz</button>
+              </div>
+            </details>
+          </div>
+        `;
+
+        clipsEl.appendChild(card);
+      });
+
+      if (!clips.length) {
+        setStatus("Brak klipów w odczytanych danych.", true);
+        return;
+      }
+
+      setStatus(`Załadowano ${clips.length} klipów.`);
+      bindPlayers();
+    }
+
+    async function loadClips() {
+      refreshBtn.disabled = true;
+      setStatus(`Pobieram klipy z Kick (max ${CLIPS_MAX_ITEMS})...`);
+      clipsEl.innerHTML = "";
+
+      try {
+        const result = await fetchAllClips(40, CLIPS_MAX_ITEMS);
+        const clips = result.clips;
+        renderClips(clips);
+
+        if (result.reachedLimit) {
+          setStatus(`Załadowano ${clips.length} klipów (limit ${CLIPS_MAX_ITEMS}).`);
+        } else if (result.partial) {
+          setStatus(`Załadowano ${clips.length} klipów.`);  //(limit zapytan proxy)
+        }
+      } catch (error) {
+        const reason = String(error?.message || "").trim();
+        const suffix = reason ? ` (${reason})` : "";
+        setStatus(`Nie udało się pobrać wszystkich klipów.${suffix}`, true);
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    }
+
+    function logoutAdmin() {
+      const previousLogin = String(currentAdminLogin || "").trim();
+      isAdminAuthenticated = false;
+      currentAdminLogin = "";
+      activeDiscordSession = null;
+      setRememberMeEnabled(false);
+      try {
+        window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      } catch (_error) {
+        // Ignore session storage failures.
+      }
+      if (window.TakuuWebhook && typeof window.TakuuWebhook.clearDiscordSession === "function") {
+        window.TakuuWebhook.clearDiscordSession();
+      }
+      if (previousLogin) {
+        sendAdminWebhookEvent("admin_logout", "Panel Administratora", { login: previousLogin });
+      }
+      setAdminStatus("Wylogowano.", "info");
+      setDiscordStatus("", "info");
+      navigateTo(LOGIN_ROUTE_PATH, "login");
+    }
+
+    if (karyNavEl) {
+      karyNavEl.setAttribute("href", KARY_ROUTE_PATH);
+      karyNavEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(KARY_ROUTE_PATH, "kary");
+      });
+    }
+
+    if (clipsNavEl) {
+      clipsNavEl.setAttribute("href", CLIPS_ROUTE_PATH);
+      clipsNavEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(CLIPS_ROUTE_PATH, "clips");
+      });
+    }
+
+    if (homeNavEl) {
+      homeNavEl.setAttribute("href", HOME_ROUTE_PATH);
+      homeNavEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(HOME_ROUTE_PATH, "home");
+      });
+    }
+
+    if (soonNavEl) {
+      soonNavEl.setAttribute("href", SOON_ROUTE_PATH);
+      soonNavEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(SOON_ROUTE_PATH, "soon");
+      });
+    }
+
+    if (statsNavEl) {
+      statsNavEl.setAttribute("href", STATS_ROUTE_PATH);
+      statsNavEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(STATS_ROUTE_PATH, "stats");
+      });
+    }
+
+    if (adminNavEl) {
+      adminNavEl.setAttribute("href", LOGIN_ROUTE_PATH);
+      adminNavEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(LOGIN_ROUTE_PATH, "login");
+      });
+    }
+
+    if (ctaKaryLinkEl) {
+      ctaKaryLinkEl.setAttribute("href", KARY_ROUTE_PATH);
+      ctaKaryLinkEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(KARY_ROUTE_PATH, "kary");
+      });
+    }
+
+    if (ctaClipsLinkEl) {
+      ctaClipsLinkEl.setAttribute("href", CLIPS_ROUTE_PATH);
+      ctaClipsLinkEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateTo(CLIPS_ROUTE_PATH, "clips");
+      });
+    }
+
+    window.addEventListener("hashchange", () => {
+      applyView(getRouteFromPath(`${window.location.pathname}${window.location.search}${window.location.hash}`));
+      scrollToRouteTop();
+    });
+
+    window.addEventListener("popstate", () => {
+      applyView(getRouteFromPath(`${window.location.pathname}${window.location.search}${window.location.hash}`));
+      scrollToRouteTop();
+    });
+
+    window.addEventListener("storage", (event) => {
+      const changedKey = String(event.key || "");
+      if (!changedKey) {
+        return;
+      }
+
+      if (changedKey === KARY_STATE_KEY) {
+        loadKaryState();
+        renderKaryLiveState();
+        return;
+      }
+
+      if (changedKey === WHEEL_SYNC_STORAGE_KEY) {
+        if (event.newValue) {
+          try {
+            const payload = JSON.parse(event.newValue);
+            consumeWheelSyncMessage(payload, "storage");
+          } catch (_error) {
+            // Ignore malformed wheel sync payload.
+          }
+        }
+        return;
+      }
+
+      if (changedKey === WHEEL_CONFIG_STORAGE_KEY) {
+        renderWheelStats();
+      }
+
+    });
+
+    window.addEventListener("takuu:wheel-history-updated", (event) => {
+      const entry = event && event.detail ? event.detail.entry : null;
+      if (entry) {
+        applyWheelHistoryEntryToStatsCache(entry);
+        renderWheelStats();
+        return;
+      }
+      void fetchWheelStatsFromApiOnce().finally(() => {
+        renderWheelStats();
+      });
+    });
+
+    window.addEventListener("takuu:wheel-config-updated", () => {
+      renderWheelStats();
+    });
+
+    if (statsRefreshBtnEl) {
+      statsRefreshBtnEl.addEventListener("click", () => {
+        void fetchWheelStatsFromApiOnce().finally(() => {
+          renderWheelStats();
+        });
+      });
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        if (lastAppliedRouteName === "stats") {
+          startWheelStatsLiveUpdates();
+        }
+        updateFriendsLiveBadges();
+        return;
+      }
+      stopWheelStatsLiveUpdates();
+    });
+
+    bindInternalRouteLinks();
+
+    // Apply route view immediately so layout is visible even if later init fails.
+    applyView(getRouteFromPath(`${window.location.pathname}${window.location.search}${window.location.hash}`));
+
+    if (adminRememberMeEl) {
+      adminRememberMeEl.checked = isRememberMeEnabled();
+    }
+    clearAdminSessionOnReload();
+    adminAccounts = loadAdminAccounts();
+    baseMembers = loadBaseMembersFromGrid();
+    customMembers = loadCustomMembers();
+    membersOrder = loadMembersOrder();
+    refreshMembersOrder();
+    setMemberFormEditingState("");
+    loadKaryCennikItems();
+    migrateDuplicatedKicksyPrices();
+    loadKaryState();
+    bindExternalTimerBridge();
+    startWheelSyncBridge();
+    void fetchWheelStatsFromApiOnce().finally(() => {
+      renderWheelStats();
+    });
+    loadTimeryConfig();
+    loadLicznikiConfig();
+    saveAdminAccounts();
+    restoreAdminSession();
+    renderPublicKaryCennik();
+    renderAdminKaryCennikTable();
+    resetAdminCennikForm();
+    populateKaryAdminControls();
+    applyTimeryConfig();
+    applyLicznikiConfig();
+    renderKaryLiveState();
+    startKaryTimerTick();
+    renderCustomMembersCards();
+    startFriendsLivePolling();
+    renderAdminMembersTable();
+    renderAdminAccountsTable();
+    setActiveAdminTab(activeAdminTab);
+
+    if (adminTabsWrapEl) {
+      adminTabsWrapEl.addEventListener("click", (event) => {
+        const button = event.target.closest(".admin-tab-btn");
+        if (!button) {
+          return;
+        }
+        setActiveAdminTab(button.dataset.tab || "members");
+      });
+    }
+
+    if (adminMemberFormEl) {
+      adminMemberFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const formData = new FormData(adminMemberFormEl);
+        const name = String(formData.get("memberName") || "").trim();
+        const kickInput = String(formData.get("memberKick") || "").trim();
+        const avatar = String(formData.get("memberAvatar") || "").trim();
+        const url = sanitizeMemberUrl(kickInput);
+
+        if (!name || !url) {
+          setPanelStatus(adminMemberStatusEl, "Podaj nazwe i profil Kick.", "error");
+          return;
+        }
+
+        if (editingMemberId) {
+          const editIndex = customMembers.findIndex((member) => member.id === editingMemberId);
+          if (editIndex === -1) {
+            stopMemberEdit({ resetForm: true });
+            setPanelStatus(adminMemberStatusEl, "Nie znaleziono członka do edycji.", "error");
+            return;
+          }
+
+          const updatedMember = {
+            ...customMembers[editIndex],
+            name,
+            url,
+            avatar: avatar || CHANNEL_AVATAR_FALLBACK
+          };
+          customMembers[editIndex] = updatedMember;
+          refreshMembersOrder(true);
+          renderCustomMembersCards();
+          renderAdminMembersTable();
+          stopMemberEdit({ resetForm: true });
+          setPanelStatus(adminMemberStatusEl, "Zapisano zmiany członka CCI.", "success");
+          sendAdminWebhookEvent("member_edit", updatedMember.name, {
+            id: updatedMember.id,
+            name: updatedMember.name,
+            url: updatedMember.url,
+            avatar: updatedMember.avatar
+          });
+          return;
+        }
+
+        const newMember = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name,
+          url,
+          avatar: avatar || CHANNEL_AVATAR_FALLBACK
+        };
+
+        customMembers.push(newMember);
+        membersOrder = [...membersOrder, newMember.id];
+        refreshMembersOrder(true);
+        renderCustomMembersCards();
+        renderAdminMembersTable();
+        adminMemberFormEl.reset();
+        setPanelStatus(adminMemberStatusEl, "Dodano członka CCI.", "success");
+        sendAdminWebhookEvent("member_add", newMember.name, {
+          id: newMember.id,
+          name: newMember.name,
+          url: newMember.url,
+          avatar: newMember.avatar
+        });
+      });
+    }
+
+    if (adminMembersTableBodyEl) {
+      adminMembersTableBodyEl.addEventListener("click", (event) => {
+        const editButton = event.target.closest("[data-member-edit]");
+        if (editButton) {
+          const memberId = String(editButton.dataset.memberEdit || "");
+          startMemberEdit(memberId);
+          return;
+        }
+
+        const removeButton = event.target.closest("[data-member-remove]");
+        if (!removeButton) {
+          return;
+        }
+
+        const memberId = String(removeButton.dataset.memberRemove || "");
+        const removedMember = customMembers.find((member) => member.id === memberId) || null;
+        if (!removedMember) {
+          return;
+        }
+
+        customMembers = customMembers.filter((member) => member.id !== memberId);
+        if (editingMemberId === memberId) {
+          stopMemberEdit({ resetForm: true });
+        }
+        membersOrder = membersOrder.filter((id) => id !== memberId);
+        refreshMembersOrder(true);
+        renderCustomMembersCards();
+        renderAdminMembersTable();
+        setPanelStatus(adminMemberStatusEl, "Usunięto członka CCI.", "info");
+        sendAdminWebhookEvent("member_remove", removedMember.name, {
+          id: removedMember.id,
+          name: removedMember.name,
+          url: removedMember.url
+        });
+      });
+
+      adminMembersTableBodyEl.addEventListener("dragstart", (event) => {
+        const handle = event.target.closest("[data-member-drag-handle]");
+        if (!handle) {
+          event.preventDefault();
+          return;
+        }
+
+        const row = handle.closest("tr[data-member-id]");
+        if (!row) {
+          event.preventDefault();
+          return;
+        }
+
+        const memberId = String(row.dataset.memberId || "").trim();
+        if (!memberId) {
+          event.preventDefault();
+          return;
+        }
+
+        draggingMemberId = memberId;
+        draggingMemberRow = row;
+        draggingMemberRow.style.opacity = "0.55";
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", memberId);
+        }
+      });
+
+      adminMembersTableBodyEl.addEventListener("dragover", (event) => {
+        if (!draggingMemberRow || !draggingMemberId) {
+          return;
+        }
+        event.preventDefault();
+
+        const dropTarget = findDropTargetMemberRow(event.clientY);
+        if (!dropTarget) {
+          adminMembersTableBodyEl.appendChild(draggingMemberRow);
+          return;
+        }
+
+        if (dropTarget !== draggingMemberRow) {
+          adminMembersTableBodyEl.insertBefore(draggingMemberRow, dropTarget);
+        }
+      });
+
+      adminMembersTableBodyEl.addEventListener("drop", (event) => {
+        if (!draggingMemberRow || !draggingMemberId) {
+          return;
+        }
+        event.preventDefault();
+
+        draggingMemberRow.style.opacity = "";
+        const changed = applyMembersOrderFromDom();
+        draggingMemberRow = null;
+        draggingMemberId = "";
+        if (changed) {
+          renderCustomMembersCards();
+          renderAdminMembersTable();
+          setPanelStatus(adminMemberStatusEl, "Zmieniono kolejność członków CCI.", "success");
+          sendAdminWebhookEvent("member_reorder", "Członkowie CCI", {
+            order: membersOrder
+          });
+        }
+      });
+
+      adminMembersTableBodyEl.addEventListener("dragend", () => {
+        if (draggingMemberRow) {
+          draggingMemberRow.style.opacity = "";
+        }
+        draggingMemberRow = null;
+        draggingMemberId = "";
+      });
+    }
+
+    if (adminTimerFormEl) {
+      adminTimerFormEl.addEventListener("click", (event) => {
+        const actionButton = event.target.closest("[data-timer-action]");
+        if (!actionButton) {
+          return;
+        }
+        event.preventDefault();
+        const action = String(actionButton.dataset.timerAction || "");
+        const formData = new FormData(adminTimerFormEl);
+        applyTimerAction(action, formData);
+      });
+    }
+
+    if (adminCounterFormEl) {
+      adminCounterFormEl.addEventListener("click", (event) => {
+        const actionButton = event.target.closest("[data-counter-action]");
+        if (!actionButton) {
+          return;
+        }
+        event.preventDefault();
+        const action = String(actionButton.dataset.counterAction || "");
+        const formData = new FormData(adminCounterFormEl);
+        applyCounterAction(action, formData);
+      });
+    }
+
+    if (adminCennikFormEl) {
+      adminCennikFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        upsertKaryCennikFromForm();
+      });
+    }
+
+    if (adminCennikCancelBtnEl) {
+      adminCennikCancelBtnEl.addEventListener("click", () => {
+        resetAdminCennikForm();
+        setKaryCennikStatus("Wyczyszczono formularz.", "info");
+      });
+    }
+
+    if (adminCennikTableBodyEl) {
+      adminCennikTableBodyEl.addEventListener("click", (event) => {
+        const editButton = event.target.closest("[data-cennik-edit]");
+        if (editButton) {
+          const itemId = String(editButton.dataset.cennikEdit || "");
+          const matched = karyCennikItems.find((item) => item.id === itemId);
+          if (matched) {
+            fillAdminCennikForm(matched);
+            setKaryCennikStatus("Tryb edycji pozycji cennika.", "info");
+          }
+          return;
+        }
+
+        const removeButton = event.target.closest("[data-cennik-remove]");
+        if (!removeButton) {
+          return;
+        }
+
+        const itemId = String(removeButton.dataset.cennikRemove || "");
+        const removedItem = karyCennikItems.find((item) => item.id === itemId) || null;
+        const before = karyCennikItems.length;
+        karyCennikItems = karyCennikItems.filter((item) => item.id !== itemId);
+        if (karyCennikItems.length === before) {
+          return;
+        }
+
+        saveKaryCennikItems();
+        renderPublicKaryCennik();
+        renderAdminKaryCennikTable();
+        resetAdminCennikForm();
+        setKaryCennikStatus("Usunięto pozycję cennika.", "success");
+        if (removedItem) {
+          sendAdminWebhookEvent("cennik_remove", removedItem.name, {
+            section: removedItem.section,
+            description: removedItem.description,
+            pricePln: removedItem.pricePln,
+            priceSuby: removedItem.priceSuby,
+            priceKicksy: removedItem.priceKicksy
+          });
+        }
+      });
+    }
+
+    if (adminAccountFormEl) {
+      adminAccountFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        if (!hasOwnerAdminAccess()) {
+          setPanelStatus(adminAccountStatusEl, "Brak permisji do zakładki Panel Admina.", "error");
+          return;
+        }
+
+        const formData = new FormData(adminAccountFormEl);
+        const login = String(formData.get("accountLogin") || "").trim();
+        const password = String(formData.get("accountPassword") || "").trim();
+        const discordUserId = normalizeDiscordUserId(formData.get("accountDiscordId"));
+        const canAccessAdmin = formData.get("accountAccessAdmin") === "on";
+        const canAccessStreamObs = formData.get("accountAccessStreamObs") === "on";
+        const isDiscordAccount = Boolean(discordUserId);
+        let accountAction = "account_add";
+
+        if (!login && !discordUserId) {
+          setPanelStatus(adminAccountStatusEl, "Podaj login albo Discord ID.", "error");
+          return;
+        }
+        if (!password && !discordUserId) {
+          setPanelStatus(adminAccountStatusEl, "Podaj hasło dla konta lokalnego.", "error");
+          return;
+        }
+
+        const normalizedLogin = login || `discord:${discordUserId}`;
+        const normalizedPassword = password || "DISCORD_ONLY";
+        const existingIndex = adminAccounts.findIndex(
+          (item) =>
+            item.login.toLowerCase() === normalizedLogin.toLowerCase() ||
+            (discordUserId && normalizeDiscordUserId(item.discordUserId) === discordUserId)
+        );
+        if (existingIndex !== -1) {
+          if (adminAccounts[existingIndex].isRoot) {
+            setPanelStatus(adminAccountStatusEl, "Tego konta nie można edytować.", "error");
+            return;
+          }
+
+          adminAccounts[existingIndex] = {
+            ...adminAccounts[existingIndex],
+            login: normalizedLogin,
+            password: normalizedPassword,
+            discordUserId: discordUserId || "",
+            discordName: String(adminAccounts[existingIndex].discordName || ""),
+            canAccessAdmin,
+            canAccessStreamObs,
+            isDiscordAccount
+          };
+          accountAction = "account_update";
+          setPanelStatus(adminAccountStatusEl, "Zaktualizowano konto admina.", "success");
+        } else {
+          const newAccount = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            login: normalizedLogin,
+            password: normalizedPassword,
+            discordUserId: discordUserId || "",
+            discordName: "",
+            canAccessAdmin,
+            canAccessStreamObs,
+            isRoot: false,
+            isDiscordAccount
+          };
+          adminAccounts.push(newAccount);
+          setPanelStatus(adminAccountStatusEl, "Dodano nowe konto admina.", "success");
+        }
+
+        saveAdminAccounts();
+        renderAdminAccountsTable();
+        adminAccountFormEl.reset();
+        sendAdminWebhookEvent(accountAction, normalizedLogin, {
+          login: normalizedLogin,
+          discordUserId: discordUserId || "",
+          canAccessAdmin,
+          canAccessStreamObs
+        });
+      });
+    }
+
+    if (adminAccountsTableBodyEl) {
+      adminAccountsTableBodyEl.addEventListener("click", (event) => {
+        if (!hasOwnerAdminAccess()) {
+          setPanelStatus(adminAccountStatusEl, "Brak permisji do zakładki Panel Admina.", "error");
+          return;
+        }
+
+        const toggleBtn = event.target.closest("[data-account-toggle]");
+        if (toggleBtn) {
+          const accountId = String(toggleBtn.dataset.accountToggle || "");
+          const account = adminAccounts.find((item) => item.id === accountId);
+          if (!account || account.isRoot) {
+            return;
+          }
+          if (visibleAdminPasswords.has(accountId)) {
+            visibleAdminPasswords.delete(accountId);
+          } else {
+            visibleAdminPasswords.add(accountId);
+          }
+          renderAdminAccountsTable();
+          return;
+        }
+
+        const panelPermissionBtn = event.target.closest("[data-account-permission-admin]");
+        if (panelPermissionBtn) {
+          const accountId = String(panelPermissionBtn.dataset.accountPermissionAdmin || "");
+          const account = adminAccounts.find((item) => item.id === accountId);
+          if (!account || account.isRoot) {
+            return;
+          }
+
+          account.canAccessAdmin = !account.canAccessAdmin;
+          saveAdminAccounts();
+          renderAdminAccountsTable();
+          setPanelStatus(
+            adminAccountStatusEl,
+            account.canAccessAdmin ? "Nadano permisję do Panelu Admina." : "Odebrano permisję do Panelu Admina.",
+            "success"
+          );
+          sendAdminWebhookEvent("account_access_admin_change", account.login, {
+            login: account.login,
+            discordUserId: normalizeDiscordUserId(account.discordUserId),
+            canAccessAdmin: account.canAccessAdmin,
+            canAccessStreamObs: account.canAccessStreamObs
+          });
+          return;
+        }
+
+        const streamObsPermissionBtn = event.target.closest("[data-account-permission-streamobs]");
+        if (streamObsPermissionBtn) {
+          const accountId = String(streamObsPermissionBtn.dataset.accountPermissionStreamobs || "");
+          const account = adminAccounts.find((item) => item.id === accountId);
+          if (!account || account.isRoot) {
+            return;
+          }
+
+          account.canAccessStreamObs = !account.canAccessStreamObs;
+          saveAdminAccounts();
+          renderAdminAccountsTable();
+          setPanelStatus(
+            adminAccountStatusEl,
+            account.canAccessStreamObs ? "Nadano permisję do StreamOBS." : "Odebrano permisję do StreamOBS.",
+            "success"
+          );
+          sendAdminWebhookEvent("account_access_streamobs_change", account.login, {
+            login: account.login,
+            discordUserId: normalizeDiscordUserId(account.discordUserId),
+            canAccessAdmin: account.canAccessAdmin,
+            canAccessStreamObs: account.canAccessStreamObs
+          });
+          return;
+        }
+
+        const removeBtn = event.target.closest("[data-account-remove]");
+        if (!removeBtn) {
+          return;
+        }
+
+        const accountId = String(removeBtn.dataset.accountRemove || "");
+        const accountToDelete = adminAccounts.find((item) => item.id === accountId);
+        adminAccounts = adminAccounts.filter((item) => item.id !== accountId);
+        visibleAdminPasswords.delete(accountId);
+        saveAdminAccounts();
+        renderAdminAccountsTable();
+        setPanelStatus(adminAccountStatusEl, "Usunięto konto admina.", "info");
+        if (accountToDelete) {
+          sendAdminWebhookEvent("account_remove", accountToDelete.login, {
+            login: accountToDelete.login,
+            discordUserId: normalizeDiscordUserId(accountToDelete.discordUserId),
+            canAccessAdmin: accountToDelete.canAccessAdmin,
+            canAccessStreamObs: accountToDelete.canAccessStreamObs
+          });
+        }
+
+        if (
+          accountToDelete &&
+          (
+            accountToDelete.login === currentAdminLogin ||
+            (
+              activeDiscordSession &&
+              normalizeDiscordUserId(accountToDelete.discordUserId) === normalizeDiscordUserId(activeDiscordSession.id)
+            )
+          )
+        ) {
+          logoutAdmin();
+        }
+      });
+    }
+
+    if (adminLogoutBtnEl) {
+      adminLogoutBtnEl.addEventListener("click", logoutAdmin);
+    }
+
+    if (adminRememberMeEl) {
+      adminRememberMeEl.addEventListener("change", () => {
+        setRememberMeEnabled(adminRememberMeEl.checked);
+      });
+    }
+
+    if (adminLoginFormEl) {
+      adminLoginFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const formData = new FormData(adminLoginFormEl);
+        const login = String(formData.get("login") || "").trim();
+        const password = String(formData.get("password") || "").trim();
+        const passwordInput = adminLoginPasswordEl || adminLoginFormEl.querySelector('input[name="password"]');
+
+        if (!login || !password) {
+          setAdminStatus("Wpisz login i hasło.", "error");
+          return;
+        }
+
+        const rootLoginMatch = login.toLowerCase() === ROOT_ADMIN_LOGIN.toLowerCase() && password === ROOT_ADMIN_PASSWORD;
+        let matched = adminAccounts.find(
+          (item) => item.login === login && item.password === password && canAccountAccessAnyAdminArea(item)
+        );
+        if (!matched && rootLoginMatch) {
+          matched =
+            adminAccounts.find((item) => item.id === ROOT_ADMIN_ID) || {
+              id: ROOT_ADMIN_ID,
+              login: ROOT_ADMIN_LOGIN,
+              password: ROOT_ADMIN_PASSWORD,
+              discordUserId: ROOT_ADMIN_DISCORD_ID,
+              canAccessAdmin: true,
+              canAccessStreamObs: true,
+              isRoot: true,
+              isDiscordAccount: false
+            };
+        }
+
+        if (!matched) {
+          isAdminAuthenticated = false;
+          currentAdminLogin = "";
+          activeDiscordSession = null;
+          try {
+            window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+          } catch (_error) {
+            // Ignore session storage failures.
+          }
+          if (window.TakuuWebhook && typeof window.TakuuWebhook.clearDiscordSession === "function") {
+            window.TakuuWebhook.clearDiscordSession();
+          }
+
+          if (passwordInput) {
+            passwordInput.value = "";
+            passwordInput.focus();
+          }
+          setAdminStatus("Nieprawidłowy login lub hasło.", "error");
+          sendAdminWebhookEvent("admin_login_failed", "Panel Administratora", {
+            loginAttempt: login
+          });
+          return;
+        }
+
+        isAdminAuthenticated = true;
+        currentAdminLogin = matched.login;
+        activeDiscordSession = null;
+        const shouldRememberAdmin = Boolean(adminRememberMeEl && adminRememberMeEl.checked);
+        try {
+          window.sessionStorage.setItem(ADMIN_SESSION_KEY, matched.login);
+        } catch (_error) {
+          // Ignore session storage failures.
+        }
+        if (window.TakuuWebhook && typeof window.TakuuWebhook.clearDiscordSession === "function") {
+          window.TakuuWebhook.clearDiscordSession();
+        }
+
+        adminLoginFormEl.reset();
+        setRememberMeEnabled(shouldRememberAdmin);
+        setLoginPasswordVisibility(false);
+        setAdminStatus(`Zalogowano jako ${matched.login}.`, "success");
+        setDiscordStatus("", "info");
+        sendAdminWebhookEvent("admin_login_local", "Panel Administratora", {
+          login: matched.login
+        });
+        navigateTo(ADMIN_ROUTE_PATH, "admin");
+      });
+    }
+
+    if (adminPasswordToggleEl) {
+      adminPasswordToggleEl.addEventListener("click", () => {
+        const nextVisible = !(adminLoginPasswordEl && adminLoginPasswordEl.type === "text");
+        setLoginPasswordVisibility(nextVisible);
+        if (adminLoginPasswordEl) {
+          try {
+            adminLoginPasswordEl.focus({ preventScroll: true });
+          } catch (_error) {
+            adminLoginPasswordEl.focus();
+          }
+        }
+      });
+    }
+
+    if (adminShowPasswordEl && adminShowPasswordEl.type === "checkbox") {
+      adminShowPasswordEl.addEventListener("change", () => {
+        setLoginPasswordVisibility(adminShowPasswordEl.checked);
+      });
+    }
+
+    setLoginPasswordVisibility(Boolean(adminLoginPasswordEl && adminLoginPasswordEl.type === "text"));
+
+    if (adminDiscordLoginBtnEl) {
+      if (window.TakuuWebhook && typeof window.TakuuWebhook.isDiscordLoginAvailable === "function") {
+        const availability = window.TakuuWebhook.isDiscordLoginAvailable();
+        if (!availability.ok) {
+          adminDiscordLoginBtnEl.disabled = true;
+          setDiscordStatus(availability.error || "Logowanie Discord jest niedostepne.", "error");
+        }
+      } else {
+        adminDiscordLoginBtnEl.disabled = true;
+        setDiscordStatus("Brak webhook.js lub konfiguracji Discord.", "error");
+      }
+
+      adminDiscordLoginBtnEl.addEventListener("click", () => {
+        startDiscordLoginFlow();
+      });
+    }
+
+    // Signal that native login handlers are fully bound.
+    window.__takuuNativeLoginReady = true;
+
+    if (karyCurrencySwitchEl) {
+      karyCurrencySwitchEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-currency]");
+        if (!button) {
+          return;
+        }
+        setKaryCurrency(button.dataset.currency);
+      });
+      setKaryCurrency("pln");
+      window.__takuuNativeKaryCurrencyReady = true;
+    }
+
+    if (karyOpenWindowButtonEls.length) {
+      karyOpenWindowButtonEls.forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === "function") {
+            event.stopImmediatePropagation();
+          }
+
+          const target = String(button.dataset.karyOpenWindow || "").toLowerCase();
+          const hrefPath = String(button.getAttribute("href") || "").trim();
+          const routePath =
+            (IS_FILE_PROTOCOL
+              ? (target === "liczniki" ? LICZNIKI_ROUTE_PATH : target === "timery" ? TIMERY_ROUTE_PATH : "")
+              : (hrefPath || (target === "liczniki" ? LICZNIKI_ROUTE_PATH : target === "timery" ? TIMERY_ROUTE_PATH : "")));
+          if (!routePath) {
+            return;
+          }
+          let absoluteRoute = routePath;
+          try {
+            absoluteRoute = new URL(routePath, IS_FILE_PROTOCOL ? window.location.href : window.location.origin).href;
+          } catch (_error) {
+            absoluteRoute = routePath;
+          }
+          const popupWidth = 1240;
+          const popupHeight = target === "liczniki" ? 760 : 920;
+          const left = Math.max(0, Math.floor((window.screen.availWidth - popupWidth) / 2));
+          const top = Math.max(0, Math.floor((window.screen.availHeight - popupHeight) / 2));
+          const popupName = target === "liczniki" ? "takuu_liczniki_popup" : "takuu_timery_popup";
+          const popupFeatures = [
+            "popup=yes",
+            `width=${popupWidth}`,
+            `height=${popupHeight}`,
+            `left=${left}`,
+            `top=${top}`,
+            "resizable=yes",
+            "scrollbars=yes"
+          ].join(",");
+
+          let popup = target === "liczniki" ? licznikiPopupRef : timeryPopupRef;
+          if (popup && popup.closed) {
+            popup = null;
+          }
+
+          if (popup) {
+            try {
+              popup.opener = null;
+              popup.location.href = absoluteRoute;
+              popup.focus();
+            } catch (_error) {
+              // Ignore popup focus/opener errors.
+            }
+            return;
+          }
+
+          popup = window.open(absoluteRoute, popupName, popupFeatures);
+          if (popup) {
+            if (target === "liczniki") {
+              licznikiPopupRef = popup;
+            } else {
+              timeryPopupRef = popup;
+            }
+            try {
+              popup.opener = null;
+              popup.focus();
+            } catch (_error) {
+              // Ignore popup focus/opener errors.
+            }
+            return;
+          }
+
+          window.alert("Przegladarka zablokowala nowe okno. Zezwol na popupy dla tej strony.");
+        });
+      });
+    }
+
+    if (karyJumpButtonEls.length) {
+      karyJumpButtonEls.forEach((button) => {
+        button.addEventListener("click", () => {
+          const selector = String(button.dataset.karyJump || "").trim();
+          if (!selector) {
+            return;
+          }
+          const target = document.querySelector(selector);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        });
+      });
+    }
+
+    if (timeryConfigBtnEl) {
+      timeryConfigBtnEl.addEventListener("click", () => {
+        timeryConfigState.panelOpen = !timeryConfigState.panelOpen;
+        saveTimeryConfig();
+        applyTimeryConfig();
+      });
+    }
+
+    if (timeryLayoutSelectEl) {
+      timeryLayoutSelectEl.addEventListener("change", () => {
+        const selectedLayout = String(timeryLayoutSelectEl.value || "").toLowerCase();
+        timeryConfigState.layout =
+          selectedLayout === "grid" || selectedLayout === "compact" ? selectedLayout : "list";
+        saveTimeryConfig();
+        applyTimeryConfig();
+      });
+    }
+
+    if (timeryBgColorInputEl) {
+      timeryBgColorInputEl.addEventListener("input", () => {
+        const color = String(timeryBgColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        timeryConfigState.bgColor = color;
+        saveTimeryConfig();
+        applyTimeryConfig();
+      });
+    }
+
+    if (timeryShowTitleEl) {
+      timeryShowTitleEl.addEventListener("change", () => {
+        timeryConfigState.showTitle = timeryShowTitleEl.checked;
+        saveTimeryConfig();
+        applyTimeryConfig();
+      });
+    }
+
+    if (timeryShowProgressEl) {
+      timeryShowProgressEl.addEventListener("change", () => {
+        timeryConfigState.showProgress = timeryShowProgressEl.checked;
+        saveTimeryConfig();
+        applyTimeryConfig();
+      });
+    }
+
+    if (timeryShowStatusEl) {
+      timeryShowStatusEl.addEventListener("change", () => {
+        timeryConfigState.showStatus = timeryShowStatusEl.checked;
+        saveTimeryConfig();
+        applyTimeryConfig();
+      });
+    }
+
+    if (licznikiConfigBtnEl) {
+      licznikiConfigBtnEl.addEventListener("click", () => {
+        licznikiConfigState.panelOpen = !licznikiConfigState.panelOpen;
+        saveLicznikiConfig();
+        applyLicznikiConfig();
+      });
+    }
+
+    if (licznikiLayoutSelectEl) {
+      licznikiLayoutSelectEl.addEventListener("change", () => {
+        const selectedLayout = String(licznikiLayoutSelectEl.value || "").toLowerCase();
+        licznikiConfigState.layout =
+          selectedLayout === "list" || selectedLayout === "compact" ? selectedLayout : "grid";
+        saveLicznikiConfig();
+        applyLicznikiConfig();
+      });
+    }
+
+    if (licznikiBgColorInputEl) {
+      licznikiBgColorInputEl.addEventListener("input", () => {
+        const color = String(licznikiBgColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        licznikiConfigState.bgColor = color;
+        saveLicznikiConfig();
+        applyLicznikiConfig();
+      });
+    }
+
+    if (licznikiShowTitleEl) {
+      licznikiShowTitleEl.addEventListener("change", () => {
+        licznikiConfigState.showTitle = licznikiShowTitleEl.checked;
+        saveLicznikiConfig();
+        applyLicznikiConfig();
+      });
+    }
+
+    if (licznikiShowStatusEl) {
+      licznikiShowStatusEl.addEventListener("change", () => {
+        licznikiConfigState.showStatus = licznikiShowStatusEl.checked;
+        saveLicznikiConfig();
+        applyLicznikiConfig();
+      });
+    }
+
+    if (licznikiShowValueEl) {
+      licznikiShowValueEl.addEventListener("change", () => {
+        licznikiConfigState.showValue = licznikiShowValueEl.checked;
+        saveLicznikiConfig();
+        applyLicznikiConfig();
+      });
+    }
+
+    // Signal that native timery/liczniki config handlers are fully bound.
+    window.__takuuNativeConfigReady = true;
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", loadClips);
+    }
+    window.addEventListener("beforeunload", () => {
+      saveReloadSourcePath(window.location.pathname);
+      persistLastRoutePath(window.location.pathname);
+    });
+    window.addEventListener("pagehide", () => {
+      saveReloadSourcePath(window.location.pathname);
+    });
+
+    handleDiscordOAuthCallback().finally(() => {
+      const restoredPath = getRestorableRoutePath();
+      if (restoredPath && !OBS_OVERLAY_MODE) {
+        const restoredRoute = getRouteFromPath(restoredPath);
+        try {
+          window.history.replaceState({ view: restoredRoute }, "", restoredPath);
+        } catch (_error) {
+          window.location.href = restoredPath;
+          return;
+        }
+        applyView(restoredRoute);
+        return;
+      }
+
+      const initialPathRoute = OBS_OVERLAY_MODE ? "admin" : getRouteFromPath(window.location.pathname);
+      const popupHintRoute = getPopupRouteHint();
+      const hasExplicitRoute = Boolean(
+        getRouteFromSearch(window.location.search) || getRouteFromHash(window.location.hash)
+      );
+
+      if (
+        !OBS_OVERLAY_MODE &&
+        !IS_FILE_PROTOCOL &&
+        popupHintRoute &&
+        !hasExplicitRoute &&
+        initialPathRoute === "home"
+      ) {
+        try {
+          window.name = "";
+        } catch (_error) {
+          // Ignore popup name write failures.
+        }
+        navigateTo(popupHintRoute === "liczniki" ? LICZNIKI_ROUTE_PATH : TIMERY_ROUTE_PATH, popupHintRoute);
+        return;
+      }
+
+      applyView(initialPathRoute);
+      if (initialPathRoute === "home") {
+        window.setTimeout(() => {
+          if (!window.__takuuIntroTypingTriggered) {
+            queueIntroTypingAnimation(0);
+          }
+        }, 140);
+      }
+    });
+
+
+/* INLINE_FALLBACK_MOVED_FROM_INDEX */
+    (function () {
+      "use strict";
+
+      function detectRoute() {
+        var path = String(window.location.pathname || "").toLowerCase();
+        var params = new URLSearchParams(window.location.search || "");
+        var view = String(params.get("view") || "").toLowerCase();
+
+        if (/\/kary\/?$/.test(path) || view === "kary") return "kary";
+        if (/\/timery\/?$/.test(path) || view === "timery" || view === "timers") return "timery";
+        if (/\/liczniki\/?$/.test(path) || view === "liczniki" || view === "counters") return "liczniki";
+        if (/\/(klipy|clips)\/?$/.test(path) || view === "klipy" || view === "clips") return "clips";
+        if (/\/(soon|wkrotce)\/?$/.test(path) || view === "soon" || view === "wkrotce") return "soon";
+        if (/\/(stats|statystyki)\/?$/.test(path) || view === "stats" || view === "statystyki") return "stats";
+        if (/\/(logowanie|login)\/?$/.test(path) || view === "logowanie" || view === "login") return "login";
+        if (/\/admin\/?$/.test(path) || view === "admin") return "admin";
+        return "home";
+      }
+
+      function setVisible(el, show, displayValue) {
+        if (!el) return;
+        el.hidden = !show;
+        el.style.display = show ? (displayValue || "") : "none";
+      }
+
+      function bindConfigToggle(buttonId, panelId, storageKey) {
+        var button = document.getElementById(buttonId);
+        var panel = document.getElementById(panelId);
+        if (!button || !panel) return;
+
+        button.textContent = panel.hidden ? "Konfiguracja" : "Ukryj konfigurację";
+
+        button.addEventListener("click", function (event) {
+          event.preventDefault();
+          if (typeof event.stopImmediatePropagation === "function") {
+            event.stopImmediatePropagation();
+          }
+          event.stopPropagation();
+
+          var shouldOpen = Boolean(panel.hidden);
+          panel.hidden = !shouldOpen;
+          button.textContent = shouldOpen ? "Ukryj konfigurację" : "Konfiguracja";
+
+          try {
+            var raw = window.localStorage.getItem(storageKey);
+            var parsed = raw ? JSON.parse(raw) : {};
+            if (!parsed || typeof parsed !== "object") {
+              parsed = {};
+            }
+            parsed.panelOpen = shouldOpen;
+            window.localStorage.setItem(storageKey, JSON.stringify(parsed));
+          } catch (_error) {
+            // Ignore storage errors.
+          }
+        }, true);
+      }
+
+      function readConfig(storageKey, fallback) {
+        try {
+          var raw = window.localStorage.getItem(storageKey);
+          if (!raw) return fallback;
+          var parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") return fallback;
+          return parsed;
+        } catch (_error) {
+          return fallback;
+        }
+      }
+
+      function saveConfig(storageKey, config) {
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(config));
+        } catch (_error) {
+          // Ignore storage errors.
+        }
+      }
+
+      function applyTimeryConfigFallback(config) {
+        var panel = document.getElementById("timeryPanel");
+        if (!panel) return;
+
+        var layout = String(config.layout || "list").toLowerCase();
+        var isGrid = layout === "grid";
+        var isCompact = layout === "compact";
+        var bgColor = /^#[\da-f]{6}$/i.test(String(config.bgColor || "")) ? String(config.bgColor) : "#101420";
+        var showTitle = config.showTitle !== false;
+        var showProgress = config.showProgress !== false;
+        var showStatus = config.showStatus !== false;
+
+        panel.classList.toggle("timery-layout-grid", isGrid);
+        panel.classList.toggle("timery-layout-compact", isCompact);
+        panel.classList.toggle("timery-hide-title", !showTitle);
+        panel.classList.toggle("timery-hide-progress", !showProgress);
+        panel.classList.toggle("timery-hide-status", !showStatus);
+        panel.style.setProperty("--timery-card-bg", bgColor);
+      }
+
+      function applyLicznikiConfigFallback(config) {
+        var panel = document.getElementById("licznikiPanel");
+        if (!panel) return;
+
+        var layout = String(config.layout || "grid").toLowerCase();
+        var isList = layout === "list";
+        var isCompact = layout === "compact";
+        var isGrid = !isList && !isCompact;
+        var bgColor = /^#[\da-f]{6}$/i.test(String(config.bgColor || "")) ? String(config.bgColor) : "#101420";
+        var showTitle = config.showTitle !== false;
+        var showStatus = config.showStatus !== false;
+        var showValue = config.showValue !== false;
+
+        panel.classList.toggle("liczniki-layout-list", isList);
+        panel.classList.toggle("liczniki-layout-grid", isGrid);
+        panel.classList.toggle("liczniki-layout-compact", isCompact);
+        panel.classList.toggle("liczniki-hide-title", !showTitle);
+        panel.classList.toggle("liczniki-hide-status", !showStatus);
+        panel.classList.toggle("liczniki-hide-value", !showValue);
+        panel.style.setProperty("--liczniki-card-bg", bgColor);
+      }
+
+      function bindTimeryConfigControlsFallback() {
+        var storageKey = "takuu_timery_view_config";
+        var defaultConfig = {
+          panelOpen: false,
+          layout: "list",
+          bgColor: "#101420",
+          showTitle: true,
+          showProgress: true,
+          showStatus: true
+        };
+        var config = readConfig(storageKey, defaultConfig);
+        applyTimeryConfigFallback(config);
+
+        var layoutSelect = document.getElementById("timeryLayoutSelect");
+        var colorInput = document.getElementById("timeryBgColorInput");
+        var showTitle = document.getElementById("timeryShowTitle");
+        var showProgress = document.getElementById("timeryShowProgress");
+        var showStatus = document.getElementById("timeryShowStatus");
+
+        if (layoutSelect) {
+          layoutSelect.value = String(config.layout || "list");
+          layoutSelect.addEventListener("change", function () {
+            config.layout = String(layoutSelect.value || "list").toLowerCase();
+            saveConfig(storageKey, config);
+            applyTimeryConfigFallback(config);
+          });
+        }
+
+        if (colorInput) {
+          colorInput.value = /^#[\da-f]{6}$/i.test(String(config.bgColor || "")) ? String(config.bgColor) : "#101420";
+          colorInput.addEventListener("input", function () {
+            if (!/^#[\da-f]{6}$/i.test(String(colorInput.value || ""))) return;
+            config.bgColor = String(colorInput.value);
+            saveConfig(storageKey, config);
+            applyTimeryConfigFallback(config);
+          });
+        }
+
+        if (showTitle) {
+          showTitle.checked = config.showTitle !== false;
+          showTitle.addEventListener("change", function () {
+            config.showTitle = !!showTitle.checked;
+            saveConfig(storageKey, config);
+            applyTimeryConfigFallback(config);
+          });
+        }
+
+        if (showProgress) {
+          showProgress.checked = config.showProgress !== false;
+          showProgress.addEventListener("change", function () {
+            config.showProgress = !!showProgress.checked;
+            saveConfig(storageKey, config);
+            applyTimeryConfigFallback(config);
+          });
+        }
+
+        if (showStatus) {
+          showStatus.checked = config.showStatus !== false;
+          showStatus.addEventListener("change", function () {
+            config.showStatus = !!showStatus.checked;
+            saveConfig(storageKey, config);
+            applyTimeryConfigFallback(config);
+          });
+        }
+      }
+
+      function bindLicznikiConfigControlsFallback() {
+        var storageKey = "takuu_liczniki_view_config";
+        var defaultConfig = {
+          panelOpen: false,
+          layout: "grid",
+          bgColor: "#101420",
+          showTitle: true,
+          showStatus: true,
+          showValue: true
+        };
+        var config = readConfig(storageKey, defaultConfig);
+        applyLicznikiConfigFallback(config);
+
+        var layoutSelect = document.getElementById("licznikiLayoutSelect");
+        var colorInput = document.getElementById("licznikiBgColorInput");
+        var showTitle = document.getElementById("licznikiShowTitle");
+        var showStatus = document.getElementById("licznikiShowStatus");
+        var showValue = document.getElementById("licznikiShowValue");
+
+        if (layoutSelect) {
+          layoutSelect.value = String(config.layout || "grid");
+          layoutSelect.addEventListener("change", function () {
+            config.layout = String(layoutSelect.value || "grid").toLowerCase();
+            saveConfig(storageKey, config);
+            applyLicznikiConfigFallback(config);
+          });
+        }
+
+        if (colorInput) {
+          colorInput.value = /^#[\da-f]{6}$/i.test(String(config.bgColor || "")) ? String(config.bgColor) : "#101420";
+          colorInput.addEventListener("input", function () {
+            if (!/^#[\da-f]{6}$/i.test(String(colorInput.value || ""))) return;
+            config.bgColor = String(colorInput.value);
+            saveConfig(storageKey, config);
+            applyLicznikiConfigFallback(config);
+          });
+        }
+
+        if (showTitle) {
+          showTitle.checked = config.showTitle !== false;
+          showTitle.addEventListener("change", function () {
+            config.showTitle = !!showTitle.checked;
+            saveConfig(storageKey, config);
+            applyLicznikiConfigFallback(config);
+          });
+        }
+
+        if (showStatus) {
+          showStatus.checked = config.showStatus !== false;
+          showStatus.addEventListener("change", function () {
+            config.showStatus = !!showStatus.checked;
+            saveConfig(storageKey, config);
+            applyLicznikiConfigFallback(config);
+          });
+        }
+
+        if (showValue) {
+          showValue.checked = config.showValue !== false;
+          showValue.addEventListener("change", function () {
+            config.showValue = !!showValue.checked;
+            saveConfig(storageKey, config);
+            applyLicznikiConfigFallback(config);
+          });
+        }
+      }
+
+      function readStorageJsonFallback(key, fallback) {
+        try {
+          var raw = window.localStorage.getItem(key);
+          if (!raw) return fallback;
+          var parsed = JSON.parse(raw);
+          return parsed == null ? fallback : parsed;
+        } catch (_error) {
+          return fallback;
+        }
+      }
+
+      function saveStorageJsonFallback(key, value) {
+        try {
+          window.localStorage.setItem(key, JSON.stringify(value));
+        } catch (_error) {
+          // Ignore storage write failures.
+        }
+      }
+
+      function setInlineLoginStatus(element, text, type) {
+        if (!element) return;
+        element.textContent = String(text || "");
+        element.classList.toggle("is-error", type === "error");
+        element.classList.toggle("is-success", type === "success");
+      }
+
+      function getAdminRoutePathFallback() {
+        return window.location.protocol === "file:" ? "index.html?view=admin" : "/admin";
+      }
+
+      function getInlineAdminAccountsFallback() {
+        var root = {
+          id: "root-admin",
+          login: ROOT_ADMIN_LOGIN,
+          password: ROOT_ADMIN_PASSWORD,
+          canAccessAdmin: true,
+          canAccessStreamObs: true,
+          isRoot: true
+        };
+        var stored = readStorageJsonFallback("takuu_admin_accounts", []);
+        var list = Array.isArray(stored) ? stored.slice() : [];
+        var hasRoot = list.some(function (item) {
+          return item && (String(item.id || "") === "root-admin" || String(item.login || "") === ROOT_ADMIN_LOGIN);
+        });
+        if (!hasRoot) {
+          list.unshift(root);
+        }
+        return list;
+      }
+
+      function tryInlineLocalLoginFallback(login, password) {
+        var cleanLogin = String(login || "").trim();
+        var cleanPassword = String(password || "").trim();
+        if (!cleanLogin || !cleanPassword) return null;
+
+        if (cleanLogin.toLowerCase() === String(ROOT_ADMIN_LOGIN || "").toLowerCase() && cleanPassword === ROOT_ADMIN_PASSWORD) {
+          return {
+            login: ROOT_ADMIN_LOGIN,
+            canAccessAdmin: true,
+            canAccessStreamObs: true
+          };
+        }
+
+        var accounts = getInlineAdminAccountsFallback();
+        for (var i = 0; i < accounts.length; i += 1) {
+          var account = accounts[i] || {};
+          if (!(account && (account.canAccessAdmin || account.canAccessStreamObs || account.isRoot))) continue;
+          if (String(account.login || "") === cleanLogin && String(account.password || "") === cleanPassword) {
+            return account;
+          }
+        }
+        return null;
+      }
+
+      function bindInlineLoginFallback(route) {
+        if (window.__takuuNativeLoginReady) return;
+        if (route !== "login" && route !== "admin") return;
+
+        var form = document.getElementById("adminLoginForm");
+        var passwordInput = document.getElementById("adminLoginPassword");
+        var showPasswordInput = document.getElementById("adminShowPassword");
+        var passwordToggleBtn = document.getElementById("adminPasswordToggle");
+        var passwordToggleIcon = document.getElementById("adminPasswordToggleIcon");
+        var rememberInput = document.getElementById("adminRememberMe");
+        var loginStatus = document.getElementById("adminLoginStatus");
+        var discordStatus = document.getElementById("adminDiscordStatus");
+        var discordBtn = document.getElementById("adminDiscordLoginBtn");
+        var rememberStorageKey = "takuu_admin_remember_me";
+        var rememberMaxAgeMs = 3 * 24 * 60 * 60 * 1000;
+
+        function readRememberFallback() {
+          var now = Date.now();
+          try {
+            var rawValue = String(window.localStorage.getItem(rememberStorageKey) || "").trim();
+            if (!rawValue) return false;
+
+            // Backward compatibility for older boolean storage format.
+            if (rawValue === "1") {
+              var migratedExpiresAt = now + rememberMaxAgeMs;
+              window.localStorage.setItem(rememberStorageKey, String(migratedExpiresAt));
+              return true;
+            }
+
+            var expiresAt = Number(rawValue);
+            if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+              window.localStorage.removeItem(rememberStorageKey);
+              return false;
+            }
+            return true;
+          } catch (_error) {
+            return false;
+          }
+        }
+
+        function saveRememberFallback(enabled) {
+          var normalized = Boolean(enabled);
+          try {
+            if (normalized) {
+              var expiresAt = Date.now() + rememberMaxAgeMs;
+              window.localStorage.setItem(rememberStorageKey, String(expiresAt));
+            } else {
+              window.localStorage.removeItem(rememberStorageKey);
+            }
+          } catch (_error) {
+            // Ignore storage write failures.
+          }
+          if (rememberInput) {
+            rememberInput.checked = normalized;
+          }
+        }
+
+        if (rememberInput) {
+          rememberInput.checked = readRememberFallback();
+          rememberInput.addEventListener("change", function () {
+            saveRememberFallback(rememberInput.checked);
+          });
+        }
+
+        function setFallbackPasswordVisibility(visible) {
+          if (passwordInput) {
+            passwordInput.type = visible ? "text" : "password";
+          }
+          if (showPasswordInput && showPasswordInput.type === "checkbox") {
+            showPasswordInput.checked = Boolean(visible);
+          }
+          if (passwordToggleBtn) {
+            passwordToggleBtn.setAttribute("aria-pressed", visible ? "true" : "false");
+            passwordToggleBtn.setAttribute("aria-label", visible ? "Ukryj hasło" : "Pokaż hasło");
+          }
+          if (passwordToggleIcon) {
+            passwordToggleIcon.classList.toggle("fa-eye", !visible);
+            passwordToggleIcon.classList.toggle("fa-eye-slash", visible);
+          }
+        }
+
+        if (showPasswordInput && passwordInput && showPasswordInput.type === "checkbox") {
+          showPasswordInput.addEventListener("change", function () {
+            setFallbackPasswordVisibility(showPasswordInput.checked);
+          });
+        }
+
+        if (passwordToggleBtn) {
+          passwordToggleBtn.addEventListener("click", function () {
+            var nextVisible = !(passwordInput && passwordInput.type === "text");
+            setFallbackPasswordVisibility(nextVisible);
+            if (passwordInput) {
+              passwordInput.focus();
+            }
+          });
+        }
+
+        setFallbackPasswordVisibility(Boolean(passwordInput && passwordInput.type === "text"));
+
+        if (form) {
+          form.addEventListener(
+            "submit",
+            function (event) {
+              event.preventDefault();
+
+              var formData = new FormData(form);
+              var login = String(formData.get("login") || "").trim();
+              var password = String(formData.get("password") || "").trim();
+              var matched = tryInlineLocalLoginFallback(login, password);
+
+              if (!matched) {
+                if (passwordInput) {
+                  passwordInput.value = "";
+                  passwordInput.focus();
+                }
+                setInlineLoginStatus(loginStatus, "Nieprawidłowy login lub hasło.", "error");
+                return;
+              }
+
+              try {
+                window.sessionStorage.setItem("takuu_admin_auth", String(matched.login || login));
+              } catch (_error) {
+                // Ignore session storage failures.
+              }
+
+              saveRememberFallback(Boolean(rememberInput && rememberInput.checked));
+              setFallbackPasswordVisibility(false);
+              setInlineLoginStatus(loginStatus, "Zalogowano pomyślnie.", "success");
+              window.location.href = getAdminRoutePathFallback();
+            },
+            true
+          );
+        }
+
+        function runDiscordCallbackFallback() {
+          if (!window.TakuuWebhook || typeof window.TakuuWebhook.completeDiscordAdminLogin !== "function") return;
+
+          var params = new URLSearchParams(window.location.search || "");
+          var hasOAuthParams = params.has("code") || params.has("error");
+          if (!hasOAuthParams) return;
+
+          var accounts = getInlineAdminAccountsFallback();
+          Promise.resolve(window.TakuuWebhook.completeDiscordAdminLogin(accounts))
+            .then(function (result) {
+              if (!result || result.skipped) return;
+
+              if (result.accountsChanged) {
+                saveStorageJsonFallback("takuu_admin_accounts", accounts);
+              }
+
+              var hasAnyAdminAccess = !!(
+                result &&
+                (result.hasAnyAdminAccess == null ? result.canAccessAdmin : result.hasAnyAdminAccess)
+              );
+              if (!result.ok || !hasAnyAdminAccess) {
+                setInlineLoginStatus(
+                  discordStatus,
+                  (result && result.error) || "Brak permisji do Panelu Admina ani StreamOBS.",
+                  "error"
+                );
+                return;
+              }
+
+              var session = result.session || {};
+              var loginValue = session.username ? "discord:" + session.username : "discord";
+              try {
+                window.sessionStorage.setItem("takuu_admin_auth", loginValue);
+              } catch (_error) {
+                // Ignore session storage failures.
+              }
+
+              setInlineLoginStatus(discordStatus, "Logowanie Discord zakończone pomyślnie.", "success");
+              window.location.href = getAdminRoutePathFallback();
+            })
+            .catch(function () {
+              setInlineLoginStatus(discordStatus, "Nie udało się zakończyć logowania Discord.", "error");
+            });
+        }
+
+        if (discordBtn) {
+          if (!window.TakuuWebhook || typeof window.TakuuWebhook.startDiscordLogin !== "function") {
+            discordBtn.disabled = true;
+            setInlineLoginStatus(discordStatus, "Brak webhook.js lub konfiguracji Discord.", "error");
+          } else {
+            if (typeof window.TakuuWebhook.isDiscordLoginAvailable === "function") {
+              var availability = window.TakuuWebhook.isDiscordLoginAvailable();
+              if (!availability.ok) {
+                discordBtn.disabled = true;
+                setInlineLoginStatus(
+                  discordStatus,
+                  availability.error || "Logowanie Discord jest niedostepne.",
+                  "error"
+                );
+              }
+            }
+
+            discordBtn.addEventListener("click", function () {
+              if (discordBtn.disabled) return;
+              saveRememberFallback(Boolean(rememberInput && rememberInput.checked));
+              setInlineLoginStatus(discordStatus, "Przekierowanie do logowania Discord...", "success");
+              Promise.resolve(window.TakuuWebhook.startDiscordLogin()).catch(function () {
+                setInlineLoginStatus(discordStatus, "Nie udało się uruchomić logowania Discord.", "error");
+              });
+            });
+          }
+        }
+
+        runDiscordCallbackFallback();
+      }
+
+      function bindKaryCurrencyFallback() {
+        if (window.__takuuNativeKaryCurrencyReady) return;
+
+        var switchEl = document.querySelector(".kary-currency-switch");
+        if (!switchEl) return;
+
+        var listChill = document.getElementById("karyPriceListChill");
+        var listHard = document.getElementById("karyPriceListHard");
+        var emptyChill = document.getElementById("karyPriceEmptyChill");
+        var emptyHard = document.getElementById("karyPriceEmptyHard");
+        var STORAGE_KEY = "takuu_kary_currency_fallback";
+
+        function parseFirstInteger(value) {
+          var match = String(value || "").match(/-?\d+/);
+          if (!match) return 0;
+          var parsed = Number(match[0]);
+          return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+        }
+
+        function setCurrency(currency) {
+          var clean = String(currency || "").toLowerCase();
+          var next = clean === "suby" || clean === "kicksy" ? clean : "pln";
+
+          var buttons = switchEl.querySelectorAll("button[data-currency]");
+          buttons.forEach(function (button) {
+            var active = String(button.getAttribute("data-currency") || "").toLowerCase() === next;
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-pressed", active ? "true" : "false");
+          });
+
+          var dataKey = next === "suby" ? "suby" : next === "kicksy" ? "kicksy" : "pln";
+          var priceNodes = document.querySelectorAll(".kary-price-value");
+          priceNodes.forEach(function (price) {
+            var nextValue = String(price.dataset[dataKey] || "").trim();
+            if (nextValue) {
+              price.textContent = nextValue;
+              return;
+            }
+            if (dataKey === "suby") {
+              price.textContent = "0 Suby";
+              return;
+            }
+            if (dataKey === "kicksy") {
+              price.textContent = "0 Kicksy";
+              return;
+            }
+            price.textContent = "0 PLN";
+          });
+
+          var pairs = [
+            { list: listChill, empty: emptyChill },
+            { list: listHard, empty: emptyHard }
+          ];
+          pairs.forEach(function (pair) {
+            if (!pair.list) return;
+            var rows = Array.from(pair.list.querySelectorAll("li"));
+            var visible = 0;
+
+            rows.forEach(function (row) {
+              var priceEl = row.querySelector(".kary-price-value");
+              if (!priceEl) {
+                row.hidden = false;
+                visible += 1;
+                return;
+              }
+
+              if (dataKey === "pln") {
+                row.hidden = false;
+                visible += 1;
+                return;
+              }
+
+              var valueRaw = String(priceEl.dataset[dataKey] || "");
+              var show = parseFirstInteger(valueRaw) > 0;
+              row.hidden = !show;
+              if (show) visible += 1;
+            });
+
+            var hasItems = visible > 0;
+            pair.list.hidden = !hasItems;
+            pair.list.style.display = hasItems ? "grid" : "none";
+            if (pair.empty) {
+              pair.empty.hidden = hasItems;
+              pair.empty.style.display = hasItems ? "none" : "block";
+            }
+          });
+
+          try {
+            window.localStorage.setItem(STORAGE_KEY, next);
+          } catch (_error) {
+            // Ignore storage write failures.
+          }
+        }
+
+        switchEl.addEventListener("click", function (event) {
+          var target = event.target;
+          if (!target || typeof target.closest !== "function") return;
+          var button = target.closest("button[data-currency]");
+          if (!button) return;
+          event.preventDefault();
+          setCurrency(button.getAttribute("data-currency"));
+        });
+
+        var initial = "pln";
+        try {
+          var stored = String(window.localStorage.getItem(STORAGE_KEY) || "").toLowerCase();
+          if (stored === "pln" || stored === "suby" || stored === "kicksy") {
+            initial = stored;
+          }
+        } catch (_error) {
+          // Ignore storage read failures.
+        }
+        setCurrency(initial);
+      }
+
+      function bindKaryPopupButtons() {
+        var buttons = document.querySelectorAll("[data-kary-open-window]");
+        if (!buttons || !buttons.length) return;
+
+        buttons.forEach(function (button) {
+          button.addEventListener("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === "function") {
+              event.stopImmediatePropagation();
+            }
+
+            var target = String(button.getAttribute("data-kary-open-window") || "").toLowerCase();
+            var href = String(button.getAttribute("href") || "").trim();
+            if (!href) return;
+
+            var absoluteHref = href;
+            try {
+              absoluteHref = new URL(href, window.location.href).href;
+            } catch (_error) {
+              absoluteHref = href;
+            }
+
+            var popupWidth = 1240;
+            var popupHeight = target === "liczniki" ? 760 : 920;
+            var left = Math.max(0, Math.floor((window.screen.availWidth - popupWidth) / 2));
+            var top = Math.max(0, Math.floor((window.screen.availHeight - popupHeight) / 2));
+            var popupName = target === "liczniki" ? "takuu_liczniki_popup" : "takuu_timery_popup";
+            var popupFeatures = [
+              "popup=yes",
+              "noopener=yes",
+              "noreferrer=yes",
+              "resizable=yes",
+              "scrollbars=yes",
+              "toolbar=no",
+              "location=no",
+              "menubar=no",
+              "status=no",
+              "personalbar=no",
+              "directories=no",
+              "copyhistory=no",
+              "width=" + popupWidth,
+              "height=" + popupHeight,
+              "left=" + left,
+              "top=" + top
+            ].join(",");
+
+            var popup = window.open(absoluteHref, popupName, popupFeatures);
+            if (popup) {
+              try {
+                popup.opener = null;
+                popup.focus();
+              } catch (_error) {
+                // Ignore popup focus errors.
+              }
+              return;
+            }
+
+            window.alert("Przegladarka zablokowala nowe okno. Zezwol na popupy dla tej strony.");
+          }, true);
+        });
+      }
+
+      function runIntroTypingFallback(route) {
+        if (route !== "home") return;
+
+        window.setTimeout(function () {
+          if (window.__takuuIntroTypingTriggered) return;
+
+          var titleEl = document.querySelector(".stream-intro-title");
+          var subtitleEl = document.querySelector(".stream-intro-subtitle");
+          if (!titleEl || !subtitleEl) return;
+
+          var accentEl = titleEl.querySelector(".stream-intro-title-accent");
+          var fullTitle = String(titleEl.textContent || "").replace(/\s+/g, " ").trim();
+          var accentText = accentEl ? String(accentEl.textContent || "").replace(/\s+/g, " ").trim() : "";
+          var accentIndex = accentText ? fullTitle.indexOf(accentText) : -1;
+          var beforeText = accentIndex >= 0 ? fullTitle.slice(0, accentIndex) : fullTitle;
+          var afterText = accentIndex >= 0 ? fullTitle.slice(accentIndex + accentText.length) : "";
+          var fullSubtitle = String(subtitleEl.textContent || "").replace(/\s+/g, " ").trim();
+
+          if (!fullTitle || !fullSubtitle) return;
+
+          var escapeHtml = function (value) {
+            return String(value || "")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/\"/g, "&quot;")
+              .replace(/'/g, "&#39;");
+          };
+
+          var titleLen = beforeText.length + accentText.length + afterText.length;
+          var subtitleLen = fullSubtitle.length;
+          var titleCount = 0;
+          var subtitleCount = 0;
+          var phase = "title";
+          var holdTicks = 0;
+
+          titleEl.style.opacity = "1";
+          titleEl.style.transform = "none";
+          subtitleEl.style.opacity = "1";
+          subtitleEl.style.transform = "none";
+          titleEl.innerHTML = "";
+          subtitleEl.textContent = "";
+          titleEl.classList.add("is-typing");
+          subtitleEl.classList.remove("is-typing");
+
+          var timerId = window.setInterval(function () {
+            if (phase === "title") {
+              if (titleCount < titleLen) {
+                titleCount += 1;
+                if (titleCount <= beforeText.length) {
+                  titleEl.innerHTML = escapeHtml(beforeText.slice(0, titleCount));
+                } else if (titleCount <= beforeText.length + accentText.length) {
+                  titleEl.innerHTML =
+                    escapeHtml(beforeText) +
+                    '<span class="stream-intro-title-accent">' +
+                    escapeHtml(accentText.slice(0, titleCount - beforeText.length)) +
+                    "</span>";
+                } else {
+                  titleEl.innerHTML =
+                    escapeHtml(beforeText) +
+                    '<span class="stream-intro-title-accent">' + escapeHtml(accentText) + "</span>" +
+                    escapeHtml(afterText.slice(0, titleCount - beforeText.length - accentText.length));
+                }
+                return;
+              }
+              phase = "hold";
+              titleEl.classList.remove("is-typing");
+              holdTicks = 0;
+              return;
+            }
+
+            if (phase === "hold") {
+              holdTicks += 1;
+              if (holdTicks < 4) return;
+              phase = "subtitle";
+              subtitleEl.classList.add("is-typing");
+              return;
+            }
+
+            if (phase === "subtitle") {
+              if (subtitleCount < subtitleLen) {
+                subtitleCount += 1;
+                subtitleEl.textContent = fullSubtitle.slice(0, subtitleCount);
+                return;
+              }
+              subtitleEl.classList.remove("is-typing");
+              window.clearInterval(timerId);
+            }
+          }, 40);
+        }, 700);
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        if (window.__takuuNativeLoginReady && window.__takuuNativeConfigReady) {
+          return;
+        }
+
+        var isObsOverlay = Boolean(window.__takuuObsOverlayMode);
+        if (!isObsOverlay) {
+          try {
+            var params = new URLSearchParams(window.location.search || "");
+            var obsRaw = String(params.get("obs") || params.get("overlay") || "").trim().toLowerCase();
+            isObsOverlay =
+              obsRaw === "1" ||
+              obsRaw === "true" ||
+              obsRaw === "yes" ||
+              obsRaw === "on";
+          } catch (_error) {
+            isObsOverlay = false;
+          }
+        }
+        var route = isObsOverlay ? "admin" : detectRoute();
+        var body = document.body;
+        if (body) {
+          var cleaned = String(body.className || "").replace(/\broute-[^\s]+/g, "").trim();
+          body.className = cleaned;
+          body.classList.add("route-" + route);
+          if (isObsOverlay) {
+            body.classList.add("obs-wheel-overlay");
+          }
+        }
+
+        var mainWrap = document.querySelector("main.wrap");
+        var karyPanel = document.getElementById("karyPanel");
+        var timeryPanel = document.getElementById("timeryPanel");
+        var licznikiPanel = document.getElementById("licznikiPanel");
+        var statsPanel = document.getElementById("statsPanel");
+        var adminPanel = document.getElementById("adminPanel");
+        var adminDashboard = document.getElementById("adminDashboard");
+        var adminStreamObsTab = document.getElementById("adminStreamObsTab");
+        var routePlaceholder = document.getElementById("routePlaceholder");
+        var streamLayout = document.querySelector(".stream-layout");
+        var friends = document.getElementById("friends");
+
+        setVisible(mainWrap, route === "clips");
+        setVisible(karyPanel, route === "kary");
+        setVisible(timeryPanel, route === "timery");
+        setVisible(licznikiPanel, route === "liczniki");
+        setVisible(statsPanel, route === "stats");
+        setVisible(adminPanel, route === "login" && !isObsOverlay);
+        setVisible(adminDashboard, route === "admin");
+        if (adminStreamObsTab) {
+          setVisible(adminStreamObsTab, route === "admin");
+          adminStreamObsTab.classList.toggle("is-active", route === "admin");
+        }
+        setVisible(routePlaceholder, route === "soon");
+        setVisible(streamLayout, route === "home", "grid");
+        setVisible(friends, route === "home");
+
+        if (isObsOverlay) {
+          var tabsToHide = ["adminMembersTab", "adminKaryTab", "adminAccountsTab"];
+          tabsToHide.forEach(function (id) {
+            var tab = document.getElementById(id);
+            if (!tab) return;
+            tab.hidden = true;
+            tab.classList.remove("is-active");
+          });
+
+          var tabButtons = document.querySelectorAll(".admin-tab-btn");
+          tabButtons.forEach(function (button) {
+            var active = String(button.getAttribute("data-tab") || "") === "streamobs";
+            button.classList.toggle("is-active", active);
+            if (!active) {
+              button.hidden = true;
+            }
+          });
+        }
+
+        if (!window.__takuuNativeConfigReady) {
+          bindConfigToggle("timeryConfigBtn", "timeryConfigPanel", "takuu_timery_view_config");
+          bindConfigToggle("licznikiConfigBtn", "licznikiConfigPanel", "takuu_liczniki_view_config");
+          bindTimeryConfigControlsFallback();
+          bindLicznikiConfigControlsFallback();
+        }
+        bindInlineLoginFallback(route);
+        bindKaryCurrencyFallback();
+        bindKaryPopupButtons();
+        runIntroTypingFallback(route);
+      });
+    })();
+  
+
