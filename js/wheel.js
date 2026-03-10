@@ -28,7 +28,6 @@
   }
 
   const STORAGE_KEY = "takuu_wheel_config";
-  const HISTORY_KEY = "takuu_wheel_history";
   const SPIN_SPEED_KEY = "takuu_wheel_spin_speed";
   const WHEEL_SYNC_STORAGE_KEY = "takuu_wheel_sync_event";
   const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
@@ -612,14 +611,6 @@
   buildTickPool(TICK_SOUND_SOURCES[tickSourceIndex]);
 
   let history = [];
-  try {
-    history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    if (!Array.isArray(history)) {
-      history = [];
-    }
-  } catch (_error) {
-    history = [];
-  }
 
   const wheelSyncSourceId = `wheel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   try {
@@ -795,11 +786,6 @@
       return;
     }
     history.push(normalizedEntry);
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    } catch (_error) {
-      // Ignore storage write failures.
-    }
     saveWheelHistoryEntryToApi(normalizedEntry);
     emitWheelStatsEvent("takuu:wheel-history-updated", {
       winner: normalizedEntry.name,

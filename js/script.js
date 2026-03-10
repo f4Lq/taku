@@ -240,7 +240,6 @@
     const TIMERY_CONFIG_KEY = "takuu_timery_view_config";
     const LICZNIKI_CONFIG_KEY = "takuu_liczniki_view_config";
     const WHEEL_CONFIG_STORAGE_KEY = "takuu_wheel_config";
-    const WHEEL_HISTORY_KEY = "takuu_wheel_history";
     const WHEEL_SYNC_STORAGE_KEY = "takuu_wheel_sync_event";
     const WHEEL_SYNC_CURSOR_STORAGE_KEY = "takuu_wheel_sync_last_event_id";
     const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
@@ -1144,9 +1143,7 @@
     }
 
     function readWheelHistoryStats() {
-      const localHistory = readStorageJson(WHEEL_HISTORY_KEY, []);
-      const localEntries = Array.isArray(localHistory) ? localHistory : [];
-      return mergeWheelHistoryEntries(wheelStatsHistoryCache, localEntries);
+      return mergeWheelHistoryEntries([], wheelStatsHistoryCache);
     }
 
     function renderWheelStats() {
@@ -1758,6 +1755,14 @@
         window.localStorage.setItem(key, JSON.stringify(value));
       } catch (_error) {
         // Ignore storage write failures.
+      }
+    }
+
+    function clearLegacyWheelHistoryStorage() {
+      try {
+        window.localStorage.removeItem("takuu_wheel_history");
+      } catch (_error) {
+        // Ignore storage failures.
       }
     }
 
@@ -6254,6 +6259,7 @@
     if (adminRememberMeEl) {
       adminRememberMeEl.checked = isRememberMeEnabled();
     }
+    clearLegacyWheelHistoryStorage();
     clearAdminSessionOnReload();
     adminAccounts = loadAdminAccounts();
     baseMemberOverrides = loadBaseMemberOverrides();
