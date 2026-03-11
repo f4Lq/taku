@@ -1,17 +1,29 @@
-const { createRedisClient } = require("../_lib/redis.js");
-const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require("../_lib/http.js");
+﻿const { createRedisClient } = require('../_lib/redis.js');
+const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require('../_lib/http.js');
 
-const KARY_STATE_DATA_KEY = "kary:state:data";
-const KARY_STATE_UPDATED_AT_KEY = "kary:state:updated_at";
+const KARY_STATE_DATA_KEY = 'kary:state:data';
+const KARY_STATE_UPDATED_AT_KEY = 'kary:state:updated_at';
+const KARY_STATE_MEMORY_SYMBOL = Symbol.for('takuu.kary_state.memory_store.v1');
+
+function getKaryStateMemoryStore() {
+  const scope = globalThis;
+  if (!scope[KARY_STATE_MEMORY_SYMBOL]) {
+    scope[KARY_STATE_MEMORY_SYMBOL] = {
+      state: null,
+      updatedAt: 0,
+    };
+  }
+  return scope[KARY_STATE_MEMORY_SYMBOL];
+}
 
 function normalizeStateMap(rawValue) {
-  if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) {
     return {};
   }
 
   const normalized = {};
   Object.entries(rawValue).forEach(([rawKey, rawNumber]) => {
-    const key = String(rawKey || "").trim();
+    const key = String(rawKey || '').trim();
     if (!key) {
       return;
     }
@@ -23,7 +35,7 @@ function normalizeStateMap(rawValue) {
 
 function normalizeKaryState(rawState, fallbackTickAt = Date.now()) {
   const source =
-    rawState && typeof rawState === "object" && !Array.isArray(rawState)
+    rawState && typeof rawState === 'object' && !Array.isArray(rawState)
       ? rawState
       : {};
 
@@ -57,7 +69,7 @@ function normalizeKaryState(rawState, fallbackTickAt = Date.now()) {
 }
 
 function parseStoredState(rawValue) {
-  const text = String(rawValue ?? "").trim();
+  const text = String(rawValue ?? '').trim();
   if (!text) {
     return null;
   }
@@ -71,41 +83,40 @@ function parseStoredState(rawValue) {
 }
 
 module.exports = async function handler(req, res) {
-  const method = String(req.method || "GET").toUpperCase();
-  if (method === "OPTIONS") {
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method === 'OPTIONS') {
     sendOptions(res);
     return;
   }
-  if (method !== "GET" && method !== "POST") {
-    res.setHeader("Allow", "GET, POST, OPTIONS");
-    sendJson(res, { ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
+  if (method !== 'GET' && method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST, OPTIONS');
+    sendJson(res, { ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
     return;
   }
 
   const redis = createRedisClient();
-  if (!redis) {
-    sendJson(
-      res,
-      {
-        ok: false,
-        error: "MISSING_KV_REST_ENV",
-        requiredEnv: ["KV_REST_API_URL", "KV_REST_API_TOKEN"],
-      },
-      500
-    );
-    return;
-  }
+  const useRedis = Boolean(redis);
+  const memoryStore = useRedis ? null : getKaryStateMemoryStore();
 
   try {
-    if (method === "GET") {
+    if (method === 'GET') {
       const url = getRequestUrl(req);
-      const afterUpdatedAt = Math.max(0, getSafeInt(url.searchParams.get("after"), 0));
-      const [rawState, rawUpdatedAt] = await redis.pipeline([
-        ["GET", KARY_STATE_DATA_KEY],
-        ["GET", KARY_STATE_UPDATED_AT_KEY],
-      ]);
+      const afterUpdatedAt = Math.max(0, getSafeInt(url.searchParams.get('after'), 0));
 
-      const updatedAt = Math.max(0, getSafeInt(rawUpdatedAt, 0));
+      let state = null;
+      let updatedAt = 0;
+      if (useRedis) {
+        const [rawState, rawUpdatedAt] = await redis.pipeline([
+          ['GET', KARY_STATE_DATA_KEY],
+          ['GET', KARY_STATE_UPDATED_AT_KEY],
+        ]);
+        state = parseStoredState(rawState);
+        updatedAt = Math.max(0, getSafeInt(rawUpdatedAt, 0));
+      } else {
+        state = memoryStore && memoryStore.state ? normalizeKaryState(memoryStore.state) : null;
+        updatedAt = Math.max(0, getSafeInt(memoryStore?.updatedAt, 0));
+      }
+
       if (afterUpdatedAt > 0 && updatedAt > 0 && updatedAt <= afterUpdatedAt) {
         sendJson(res, {
           ok: true,
@@ -113,51 +124,59 @@ module.exports = async function handler(req, res) {
           updatedAt,
           state: null,
           serverTime: Date.now(),
+          storage: useRedis ? 'redis' : 'memory',
         });
         return;
       }
 
-      const state = parseStoredState(rawState);
       sendJson(res, {
         ok: true,
         changed: Boolean(state),
         updatedAt,
         state,
         serverTime: Date.now(),
+        storage: useRedis ? 'redis' : 'memory',
       });
       return;
     }
 
     const payload = await readJsonBody(req);
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      sendJson(res, { ok: false, error: "INVALID_JSON" }, 400);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      sendJson(res, { ok: false, error: 'INVALID_JSON' }, 400);
       return;
     }
 
-    const action = String(payload.action || "set").trim().toLowerCase();
-    if (action !== "set" && action !== "replace") {
-      sendJson(res, { ok: false, error: "INVALID_ACTION" }, 400);
+    const action = String(payload.action || 'set').trim().toLowerCase();
+    if (action !== 'set' && action !== 'replace') {
+      sendJson(res, { ok: false, error: 'INVALID_ACTION' }, 400);
       return;
     }
 
     const now = Date.now();
     const nextState = normalizeKaryState(payload.state, now);
-    await redis.pipeline([
-      ["SET", KARY_STATE_DATA_KEY, JSON.stringify(nextState)],
-      ["SET", KARY_STATE_UPDATED_AT_KEY, now],
-    ]);
+
+    if (useRedis) {
+      await redis.pipeline([
+        ['SET', KARY_STATE_DATA_KEY, JSON.stringify(nextState)],
+        ['SET', KARY_STATE_UPDATED_AT_KEY, now],
+      ]);
+    } else {
+      memoryStore.state = nextState;
+      memoryStore.updatedAt = now;
+    }
 
     sendJson(res, {
       ok: true,
       updatedAt: now,
       state: nextState,
+      storage: useRedis ? 'redis' : 'memory',
     });
   } catch (error) {
     sendJson(
       res,
       {
         ok: false,
-        error: `KARY_STATE_API_ERROR: ${String(error?.message || "request_failed")}`,
+        error: `KARY_STATE_API_ERROR: ${String(error?.message || 'request_failed')}`,
       },
       500
     );
