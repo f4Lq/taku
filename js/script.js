@@ -99,6 +99,8 @@
     const downloadInProgress = new Set();
     const ROUTE_BODY_CLASSES = ["route-home", "route-kary", "route-timery", "route-liczniki", "route-clips", "route-soon", "route-stats", "route-login", "route-admin"];
     let menuOutsideCloserBound = false;
+    let clipViewerState = null;
+    let clipViewerOpenSeq = 0;
     let clipsLoadedOnce = false;
     let introTypingPlayed = false;
     let introTypingTickId = null;
@@ -274,6 +276,9 @@
     let editingMemberId = "";
     let draggingMemberId = "";
     let draggingMemberRow = null;
+    let draggingCennikId = "";
+    let draggingCennikSection = "";
+    let draggingCennikRow = null;
     let karyTimerTickId = null;
     let karyExternalTimerBridgeBound = false;
     let karyStateSyncPollId = null;
@@ -2347,6 +2352,108 @@
       return dropTarget;
     }
 
+    function clearCennikDragTargetRows() {
+      if (!adminCennikTableBodyEl) {
+        return;
+      }
+      adminCennikTableBodyEl
+        .querySelectorAll("tr.admin-cennik-row.is-drag-target")
+        .forEach((row) => row.classList.remove("is-drag-target"));
+    }
+
+    function findDropTargetCennikRow(pointerY, section) {
+      if (!adminCennikTableBodyEl) {
+        return null;
+      }
+      const cleanSection = normalizeKarySection(section);
+      const rows = Array.from(
+        adminCennikTableBodyEl.querySelectorAll(`tr.admin-cennik-row[data-cennik-section="${cleanSection}"]`)
+      ).filter((row) => {
+        const rowId = String(row.dataset.cennikId || "").trim();
+        return rowId && rowId !== draggingCennikId;
+      });
+
+      let dropTarget = null;
+      let closestOffset = Number.NEGATIVE_INFINITY;
+
+      rows.forEach((row) => {
+        const rect = row.getBoundingClientRect();
+        const offset = pointerY - rect.top - rect.height / 2;
+        if (offset < 0 && offset > closestOffset) {
+          closestOffset = offset;
+          dropTarget = row;
+        }
+      });
+
+      return dropTarget;
+    }
+
+    function moveDraggingCennikRowToSectionEnd(section) {
+      if (!adminCennikTableBodyEl || !draggingCennikRow) {
+        return;
+      }
+      const cleanSection = normalizeKarySection(section);
+      const sectionRows = Array.from(
+        adminCennikTableBodyEl.querySelectorAll(`tr.admin-cennik-row[data-cennik-section="${cleanSection}"]`)
+      ).filter((row) => row !== draggingCennikRow);
+
+      if (!sectionRows.length) {
+        return;
+      }
+      const lastRow = sectionRows[sectionRows.length - 1];
+      if (lastRow.nextSibling) {
+        adminCennikTableBodyEl.insertBefore(draggingCennikRow, lastRow.nextSibling);
+      } else {
+        adminCennikTableBodyEl.appendChild(draggingCennikRow);
+      }
+    }
+
+    function applyCennikOrderFromDom(section) {
+      if (!adminCennikTableBodyEl) {
+        return false;
+      }
+
+      const cleanSection = normalizeKarySection(section);
+      const orderedIds = Array.from(
+        adminCennikTableBodyEl.querySelectorAll(`tr.admin-cennik-row[data-cennik-section="${cleanSection}"]`)
+      )
+        .map((row) => String(row.dataset.cennikId || "").trim())
+        .filter(Boolean);
+
+      if (!orderedIds.length) {
+        return false;
+      }
+
+      const previousOrder = getSortedKaryCennikItems()
+        .filter((item) => item.section === cleanSection)
+        .map((item) => item.id);
+
+      const changed =
+        previousOrder.length !== orderedIds.length ||
+        previousOrder.some((itemId, index) => itemId !== orderedIds[index]);
+
+      if (!changed) {
+        return false;
+      }
+
+      const orderMap = new Map(orderedIds.map((itemId, index) => [itemId, index]));
+      karyCennikItems = karyCennikItems.map((item) => {
+        if (item.section !== cleanSection) {
+          return item;
+        }
+        const nextOrder = orderMap.get(item.id);
+        if (!Number.isInteger(nextOrder)) {
+          return item;
+        }
+        return {
+          ...item,
+          sortOrder: nextOrder
+        };
+      });
+
+      return true;
+    }
+
     function getRememberMeState() {
       const state = { enabled: false, expired: false };
       const now = Date.now();
@@ -2926,7 +3033,16 @@
         const rows = Array.from(listEl.querySelectorAll("li"));
         rows.forEach((row, index) => {
           const name = String(row.querySelector("strong")?.textContent || "").trim();
-          const desc = String(row.querySelector("small")?.textContent || "").trim();
+          const smallTexts = Array.from(row.querySelectorAll("small"))
+            .map((small) => String(small.textContent || "").trim())
+            .filter(Boolean);
+          const isTimeLine = (text) =>
+            isStandaloneMinuteDeltaDescription(text) || /^czas\s*:/i.test(String(text || "").trim());
+          const timeLineText = smallTexts.find((text) => isTimeLine(text)) || "";
+          const descriptionText = smallTexts.find((text) => !isTimeLine(text)) || "";
+          const fallbackText = smallTexts[0] || "";
+          const desc = descriptionText || (!timeLineText ? fallbackText : "");
+          const baseMinutesSource = timeLineText || desc || fallbackText;
           const priceEl = row.querySelector(".kary-price-value");
           const plnRaw = priceEl ? String(priceEl.dataset.pln || priceEl.textContent || "") : "";
           const subyRaw = priceEl ? String(priceEl.dataset.suby || "") : "";
@@ -2939,6 +3055,7 @@
             section,
             name,
             description: desc,
+            baseMinutes: parseTimerBaseMinutesFromDescription(baseMinutesSource),
             pricePln: parseFirstInteger(plnRaw),
             priceSuby: parseFirstInteger(subyRaw),
             priceKicksy: parseFirstInteger(kicksyRaw),
@@ -2965,6 +3082,13 @@
         section,
         name,
         description: String(safe.description || "").trim(),
+        baseMinutes: (() => {
+          const explicit = Math.max(0, Math.floor(Number(safe.baseMinutes) || 0));
+          if (explicit > 0) {
+            return explicit;
+          }
+          return parseTimerBaseMinutesFromDescription(safe.description);
+        })(),
         pricePln: Math.max(0, Math.floor(Number(safe.pricePln) || 0)),
         priceSuby: Math.max(0, Math.floor(Number(safe.priceSuby) || 0)),
         priceKicksy: Math.max(0, Math.floor(Number(safe.priceKicksy) || 0)),
@@ -3048,21 +3172,41 @@
           return;
         }
         listEl.innerHTML = items
-          .map(
-            (item) => `
+          .map((item) => {
+            const rawDescription = String(item.description || "").trim();
+            const explicitBaseMinutes = Math.max(0, Math.floor(Number(item.baseMinutes) || 0));
+            const baseMinutes = explicitBaseMinutes > 0
+              ? explicitBaseMinutes
+              : parseTimerBaseMinutesFromDescription(rawDescription);
+            const hasBaseMinutes = baseMinutes > 0;
+            const isMinuteOnlyDescription = isStandaloneMinuteDeltaDescription(rawDescription);
+            const descriptionText = isMinuteOnlyDescription ? "" : rawDescription;
+            const baseMinutesMarkup = hasBaseMinutes
+              ? `<small class="kary-price-base-time">Czas: +${escapeHtml(String(baseMinutes))} min</small>`
+              : "";
+            const descriptionMarkup = descriptionText
+              ? `<small class="kary-price-description">${escapeHtml(descriptionText)}</small>`
+              : "";
+            const fallbackDescriptionMarkup = !descriptionMarkup && !baseMinutesMarkup
+              ? `<small class="kary-price-description">—</small>`
+              : "";
+            return `
           <li data-cennik-id="${escapeHtml(item.id)}">
             <strong>${escapeHtml(item.name)}</strong>
             <span class="kary-price-value" data-pln="${escapeHtml(formatKaryPln(item.pricePln))}" data-suby="${escapeHtml(formatKarySuby(item.priceSuby))}" data-kicksy="${escapeHtml(formatKaryKicksy(item.priceKicksy))}">${escapeHtml(formatKaryPln(item.pricePln))}</span>
-            <small>${escapeHtml(item.description || "—")}</small>
+            ${baseMinutesMarkup}
+            ${descriptionMarkup}
+            ${fallbackDescriptionMarkup}
           </li>
         `
-          )
+          })
           .join("");
       };
 
       fillList(karyPriceListChillEl, grouped.chill);
       fillList(karyPriceListHardEl, grouped.hard);
       setKaryCurrency(activeKaryCurrency);
+      updateTimerQuickActionButtons();
     }
 
     function renderAdminKaryCennikTable() {
@@ -3076,7 +3220,7 @@
       if (!rows.length) {
         adminCennikTableBodyEl.innerHTML = `
           <tr>
-            <td colspan="6" class="admin-table-empty">Brak pozycji cennika.</td>
+            <td colspan="8" class="admin-table-empty">Brak pozycji cennika.</td>
           </tr>
         `;
         return;
@@ -3084,9 +3228,24 @@
 
       rows.forEach((item) => {
         const tr = document.createElement("tr");
+        tr.classList.add("admin-cennik-row");
+        tr.dataset.cennikId = item.id;
+        tr.dataset.cennikSection = item.section;
+        tr.draggable = false;
         tr.innerHTML = `
+          <td>
+            <button
+              class="admin-row-btn admin-cennik-drag-handle"
+              type="button"
+              data-cennik-drag-handle="1"
+              draggable="true"
+              title="Przeciągnij, aby ustawić kolejność"
+              aria-label="Przeciągnij, aby ustawić kolejność"
+            >⇅</button>
+          </td>
           <td>${escapeHtml(item.section === "hard" ? "Tortury" : "Opcje widza")}</td>
           <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.baseMinutes > 0 ? `+${item.baseMinutes} min` : "—")}</td>
           <td>${escapeHtml(formatKaryPln(item.pricePln))}</td>
           <td>${escapeHtml(formatKarySuby(item.priceSuby))}</td>
           <td>${escapeHtml(formatKaryKicksy(item.priceKicksy))}</td>
@@ -3356,6 +3515,7 @@
       const sectionInput = adminCennikFormEl.querySelector('select[name="cennikSection"]');
       const nameInput = adminCennikFormEl.querySelector('input[name="cennikName"]');
       const descriptionInput = adminCennikFormEl.querySelector('input[name="cennikDescription"]');
+      const baseMinutesInput = adminCennikFormEl.querySelector('input[name="cennikBaseMinutes"]');
       const plnInput = adminCennikFormEl.querySelector('input[name="cennikPricePln"]');
       const subyInput = adminCennikFormEl.querySelector('input[name="cennikPriceSuby"]');
       const kicksyInput = adminCennikFormEl.querySelector('input[name="cennikPriceKicksy"]');
@@ -3371,6 +3531,9 @@
       }
       if (descriptionInput) {
         descriptionInput.value = item.description || "";
+      }
+      if (baseMinutesInput) {
+        baseMinutesInput.value = item.baseMinutes > 0 ? String(item.baseMinutes) : "";
       }
       if (plnInput) {
         plnInput.value = String(item.pricePln);
@@ -3401,13 +3564,23 @@
       const section = normalizeKarySection(formData.get("cennikSection"));
       const name = String(formData.get("cennikName") || "").trim();
       const description = String(formData.get("cennikDescription") || "").trim();
+      const baseMinutesRaw = String(formData.get("cennikBaseMinutes") || "").trim();
       const pricePlnRaw = Number(formData.get("cennikPricePln"));
       const priceSubyRaw = Number(formData.get("cennikPriceSuby"));
       const priceKicksyRaw = Number(formData.get("cennikPriceKicksy"));
+      let baseMinutes = 0;
 
       if (!name) {
         setKaryCennikStatus("Podaj nazwe pozycji cennika.", "error");
         return;
+      }
+      if (baseMinutesRaw) {
+        const parsedBaseMinutes = Number(baseMinutesRaw);
+        if (!Number.isFinite(parsedBaseMinutes) || parsedBaseMinutes < 0) {
+          setKaryCennikStatus("Podaj poprawny czas dodawany (minuty).", "error");
+          return;
+        }
+        baseMinutes = Math.floor(parsedBaseMinutes);
       }
       if (
         !Number.isFinite(pricePlnRaw) ||
@@ -3433,6 +3606,7 @@
             section: previous.section,
             name: previous.name,
             description: previous.description,
+            baseMinutes: previous.baseMinutes,
             pricePln: previous.pricePln,
             priceSuby: previous.priceSuby,
             priceKicksy: previous.priceKicksy
@@ -3442,6 +3616,7 @@
             section,
             name,
             description,
+            baseMinutes,
             pricePln,
             priceSuby,
             priceKicksy,
@@ -3455,6 +3630,7 @@
           sendAdminWebhookEvent("cennik_update", name, {
             section,
             description,
+            baseMinutes,
             pricePln,
             priceSuby,
             priceKicksy,
@@ -3469,6 +3645,7 @@
         section,
         name,
         description,
+        baseMinutes,
         pricePln,
         priceSuby,
         priceKicksy,
@@ -3483,6 +3660,7 @@
       sendAdminWebhookEvent("cennik_add", name, {
         section,
         description,
+        baseMinutes,
         pricePln,
         priceSuby,
         priceKicksy
@@ -4279,6 +4457,7 @@
           .map((counter) => `<option value="${escapeHtml(counter.key)}">${escapeHtml(counter.label)}</option>`)
           .join("");
       }
+      updateTimerQuickActionButtons();
     }
 
     function getTimerLabel(timerKey) {
@@ -4289,6 +4468,93 @@
     function getCounterLabel(counterKey) {
       const match = karyCounterDefinitions.find((item) => item.key === counterKey);
       return match ? match.label : counterKey;
+    }
+
+    function parseTimerBaseMinutesFromDescription(description) {
+      const clean = String(description || "").trim();
+      if (!clean) {
+        return 0;
+      }
+
+      const minuteMatch = clean.match(/([+-]?\d+)\s*(?:min\.?|minute|minutes|minuta|minuty|minut)\b/i);
+      if (!minuteMatch) {
+        return 0;
+      }
+
+      const parsed = Number.parseInt(minuteMatch[1], 10);
+      if (!Number.isFinite(parsed)) {
+        return 0;
+      }
+      return Math.max(0, Math.abs(parsed));
+    }
+
+    function isStandaloneMinuteDeltaDescription(description) {
+      const clean = String(description || "").trim();
+      if (!clean) {
+        return false;
+      }
+      return /^(?:czas\s*:\s*)?[+-]?\d+\s*(?:min\.?|minute|minutes|minuta|minuty|minut)$/i.test(clean);
+    }
+
+    function resolveTimerBaseMinutes(timerKey) {
+      const fallbackMinutes = 30;
+      const cleanKey = String(timerKey || "").trim();
+      if (!cleanKey) {
+        return fallbackMinutes;
+      }
+
+      const timerLabel = getTimerLabel(cleanKey);
+      const candidateTokens = new Set([
+        normalizeTimerLookupToken(cleanKey),
+        normalizeTimerLookupToken(cleanKey.replace(/-/g, " ")),
+        normalizeTimerLookupToken(cleanKey.replace(/-/g, "")),
+        normalizeTimerLookupToken(timerLabel)
+      ].filter(Boolean));
+
+      const exactMatches = (Array.isArray(karyCennikItems) ? karyCennikItems : []).filter((item) => {
+        const nameToken = normalizeTimerLookupToken(item && item.name);
+        return nameToken && candidateTokens.has(nameToken);
+      });
+
+      for (const item of exactMatches) {
+        const explicitBaseMinutes = Math.max(0, Math.floor(Number(item && item.baseMinutes) || 0));
+        if (explicitBaseMinutes > 0) {
+          return explicitBaseMinutes;
+        }
+        const minutes = parseTimerBaseMinutesFromDescription(item.description);
+        if (minutes > 0) {
+          return minutes;
+        }
+      }
+
+      return fallbackMinutes;
+    }
+
+    function updateTimerQuickActionButtons() {
+      if (!adminTimerFormEl) {
+        return;
+      }
+
+      const minusBtn = adminTimerFormEl.querySelector('[data-timer-action="minus-30"]');
+      const plusBtn = adminTimerFormEl.querySelector('[data-timer-action="plus-30"]');
+      if (!minusBtn && !plusBtn) {
+        return;
+      }
+
+      const selectedTimerKey = String(adminTimerSelectEl?.value || "").trim();
+      const baseMinutes = resolveTimerBaseMinutes(selectedTimerKey);
+      const minusLabel = `-${baseMinutes} min`;
+      const plusLabel = `+${baseMinutes} min`;
+      const title = `Krok bazowy z cennika: ${baseMinutes} min`;
+
+      if (minusBtn) {
+        minusBtn.textContent = minusLabel;
+        minusBtn.title = title;
+      }
+      if (plusBtn) {
+        plusBtn.textContent = plusLabel;
+        plusBtn.title = title;
+      }
     }
 
     async function handleDiscordOAuthCallback() {
@@ -4581,7 +4847,13 @@
     function applyTimerAction(action, formData) {
       ensureKaryStateShape();
       const normalizedAction =
-        action === "set" || action === "reset" || action === "remove" ? action : "add";
+        action === "set" ||
+        action === "reset" ||
+        action === "remove" ||
+        action === "minus-30" ||
+        action === "plus-30"
+          ? action
+          : "add";
 
       const timerKey = String(formData.get("timerKey") || "").trim();
       if (!timerKey || !Object.prototype.hasOwnProperty.call(karyLiveState.timers, timerKey)) {
@@ -4603,6 +4875,45 @@
           timerLabel,
           remainingSeconds: 0
         });
+        return;
+      }
+
+      if (normalizedAction === "minus-30") {
+        const stepMinutes = resolveTimerBaseMinutes(timerKey);
+        const deltaSeconds = stepMinutes * 60;
+        const current = Math.max(0, Math.floor(Number(karyLiveState.timers[timerKey] || 0)));
+        const currentTotal = Math.max(current, Math.floor(Number(karyLiveState.timerTotals[timerKey] || 0)));
+        const nextRemaining = Math.max(0, current - deltaSeconds);
+        karyLiveState.timers[timerKey] = nextRemaining;
+        karyLiveState.timerTotals[timerKey] = nextRemaining > 0 ? Math.max(nextRemaining, currentTotal) : 0;
+        karyLiveState.lastTickAt = Date.now();
+        saveKaryState();
+        queueKaryStateApiPush();
+        renderKaryLiveState();
+        setKaryStatus(`Usunięto ${stepMinutes} min z timera.`, "success");
+        sendAdminWebhookEvent("timer_remove_quick", timerLabel, {
+          timerKey,
+          timerLabel,
+          stepMinutes,
+          deltaSeconds,
+          remainingSeconds: Math.max(0, Math.floor(Number(karyLiveState.timers[timerKey] || 0)))
+        });
+        return;
+      }
+
+      if (normalizedAction === "plus-30") {
+        const stepMinutes = resolveTimerBaseMinutes(timerKey);
+        const deltaSeconds = stepMinutes * 60;
+        const addResult = addTimerTimeToLiveState(timerKey, deltaSeconds, {
+          silentStatus: false,
+          statusText: `Dodano ${stepMinutes} min do timera.`,
+          emitWebhook: true,
+          webhookAction: "timer_add_quick",
+          source: "admin-panel"
+        });
+        if (!addResult.ok) {
+          setKaryStatus(`Nie udało się dodać ${stepMinutes} min do timera.`, "error");
+        }
         return;
       }
 
@@ -4668,7 +4979,8 @@
 
     function applyCounterAction(action, formData) {
       ensureKaryStateShape();
-      const normalizedAction = action === "set" || action === "reset" ? action : "add";
+      const normalizedAction =
+        action === "set" || action === "reset" || action === "minus-one" || action === "plus-one" ? action : "add";
 
       const counterKey = String(formData.get("counterKey") || "").trim();
       if (!counterKey || !Object.prototype.hasOwnProperty.call(karyLiveState.counters, counterKey)) {
@@ -4687,6 +4999,40 @@
           counterKey,
           counterLabel,
           value: 0
+        });
+        return;
+      }
+
+      if (normalizedAction === "minus-one") {
+        const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)));
+        const nextValue = Math.max(0, current - 1);
+        karyLiveState.counters[counterKey] = nextValue;
+        saveKaryState();
+        queueKaryStateApiPush();
+        renderKaryLiveState();
+        setKaryStatus("Odjęto 1 od licznika.", "success");
+        sendAdminWebhookEvent("counter_minus_one", counterLabel, {
+          counterKey,
+          counterLabel,
+          deltaValue: -1,
+          value: nextValue
+        });
+        return;
+      }
+
+      if (normalizedAction === "plus-one") {
+        const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)));
+        const nextValue = current + 1;
+        karyLiveState.counters[counterKey] = nextValue;
+        saveKaryState();
+        queueKaryStateApiPush();
+        renderKaryLiveState();
+        setKaryStatus("Dodano 1 do licznika.", "success");
+        sendAdminWebhookEvent("counter_plus_one", counterLabel, {
+          counterKey,
+          counterLabel,
+          deltaValue: 1,
+          value: nextValue
         });
         return;
       }
@@ -4725,6 +5071,9 @@
       const showHome = routeName === "home";
       const showLogin = routeName === "login" && !showObsOverlay;
       const showAdmin = routeName === "admin" || showObsOverlay;
+      if (!showClips) {
+        closeClipViewer();
+      }
 
       if (showAdmin && !showObsOverlay && !isAdminAuthenticated) {
         setAdminStatus("Zaloguj się, aby otworzyć panel administratora.", "error");
@@ -5102,17 +5451,7 @@
 
     function shortenCategory(category) {
       const clean = String(category ?? "").trim();
-      if (!clean) {
-        return "";
-      }
-      if (clean.length <= 12) {
-        return clean;
-      }
-      const firstWord = clean.split(/\s+/)[0] || "";
-      if (firstWord.length >= 4) {
-        return `${firstWord} ...`;
-      }
-      return `${clean.slice(0, 9)}...`;
+      return clean;
     }
 
     function extractJsonFromJinaResponse(rawText) {
@@ -5734,6 +6073,459 @@
       return `${minutes}:${String(secs).padStart(2, "0")}`;
     }
 
+    function resetClipViewerVideo(videoEl) {
+      if (!videoEl) {
+        return;
+      }
+      try {
+        videoEl.pause();
+      } catch (_error) {
+        // Ignore pause failures.
+      }
+      if (videoEl._hls && typeof videoEl._hls.destroy === "function") {
+        try {
+          videoEl._hls.destroy();
+        } catch (_error) {
+          // Ignore HLS destroy failures.
+        }
+        videoEl._hls = null;
+      }
+      videoEl.removeAttribute("src");
+      delete videoEl.dataset.ready;
+      try {
+        videoEl.load();
+      } catch (_error) {
+        // Ignore media reset failures.
+      }
+    }
+
+    function syncClipViewerPlayUi(state) {
+      if (!state || !state.video) {
+        return;
+      }
+      const isPlaying = !state.video.paused && !state.video.ended;
+      state.root.classList.toggle("is-playing", isPlaying);
+
+      if (state.toggleBtn) {
+        state.toggleBtn.dataset.state = isPlaying ? "pause" : "play";
+        state.toggleBtn.setAttribute("aria-label", isPlaying ? "Pauza" : "Start");
+        const icon = state.toggleBtn.querySelector("i");
+        if (icon) {
+          icon.className = isPlaying ? "fas fa-pause" : "fas fa-play";
+        }
+      }
+    }
+
+    function syncClipViewerMuteUi(state) {
+      if (!state || !state.video) {
+        return;
+      }
+      const rawVolume = Number(state.video.volume);
+      const safeVolume = Number.isFinite(rawVolume) ? Math.max(0, Math.min(1, rawVolume)) : 1;
+      const isMuted = Boolean(state.video.muted || safeVolume <= 0.01);
+
+      if (state.muteBtn) {
+        state.muteBtn.dataset.state = isMuted ? "muted" : "volume";
+        state.muteBtn.setAttribute("aria-label", isMuted ? "Wlacz dzwiek" : "Wycisz");
+        const icon = state.muteBtn.querySelector("i");
+        if (icon) {
+          icon.className = isMuted ? "fas fa-volume-mute" : "fas fa-volume-up";
+        }
+      }
+
+      if (state.volumeSliderEl) {
+        const sliderValue = isMuted ? 0 : Math.round(safeVolume * 100);
+        state.volumeSliderEl.value = String(sliderValue);
+        state.volumeSliderEl.setAttribute("aria-valuenow", String(sliderValue));
+      }
+    }
+
+    function syncClipViewerTimeUi(state) {
+      if (!state || !state.video) {
+        return;
+      }
+      const duration = Number(state.video.duration);
+      const current = Number(state.video.currentTime);
+      const hasDuration = Number.isFinite(duration) && duration > 0;
+      const safeCurrent = Number.isFinite(current) && current > 0 ? current : 0;
+      const fallbackDuration = String(state.video.dataset.durationLabel || "0:00").trim() || "0:00";
+
+      if (state.timeCurrentEl) {
+        state.timeCurrentEl.textContent = formatPlaybackTimeLabel(safeCurrent, "0:00");
+      }
+      if (state.timeTotalEl) {
+        state.timeTotalEl.textContent = hasDuration
+          ? formatPlaybackTimeLabel(duration, fallbackDuration)
+          : fallbackDuration;
+      }
+      if (state.progressEl) {
+        if (hasDuration) {
+          const progress = Math.max(0, Math.min(1000, Math.round((safeCurrent / duration) * 1000)));
+          state.progressEl.disabled = false;
+          state.progressEl.value = String(progress);
+        } else {
+          state.progressEl.disabled = true;
+          state.progressEl.value = "0";
+        }
+      }
+    }
+
+    function syncClipViewerControls(state) {
+      syncClipViewerPlayUi(state);
+      syncClipViewerMuteUi(state);
+      syncClipViewerTimeUi(state);
+    }
+
+    function seekClipViewerFromProgress(state) {
+      if (!state || !state.video || !state.progressEl) {
+        return;
+      }
+      const duration = Number(state.video.duration);
+      if (!Number.isFinite(duration) || duration <= 0) {
+        return;
+      }
+      const ratio = Math.max(0, Math.min(1, Number(state.progressEl.value || "0") / 1000));
+      state.video.currentTime = ratio * duration;
+      syncClipViewerTimeUi(state);
+    }
+
+    function applyClipViewerVolumeFromSlider(state) {
+      if (!state || !state.video || !state.volumeSliderEl) {
+        return;
+      }
+      const numeric = Math.max(0, Math.min(100, Math.round(Number(state.volumeSliderEl.value || "0"))));
+      const nextVolume = numeric / 100;
+      state.video.volume = nextVolume;
+      state.video.muted = nextVolume <= 0.01;
+      if (nextVolume > 0.01) {
+        state.video.dataset.lastVolume = String(nextVolume);
+      }
+      syncClipViewerMuteUi(state);
+    }
+
+    async function toggleClipViewerPlayback(state) {
+      if (!state || !state.video) {
+        return;
+      }
+      if (state.video.paused || state.video.ended) {
+        try {
+          const ready = await attachStream(state.video);
+          if (!ready) {
+            syncClipViewerControls(state);
+            return;
+          }
+          await state.video.play();
+        } catch (_error) {
+          syncClipViewerControls(state);
+          return;
+        }
+      } else {
+        state.video.pause();
+      }
+      syncClipViewerControls(state);
+    }
+
+    async function toggleClipViewerFullscreen(state) {
+      if (!state || !state.video) {
+        return;
+      }
+      try {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+          return;
+        }
+        const target = state.video.closest(".clip-viewer-main") || state.video;
+        if (target && typeof target.requestFullscreen === "function") {
+          await target.requestFullscreen();
+        }
+      } catch (_error) {
+        // Ignore fullscreen API errors.
+      }
+    }
+
+    function ensureClipViewer() {
+      if (clipViewerState) {
+        return clipViewerState;
+      }
+
+      const root = document.createElement("section");
+      root.className = "clip-viewer-modal";
+      root.hidden = true;
+      root.setAttribute("aria-hidden", "true");
+      root.innerHTML = `
+        <div class="clip-viewer-dialog" role="dialog" aria-modal="true" aria-label="Podglad klipu">
+          <div class="clip-viewer-main">
+            <video class="clip-viewer-video" preload="none" playsinline></video>
+            <div class="clip-viewer-top">
+              <p class="clip-viewer-top-meta"></p>
+            </div>
+            <div class="clip-viewer-controls" aria-label="Sterowanie podgladu klipu">
+              <button class="clip-viewer-control-btn clip-viewer-control-toggle" type="button" data-state="play" aria-label="Start">
+                <i class="fas fa-play" aria-hidden="true"></i>
+              </button>
+              <span class="clip-viewer-control-time">
+                <span class="clip-viewer-time-current">0:00</span>
+                <span class="clip-viewer-time-sep">/</span>
+                <span class="clip-viewer-time-total">0:00</span>
+              </span>
+              <input class="clip-viewer-control-progress" type="range" min="0" max="1000" step="1" value="0" aria-label="Postep klipu">
+              <button class="clip-viewer-control-btn clip-viewer-control-volume" type="button" data-state="volume" aria-label="Wycisz">
+                <i class="fas fa-volume-up" aria-hidden="true"></i>
+              </button>
+              <input class="clip-viewer-control-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="Glosnosc 0 do 100">
+              <button class="clip-viewer-control-btn clip-viewer-control-fullscreen" type="button" aria-label="Caly ekran">
+                <i class="fas fa-expand" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+          <aside class="clip-viewer-side" aria-label="Szczegoly klipu">
+            <div class="clip-viewer-author">
+              <img class="clip-viewer-avatar" src="" alt="">
+              <div class="clip-viewer-author-copy">
+                <p class="clip-viewer-name"></p>
+                <p class="clip-viewer-title"></p>
+              </div>
+            </div>
+            <a class="clip-viewer-open-kick" href="#" target="_blank" rel="noopener noreferrer">
+              Zobacz caly film
+            </a>
+          </aside>
+        </div>
+      `;
+
+      document.body.appendChild(root);
+
+      const state = {
+        root,
+        video: root.querySelector(".clip-viewer-video"),
+        topMeta: root.querySelector(".clip-viewer-top-meta"),
+        controls: root.querySelector(".clip-viewer-controls"),
+        toggleBtn: root.querySelector(".clip-viewer-control-toggle"),
+        muteBtn: root.querySelector(".clip-viewer-control-volume"),
+        volumeSliderEl: root.querySelector(".clip-viewer-control-volume-slider"),
+        fullBtn: root.querySelector(".clip-viewer-control-fullscreen"),
+        progressEl: root.querySelector(".clip-viewer-control-progress"),
+        timeCurrentEl: root.querySelector(".clip-viewer-time-current"),
+        timeTotalEl: root.querySelector(".clip-viewer-time-total"),
+        avatar: root.querySelector(".clip-viewer-avatar"),
+        name: root.querySelector(".clip-viewer-name"),
+        title: root.querySelector(".clip-viewer-title"),
+        openKickLink: root.querySelector(".clip-viewer-open-kick")
+      };
+
+      root.addEventListener("click", (event) => {
+        if (event.target === root) {
+          event.preventDefault();
+          closeClipViewer();
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !state.root.hidden) {
+          closeClipViewer();
+        }
+      });
+
+      if (state.toggleBtn) {
+        state.toggleBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void toggleClipViewerPlayback(state);
+        });
+      }
+
+      if (state.muteBtn) {
+        state.muteBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const isMutedNow = Boolean(state.video.muted || Number(state.video.volume) <= 0.01);
+          if (isMutedNow) {
+            const storedVolume = Number(state.video.dataset.lastVolume || "");
+            const restoreVolume =
+              Number.isFinite(storedVolume) && storedVolume > 0
+                ? Math.max(0.05, Math.min(1, storedVolume))
+                : 1;
+            state.video.muted = false;
+            state.video.volume = restoreVolume;
+          } else {
+            const currentVolume = Number(state.video.volume);
+            if (Number.isFinite(currentVolume) && currentVolume > 0.01) {
+              state.video.dataset.lastVolume = String(Math.max(0, Math.min(1, currentVolume)));
+            }
+            state.video.muted = true;
+          }
+          syncClipViewerMuteUi(state);
+        });
+      }
+
+      if (state.volumeSliderEl) {
+        state.volumeSliderEl.addEventListener("input", () => {
+          applyClipViewerVolumeFromSlider(state);
+        });
+        state.volumeSliderEl.addEventListener("change", () => {
+          applyClipViewerVolumeFromSlider(state);
+        });
+      }
+
+      if (state.fullBtn) {
+        state.fullBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void toggleClipViewerFullscreen(state);
+        });
+      }
+
+      if (state.progressEl) {
+        state.progressEl.addEventListener("input", () => {
+          seekClipViewerFromProgress(state);
+        });
+        state.progressEl.addEventListener("change", () => {
+          seekClipViewerFromProgress(state);
+        });
+      }
+
+      state.video.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void toggleClipViewerPlayback(state);
+      });
+      state.video.addEventListener("play", () => {
+        syncClipViewerPlayUi(state);
+      });
+      state.video.addEventListener("pause", () => {
+        syncClipViewerPlayUi(state);
+      });
+      state.video.addEventListener("ended", () => {
+        syncClipViewerControls(state);
+      });
+      state.video.addEventListener("loadedmetadata", () => {
+        syncClipViewerTimeUi(state);
+      });
+      state.video.addEventListener("durationchange", () => {
+        syncClipViewerTimeUi(state);
+      });
+      state.video.addEventListener("timeupdate", () => {
+        syncClipViewerTimeUi(state);
+      });
+      state.video.addEventListener("volumechange", () => {
+        syncClipViewerMuteUi(state);
+      });
+
+      syncClipViewerControls(state);
+
+      clipViewerState = state;
+      return state;
+    }
+
+    function closeClipViewer() {
+      if (!clipViewerState || clipViewerState.root.hidden) {
+        return;
+      }
+
+      clipViewerOpenSeq += 1;
+      const state = clipViewerState;
+      state.root.classList.remove("is-open");
+      state.root.setAttribute("aria-hidden", "true");
+      if (document.body) {
+        document.body.classList.remove("clip-viewer-open");
+      }
+
+      window.setTimeout(() => {
+        if (state.root.getAttribute("aria-hidden") === "true") {
+          state.root.hidden = true;
+        }
+      }, 170);
+
+      resetClipViewerVideo(state.video);
+      syncClipViewerControls(state);
+    }
+
+    async function openClipViewerFromCard(card) {
+      if (!card) {
+        return;
+      }
+
+      const viewer = ensureClipViewer();
+      const cardVideo = card.querySelector(".clip-player");
+      const source = String(cardVideo?.dataset.src || "").trim();
+      if (!source) {
+        return;
+      }
+
+      const topMetaText = String(card.querySelector(".clip-top-meta")?.textContent || "").trim();
+      const authorName = String(card.querySelector(".clip-author")?.textContent || CHANNEL_SLUG).trim();
+      const clipTitle = String(card.querySelector(".clip-title")?.textContent || "").trim();
+      const avatarSrc = String(card.querySelector(".clip-avatar")?.getAttribute("src") || CHANNEL_AVATAR_FALLBACK).trim();
+      const clipPageUrl = String(cardVideo?.dataset.clip || card.querySelector(".clip-title")?.getAttribute("href") || "#").trim() || "#";
+
+      if (clipsEl) {
+        const allCardVideos = clipsEl.querySelectorAll(".clip-player");
+        allCardVideos.forEach((item) => {
+          if (item && !item.paused) {
+            try {
+              item.pause();
+            } catch (_error) {
+              // Ignore pause failures.
+            }
+          }
+        });
+      }
+
+      clipViewerOpenSeq += 1;
+      const currentOpenSeq = clipViewerOpenSeq;
+
+      resetClipViewerVideo(viewer.video);
+      viewer.video.poster = String(cardVideo?.getAttribute("poster") || "").trim();
+      viewer.video.dataset.src = source;
+      viewer.video.dataset.clip = clipPageUrl;
+      viewer.video.dataset.durationLabel = String(cardVideo?.dataset.durationLabel || "0:00");
+      viewer.video.controls = false;
+      viewer.video.removeAttribute("controls");
+      const sliderInitialVolume = viewer.volumeSliderEl
+        ? Math.max(0, Math.min(1, Number(viewer.volumeSliderEl.value || "100") / 100))
+        : 1;
+      viewer.video.volume = Number.isFinite(sliderInitialVolume) ? sliderInitialVolume : 1;
+      viewer.video.muted = viewer.video.volume <= 0.01;
+      if (viewer.video.volume > 0.01) {
+        viewer.video.dataset.lastVolume = String(viewer.video.volume);
+      }
+
+      viewer.topMeta.textContent = topMetaText;
+      viewer.avatar.src = avatarSrc;
+      viewer.avatar.alt = authorName;
+      viewer.name.textContent = authorName;
+      viewer.title.textContent = clipTitle || topMetaText || "Klip";
+      viewer.openKickLink.href = clipPageUrl;
+      syncClipViewerControls(viewer);
+
+      viewer.root.hidden = false;
+      viewer.root.setAttribute("aria-hidden", "false");
+      if (document.body) {
+        document.body.classList.add("clip-viewer-open");
+      }
+      window.requestAnimationFrame(() => {
+        viewer.root.classList.add("is-open");
+      });
+
+      try {
+        const ready = await attachStream(viewer.video);
+        if (!ready || currentOpenSeq !== clipViewerOpenSeq || viewer.root.hidden) {
+          return;
+        }
+        try {
+          await viewer.video.play();
+        } catch (_error) {
+          // Autoplay can be blocked by browser.
+        }
+        syncClipViewerControls(viewer);
+      } catch (_error) {
+        if (currentOpenSeq === clipViewerOpenSeq) {
+          setStatus("Nie udalo sie odtworzyc klipu w podgladzie.", true);
+        }
+        syncClipViewerControls(viewer);
+      }
+    }
+
     function bindPlayers() {
       if (!menuOutsideCloserBound) {
         document.addEventListener("click", (event) => {
@@ -5866,16 +6658,22 @@
           syncPlayUi();
         };
 
-        btn.addEventListener("click", () => {
-          void playNow();
+        btn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void openClipViewerFromCard(card);
         });
         if (toggleBtn) {
-          toggleBtn.addEventListener("click", () => {
-            void togglePlayback();
+          toggleBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void openClipViewerFromCard(card);
           });
         }
-        video.addEventListener("click", () => {
-          void togglePlayback();
+        video.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void openClipViewerFromCard(card);
         });
         video.addEventListener("play", syncPlayUi);
         video.addEventListener("pause", syncPlayUi);
@@ -5901,25 +6699,10 @@
           });
         }
         if (fullBtn) {
-          fullBtn.addEventListener("click", () => {
-            const mediaRoot = card.querySelector(".clip-media");
-            const target = mediaRoot || video;
-            if (!target) {
-              return;
-            }
-            if (document.fullscreenElement) {
-              if (document.exitFullscreen) {
-                void document.exitFullscreen();
-              }
-              return;
-            }
-            if (target.requestFullscreen) {
-              void target.requestFullscreen();
-              return;
-            }
-            if (target.webkitRequestFullscreen) {
-              target.webkitRequestFullscreen();
-            }
+          fullBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void openClipViewerFromCard(card);
           });
         }
 
@@ -5962,12 +6745,12 @@
 
         const localizedViews = formatViews(clip.views);
         const localizedTime = formatRelativeTime(clip.createdAt);
-        const shortCategory = shortenCategory(clip.category);
-        const metaLine = [shortCategory, localizedTime].filter(Boolean).join(" · ") || "Klip";
-        const duration = clip.duration || "00:00";
-        const clipPageUrl = clip.pageUrl || `https://kick.com/${CHANNEL_SLUG}`;
+        const categoryLabel = shortenCategory(clip.category) || "Klip";
+        const metaTimeLabel = localizedTime || "";
         const authorName = clip.authorName || CHANNEL_SLUG;
         const authorAvatar = clip.authorAvatar || CHANNEL_AVATAR_FALLBACK;
+        const duration = clip.duration || "00:00";
+        const clipPageUrl = clip.pageUrl || `https://kick.com/${CHANNEL_SLUG}`;
         const playlistUrl = clip.playlistUrl || "";
 
         card.innerHTML = `
@@ -5982,6 +6765,7 @@
               data-duration-label="${escapeHtml(duration)}"
             ></video>
             <button class="clip-play" type="button" aria-label="Odtworz klip"></button>
+            <span class="clip-badge clip-duration">${escapeHtml(duration)}</span>
             <span class="clip-badge clip-views">${escapeHtml(localizedViews)}</span>
             <div class="clip-controls" aria-label="Sterowanie klipem">
               <button class="clip-control-btn clip-control-toggle" type="button" data-state="play" aria-label="Odtworz">
@@ -6005,11 +6789,14 @@
             <img class="clip-avatar" src="${escapeHtml(authorAvatar)}" alt="${escapeHtml(authorName)}">
             <div class="clip-copy">
               <a class="clip-title" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clip.title)}</a>
-              <p class="clip-meta">${escapeHtml(metaLine)}</p>
+              <p class="clip-meta">
+                <span class="clip-meta-category">${escapeHtml(categoryLabel)}</span>
+                ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">·</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
+              </p>
               <p class="clip-author">${escapeHtml(authorName)}</p>
             </div>
             <details class="clip-actions">
-              <summary class="clip-menu" aria-label="Opcje klipu">...</summary>
+              <summary class="clip-menu" aria-label="Opcje klipu"><i class="fas fa-ellipsis-v" aria-hidden="true"></i></summary>
               <div class="clip-actions-menu">
                 <a class="clip-action-link" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">Otworz na Kick</a>
                 <button
@@ -6537,6 +7324,12 @@
     }
 
     if (adminTimerFormEl) {
+      if (adminTimerSelectEl) {
+        adminTimerSelectEl.addEventListener("change", () => {
+          updateTimerQuickActionButtons();
+        });
+      }
+
       adminTimerFormEl.addEventListener("click", (event) => {
         const actionButton = event.target.closest("[data-timer-action]");
         if (!actionButton) {
@@ -6616,6 +7409,103 @@
             priceKicksy: removedItem.priceKicksy
           });
         }
+      });
+
+      adminCennikTableBodyEl.addEventListener("dragstart", (event) => {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        const handle = target ? target.closest("[data-cennik-drag-handle]") : null;
+        if (!handle) {
+          event.preventDefault();
+          return;
+        }
+
+        const row = handle.closest("tr.admin-cennik-row[data-cennik-id]");
+        if (!row) {
+          event.preventDefault();
+          return;
+        }
+
+        const itemId = String(row.dataset.cennikId || "").trim();
+        const section = normalizeKarySection(row.dataset.cennikSection);
+        if (!itemId || !section) {
+          event.preventDefault();
+          return;
+        }
+
+        draggingCennikId = itemId;
+        draggingCennikSection = section;
+        draggingCennikRow = row;
+        draggingCennikRow.classList.add("is-dragging");
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", itemId);
+        }
+      });
+
+      adminCennikTableBodyEl.addEventListener("dragover", (event) => {
+        if (!draggingCennikRow || !draggingCennikId || !draggingCennikSection) {
+          return;
+        }
+        event.preventDefault();
+
+        const dropTarget = findDropTargetCennikRow(event.clientY, draggingCennikSection);
+        clearCennikDragTargetRows();
+
+        if (!dropTarget) {
+          moveDraggingCennikRowToSectionEnd(draggingCennikSection);
+          return;
+        }
+
+        dropTarget.classList.add("is-drag-target");
+        if (dropTarget !== draggingCennikRow) {
+          adminCennikTableBodyEl.insertBefore(draggingCennikRow, dropTarget);
+        }
+      });
+
+      adminCennikTableBodyEl.addEventListener("drop", (event) => {
+        if (!draggingCennikRow || !draggingCennikId || !draggingCennikSection) {
+          return;
+        }
+        event.preventDefault();
+
+        const droppedSection = draggingCennikSection;
+        clearCennikDragTargetRows();
+        draggingCennikRow.classList.remove("is-dragging");
+
+        const changed = applyCennikOrderFromDom(droppedSection);
+
+        draggingCennikRow = null;
+        draggingCennikId = "";
+        draggingCennikSection = "";
+
+        if (!changed) {
+          return;
+        }
+
+        saveKaryCennikItems();
+        renderPublicKaryCennik();
+        renderAdminKaryCennikTable();
+        setKaryCennikStatus("Zmieniono kolejność pozycji cennika.", "success");
+
+        const sectionLabel = droppedSection === "hard" ? "Tortury" : "Opcje widza";
+        const order = getSortedKaryCennikItems()
+          .filter((item) => item.section === droppedSection)
+          .map((item) => item.name);
+        sendAdminWebhookEvent("cennik_reorder", sectionLabel, {
+          section: droppedSection,
+          order
+        });
+      });
+
+      adminCennikTableBodyEl.addEventListener("dragend", () => {
+        clearCennikDragTargetRows();
+        if (draggingCennikRow) {
+          draggingCennikRow.classList.remove("is-dragging");
+        }
+        draggingCennikRow = null;
+        draggingCennikId = "";
+        draggingCennikSection = "";
       });
     }
 

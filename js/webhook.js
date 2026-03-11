@@ -696,6 +696,131 @@
     };
   }
 
+  const WEBHOOK_ACTION_TITLE_MAP = Object.freeze({
+    admin_change: "Panel Administratora - Zmiana",
+    admin_login_discord: "Panel Administratora - Logowanie Discord",
+    admin_login_discord_denied: "Panel Administratora - Odrzucone logowanie Discord",
+    admin_login_local: "Panel Administratora - Logowanie lokalne",
+    admin_login_failed: "Panel Administratora - Nieudane logowanie",
+    admin_logout: "Panel Administratora - Wylogowanie",
+    cennik_add: "Cennik - Dodano pozycje",
+    cennik_update: "Cennik - Zaktualizowano pozycje",
+    cennik_remove: "Cennik - Usunieto pozycje",
+    cennik_reorder: "Cennik - Zmieniono kolejnosc",
+    timer_add_time: "Timery - Dodano czas",
+    timer_remove_time: "Timery - Usunieto czas",
+    timer_set: "Timery - Ustawiono czas",
+    timer_reset: "Timery - Reset timera",
+    timer_add_quick: "Timery - Szybkie dodanie czasu",
+    timer_remove_quick: "Timery - Szybkie odjecie czasu",
+    counter_add: "Liczniki - Dodano wartosc",
+    counter_set: "Liczniki - Ustawiono wartosc",
+    counter_reset: "Liczniki - Reset licznika",
+    counter_plus_one: "Liczniki - Dodano +1",
+    counter_minus_one: "Liczniki - Odjeto -1",
+    member_add: "CCI - Dodano czlonka",
+    member_edit: "CCI - Edytowano czlonka",
+    member_remove: "CCI - Usunieto czlonka",
+    member_reorder: "CCI - Zmieniono kolejnosc",
+    account_add: "Konta admina - Dodano konto",
+    account_update: "Konta admina - Zaktualizowano konto",
+    account_remove: "Konta admina - Usunieto konto",
+    account_access_admin_change: "Konta admina - Zmieniono dostep do panelu",
+    account_access_streamobs_change: "Konta admina - Zmieniono dostep do StreamOBS",
+    wheel_config_change: "Kolo fortuny - Zmieniono konfiguracje",
+    wheel_config_speed_change: "Kolo fortuny - Zmieniono predkosc",
+    wheel_config_segment_add: "Kolo fortuny - Dodano segment",
+    wheel_config_segment_remove: "Kolo fortuny - Usunieto segment",
+    wheel_config_reorder: "Kolo fortuny - Zmieniono kolejnosc segmentow",
+    wheel_config_save: "Kolo fortuny - Zapisano konfiguracje",
+    wheel_config_set_items: "Kolo fortuny - Ustawiono segmenty"
+  });
+
+  function humanizeActionCode(action) {
+    const clean = toSafeString(action).toLowerCase();
+    if (!clean) {
+      return "Nieznana akcja";
+    }
+
+    const tokenMap = {
+      admin: "admin",
+      login: "logowanie",
+      logout: "wylogowanie",
+      failed: "nieudane",
+      denied: "odrzucone",
+      local: "lokalne",
+      discord: "discord",
+      cennik: "cennik",
+      account: "konto",
+      access: "dostep",
+      streamobs: "streamobs",
+      member: "czlonek",
+      timer: "timer",
+      counter: "licznik",
+      add: "dodano",
+      remove: "usunieto",
+      update: "zaktualizowano",
+      edit: "edytowano",
+      reorder: "zmieniono kolejnosc",
+      set: "ustawiono",
+      reset: "zresetowano",
+      plus: "plus",
+      minus: "minus",
+      one: "jeden",
+      quick: "szybko",
+      time: "czas",
+      config: "konfiguracja",
+      speed: "predkosc",
+      segment: "segment",
+      save: "zapis",
+      items: "elementy",
+      change: "zmiana",
+      wheel: "kolo"
+    };
+
+    const text = clean
+      .split("_")
+      .map((token) => tokenMap[token] || token)
+      .join(" ")
+      .trim();
+
+    if (!text) {
+      return "Nieznana akcja";
+    }
+
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function resolveWebhookTitle(action, target = "") {
+    const cleanAction = toSafeString(action).toLowerCase();
+    if (!cleanAction) {
+      return "Panel Administratora - Zmiana";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(WEBHOOK_ACTION_TITLE_MAP, cleanAction)) {
+      return WEBHOOK_ACTION_TITLE_MAP[cleanAction];
+    }
+
+    const prefixMap = [
+      { prefix: "wheel_", title: "Kolo fortuny" },
+      { prefix: "timer_", title: "Timery" },
+      { prefix: "counter_", title: "Liczniki" },
+      { prefix: "cennik_", title: "Cennik" },
+      { prefix: "member_", title: "CCI" },
+      { prefix: "account_", title: "Konta admina" },
+      { prefix: "admin_", title: "Panel Administratora" }
+    ];
+
+    for (const item of prefixMap) {
+      if (cleanAction.startsWith(item.prefix)) {
+        return `${item.title} - ${humanizeActionCode(cleanAction.slice(item.prefix.length))}`;
+      }
+    }
+
+    const targetLabel = toSafeString(target) || "Panel Administratora";
+    return `${targetLabel} - ${humanizeActionCode(cleanAction)}`;
+  }
+
   async function sendAdminAudit(payload) {
     if (!CONFIG.webhookEnabled) {
       return { ok: false, skipped: true, reason: "Webhook disabled" };
@@ -711,9 +836,9 @@
     const action = toSafeString(data.action || "admin_change");
     const target = toSafeString(data.target || "Panel Administratora");
     const route = toSafeString(data.route || window.location.href);
-    const isDiscordLoginAction = action === "admin_login_discord" || action === "admin_login_discord_denied";
     const isLoginAction =
-      isDiscordLoginAction ||
+      action === "admin_login_discord" ||
+      action === "admin_login_discord_denied" ||
       action === "admin_login_local" ||
       action === "admin_login_failed";
     const environment = getClientEnvironment();
@@ -723,9 +848,7 @@
       detailsPayload.browser = environment.browser;
     }
     const details = stringifyDetails(detailsPayload);
-    const webhookTitle = isDiscordLoginAction
-      ? "Panel Administratora - Logowanie Discord"
-      : "Panel Administratora - Logowanie Login";
+    const webhookTitle = resolveWebhookTitle(action, target);
 
     const embed = {
       title: webhookTitle,

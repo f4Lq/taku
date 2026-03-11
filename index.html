@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-  <link rel="stylesheet" href="styles/styles.css?v=20260309-clipsfit1">
+  <link rel="stylesheet" href="styles/styles.css?v=20260311-volume-slider1">
   <link rel="shortcut icon" type="x-icon" href="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" />
 </head>
 <body>
@@ -54,7 +54,13 @@
         <span class="route-glow route-glow-red" aria-hidden="true"></span>
         <span class="route-glow route-glow-white" aria-hidden="true"></span>
         <span class="route-glow route-glow-green" aria-hidden="true"></span>
-        <span id="routeBadge" class="route-badge">WKRÓTCE...</span>
+        <div class="route-copy">
+          <span id="routeBadge" class="route-badge">WKRÓTCE...</span>
+          <p id="routeSubtext" class="route-subtext">Timery działałące w OBS.</p>
+          <p id="routeSubtext" class="route-subtext">Informacje z liczników/timerów w statystykach.</p>   
+          <p id="routeSubtext" class="route-subtext">Ruleta(czerwone/czarne 2x zielone 36x) i Koło z ulgami(2x -30min itp.) działałące w OBS + dodawanie kary czasowej po wylosowanmiu automatycznie na żywo.</p>
+          <p id="routeSubtext" class="route-subtext">Webhook dla koła/ruletka/koło z ulgami + ich konfiguracji.</p>
+        </div>
       </div>
     </section>
 
@@ -217,11 +223,12 @@
             <ul id="karyPriceListChill" class="kary-price-list">
               <li><strong>Og na Czacie</strong><span class="kary-price-value" data-pln="500 PLN" data-suby="29 Suby">500 PLN</span><small>W treści donate wpisz "OG"</small></li>
               <li><strong>Moderator</strong><span class="kary-price-value" data-pln="300 PLN" data-suby="18 Suby">300 PLN</span><small>W treści donate wpisz "Moderator + nick na kicku"</small></li>
-              <li><strong>Twoja Nutka bez skipa</strong><span class="kary-price-value" data-pln="150 PLN" data-suby="9 Suby">150 PLN</span><small>+10 min</small></li>
+              <li><strong>Twoja Nutka bez skipa</strong><span class="kary-price-value" data-pln="150 PLN" data-suby="9 Suby">150 PLN</span><small>Czas: +10 min</small><small>W treści donate daj link do twojej piosenki</small></li>
               <li><strong>UB bez Suba</strong><span class="kary-price-value" data-pln="50 PLN" data-suby="3 Suby">50 PLN</span><small>W treści donate wpisz "UB + Nick na Kicku"</small></li>
               <li><strong>Koło Fortuny</strong><span class="kary-price-value" data-pln="50 PLN" data-suby="3 Suby">50 PLN</span><small>W treści donate wpisz "Koło Fortuny"</small></li>
+              <li><strong>SubChat</strong><span class="kary-price-value" data-pln="50 PLN" data-suby="3 Suby">50 PLN</span><small>Czas: +30 min</small><small>W treści donate wpisz "SubChat"</small></li>
               <li><strong>UB z Subem</strong><span class="kary-price-value" data-pln="35 PLN" data-suby="3 Suby">35 PLN</span><small>W treści donate wpisz "UB + nick na Kicku"</small></li>
-              <li><strong>Twoja Nutka</strong><span class="kary-price-value" data-pln="20 PLN" data-suby="2 Suby">20 PLN</span><small>+10 min</small></li>
+              <li><strong>Twoja Nutka</strong><span class="kary-price-value" data-pln="20 PLN" data-suby="2 Suby">20 PLN</span><small>Czas: +4 min</small><small>W treści donate wpisz "Link do piosenki"</small></li>
               <li><strong>Un/to</strong><span class="kary-price-value" data-pln="20 PLN" data-suby="2 Suby">20 PLN</span><small>W treści donate wpisz "UN/TO + nick na kicku"</small></li>
             </ul>
             <p id="karyPriceEmptyChill" class="kary-empty" hidden>Brak pozycji.</p>
@@ -233,16 +240,13 @@
               <span class="kary-pill hard">HARD MODE</span>
             </header>
             <ul id="karyPriceListHard" class="kary-price-list">
-              <li><strong>Klima</strong><span class="kary-price-value" data-pln="250 PLN" data-suby="15 Suby">250 PLN</span><small>+30 min</small></li>
-              <li><strong>Dieta</strong><span class="kary-price-value" data-pln="100 PLN" data-suby="6 Suby">100 PLN</span><small>+30 min</small></li>
-              <li><strong>Krzesło</strong><span class="kary-price-value" data-pln="200 PLN" data-suby="12 Suby">200 PLN</span><small>+30 min</small></li>
+              <li><strong>Klima</strong><span class="kary-price-value" data-pln="250 PLN" data-suby="15 Suby">250 PLN</span><small>Czas: +30 min</small><small>W treści donate wpisz "Klima 30 albo 16 stopni"</small></li>
+              <li><strong>Dieta</strong><span class="kary-price-value" data-pln="100 PLN" data-suby="6 Suby">100 PLN</span><small>Czas: +30 min</small><small>W treści donate wpisz "Dieta"</small></li>
+              <li><strong>Krzesło</strong><span class="kary-price-value" data-pln="200 PLN" data-suby="12 Suby">200 PLN</span><small>Czas: +30 min</small><small>W treści donate wpisz "Krzesło"</small></li>
               <li><strong>360 na krześle</strong><span class="kary-price-value" data-pln="150 PLN" data-suby="9 Suby">150 PLN</span><small>W treści donate wpisz "Kręcimy na krześle"</small></li>
-              <li><strong>Bieżnia</strong><span class="kary-price-value" data-pln="300 PLN" data-suby="18 Suby">300 PLN</span><small>+10 min</small></li>
-              <li><strong>Bieżnia (tempo 6)</strong><span class="kary-price-value" data-pln="600 PLN" data-suby="35 Suby">600 PLN</span><small>W treści donate wpisz "Bieżnia tempo 6"</small></li>
-              <li><strong>SubChat</strong><span class="kary-price-value" data-pln="50 PLN" data-suby="3 Suby">50 PLN</span><small>+30 min</small></li>
-              <li><strong>Brak Palenia</strong><span class="kary-price-value" data-pln="100 PLN" data-suby="6 Suby">100 PLN</span><small>+30 min</small></li>
-              <li><strong>Brak napojów słodkich</strong><span class="kary-price-value" data-pln="150 PLN" data-suby="9 Suby">150 PLN</span><small>+30 min</small></li>
-              <li><strong>Zakaz DC & Tel</strong><span class="kary-price-value" data-pln="50 PLN" data-suby="3 Suby">50 PLN</span><small>W treści donate wpisz "Zakaz DC & Tel"</small></li>
+              <li><strong>Bieżnia</strong><span class="kary-price-value" data-pln="300 PLN" data-suby="18 Suby">300 PLN</span><small>Czas: +10 min</small><small>W treści donate wpisz "Bieżnia"</small></li>
+              <li><strong>Bieżnia (tempo 6)</strong><span class="kary-price-value" data-pln="600 PLN" data-suby="35 Suby">600 PLN</span><small>Czas: +10 min</small><small>W treści donate wpisz "Bieżnia tempo 6"</small></li>
+              <li><strong>Zakaz DC & Tel</strong><span class="kary-price-value" data-pln="50 PLN" data-suby="3 Suby">50 PLN</span><small>Czas: +30 min</small><small>W treści donate wpisz "Zakaz DC & Tel"</small></li>
             </ul>
             <p id="karyPriceEmptyHard" class="kary-empty" hidden>Brak pozycji.</p>
           </article>
@@ -511,13 +515,14 @@
                 <span class="admin-field-label">Jednostka</span>
                 <select class="admin-input" name="timerUnit">
                   <option value="minutes" selected>Minuty</option>
-                  <option value="hours">Godziny</option>
                 </select>
               </label>
               <div class="admin-kary-actions">
                 <button class="admin-kary-btn" type="button" data-timer-action="add">Dodaj czas</button>
                 <button class="admin-kary-btn" type="button" data-timer-action="remove">Usuń czas</button>
                 <button class="admin-kary-btn" type="button" data-timer-action="set">Ustaw czas</button>
+                <button class="admin-kary-btn" type="button" data-timer-action="minus-30">-30 min</button>
+                <button class="admin-kary-btn" type="button" data-timer-action="plus-30">+30 min</button>
                 <button class="admin-kary-btn admin-kary-btn-danger" type="button" data-timer-action="reset">Reset</button>
               </div>
             </form>
@@ -536,6 +541,8 @@
               <div class="admin-kary-actions">
                 <button class="admin-kary-btn" type="button" data-counter-action="add">Dodaj</button>
                 <button class="admin-kary-btn" type="button" data-counter-action="set">Ustaw</button>
+                <button class="admin-kary-btn" type="button" data-counter-action="plus-one">+1</button>
+                <button class="admin-kary-btn" type="button" data-counter-action="minus-one">-1</button>
                 <button class="admin-kary-btn admin-kary-btn-danger" type="button" data-counter-action="reset">Reset</button>
               </div>
             </form>
@@ -558,7 +565,11 @@
               </label>
               <label class="admin-field">
                 <span class="admin-field-label">Opis</span>
-                <input class="admin-input" type="text" name="cennikDescription" placeholder="Opis (np. +30 min)">
+                <input class="admin-input" type="text" name="cennikDescription" placeholder="Opis">
+              </label>
+              <label class="admin-field">
+                <span class="admin-field-label">Czas (min)</span>
+                <input class="admin-input" type="number" name="cennikBaseMinutes" placeholder="Czas" min="0" step="1">
               </label>
               <label class="admin-field">
                 <span class="admin-field-label">Cena PLN</span>
@@ -582,8 +593,10 @@
               <table class="admin-table">
                 <thead>
                   <tr>
+                    <th>Kolejność</th>
                     <th>Sekcja</th>
                     <th>Nazwa</th>
+                    <th>Czas podst.</th>
                     <th>PLN</th>
                     <th>Suby</th>
                     <th>Kicksy</th>
@@ -819,8 +832,11 @@
         </a>
       </div>
 
-      <section class="stream-active-kary" id="streamActiveKary" aria-label="Aktywne kary" aria-live="polite">
-        <h3 class="stream-active-kary-title">Aktywne kary</h3>
+      <section class="stream-active-kary is-empty" id="streamActiveKary" aria-label="Aktywne kary" aria-live="polite">
+        <h3 class="stream-active-kary-title">
+          <span class="stream-active-kary-logo" aria-hidden="true"></span>
+          <span>Aktywne kary</span>
+        </h3>
         <div class="stream-active-kary-list" id="streamActiveKaryList">
           <p class="stream-active-kary-empty">Brak aktywnych kar.</p>
         </div>
@@ -907,14 +923,14 @@
   </section>
 
   <footer class="site-footer" aria-label="Stopka strony">
-    <p class="site-footer-main">© 2026 F4Lq. Zrobione na potrzeby Takuu.</p>
-    <p class="site-footer-sub">Projekt i realizacja - F4Lq. Kopiowanie zakazane.</p>
+    <p class="site-footer-main">© 2026 f4Lq. Zrobione na potrzeby <a class="site-footer-link" href="https://www.instagram.com/takupl/" target="_blank" rel="noopener noreferrer">Takuu</a>.</p>
+    <p class="site-footer-sub">Projekt i realizacja - f4Lq. Kopiowanie zakazane.</p>
     <p class="site-footer-sub">Kontakt Discord - <a class="site-footer-link" href="https://discord.com/users/477800549505302529" target="_blank" rel="noopener noreferrer">f4Lq</a></p>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="js/webhook.js?v=20260309-permissions1"></script>
+  <script src="js/webhook.js?v=20260311-webhookactiontitles2"></script>
   <script src="js/wheel.js?v=20260310-livefix7"></script>
-  <script src="js/script.js?v=20260310-livefix8"></script>
+  <script src="js/script.js?v=20260311-volume-slider1"></script>
 </body>
 </html>
