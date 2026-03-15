@@ -3515,23 +3515,6 @@
       }
     }
 
-    function syncObsCounterColorWithTimerColor(options = {}) {
-      const persist = options && options.persist === false ? false : true;
-      const timerColor = String(streamObsTimeryConfigState.color || "").trim();
-      if (!/^#[\da-f]{6}$/i.test(timerColor)) {
-        return false;
-      }
-      if (String(streamObsLicznikiConfigState.color || "").toLowerCase() === timerColor.toLowerCase()) {
-        return false;
-      }
-
-      streamObsLicznikiConfigState.color = timerColor;
-      if (persist) {
-        saveStreamObsLicznikiConfig();
-      }
-      return true;
-    }
-
     async function copyTextWithFallback(text) {
       const value = String(text || "");
       if (!value) {
@@ -4379,7 +4362,6 @@
         licznikiConfigState = normalized.licznikiConfig;
         streamObsTimeryConfigState = normalized.streamObsTimeryConfig;
         streamObsLicznikiConfigState = normalized.streamObsLicznikiConfig;
-        syncObsCounterColorWithTimerColor({ persist: true });
 
         baseMembers = loadBaseMembersFromGrid();
         refreshMembersOrder(false);
@@ -7383,7 +7365,6 @@
     loadTimeryConfig();
     loadStreamObsTimeryConfig();
     loadStreamObsLicznikiConfig();
-    syncObsCounterColorWithTimerColor({ persist: true });
     loadLicznikiConfig();
     saveAdminAccounts();
     restoreAdminSession();
@@ -8340,9 +8321,7 @@
         }
         streamObsTimeryConfigState.color = color;
         saveStreamObsTimeryConfig();
-        syncObsCounterColorWithTimerColor();
         applyStreamObsTimeryConfig();
-        applyStreamObsLicznikiConfig();
       });
       streamObsTimeryColorInputEl.addEventListener("change", () => {
         const color = String(streamObsTimeryColorInputEl.value || "").trim();
@@ -8407,9 +8386,6 @@
         }
         streamObsLicznikiConfigState.color = color;
         saveStreamObsLicznikiConfig();
-        streamObsTimeryConfigState.color = color;
-        saveStreamObsTimeryConfig();
-        applyStreamObsTimeryConfig();
         applyStreamObsLicznikiConfig();
       });
       streamObsLicznikiColorInputEl.addEventListener("change", () => {
