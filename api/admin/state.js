@@ -50,6 +50,8 @@ function normalizeAdminState(rawState) {
     karyCennikItems: Array.isArray(source.karyCennikItems) ? toSafeJsonValue(source.karyCennikItems, []) : [],
     timeryConfig: toSafeJsonValue(source.timeryConfig, {}),
     licznikiConfig: toSafeJsonValue(source.licznikiConfig, {}),
+    streamObsTimeryConfig: toSafeJsonValue(source.streamObsTimeryConfig, {}),
+    streamObsLicznikiConfig: toSafeJsonValue(source.streamObsLicznikiConfig, {}),
   };
 }
 

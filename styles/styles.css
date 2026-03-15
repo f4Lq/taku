@@ -1318,6 +1318,53 @@ body.route-admin .stream-shell {
   padding: 12px;
 }
 
+.streamobs-timery-wrap {
+  margin: 0 0 12px;
+  border: 1px solid rgba(133, 180, 248, 0.24);
+  border-radius: 10px;
+  background: rgba(7, 13, 31, 0.64);
+  padding: 12px;
+}
+
+.streamobs-timery-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.streamobs-timery-field {
+  display: grid;
+  gap: 6px;
+}
+
+.streamobs-timery-field > span {
+  font-size: 0.82rem;
+  color: #bfd0f5;
+}
+
+.streamobs-timery-input {
+  width: 100%;
+  border: 1px solid rgba(121, 170, 244, 0.43);
+  border-radius: 8px;
+  background: rgba(8, 14, 30, 0.98);
+  color: #eef4ff;
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 8px 10px;
+}
+
+.streamobs-timery-input:focus {
+  outline: none;
+  border-color: rgba(163, 214, 255, 0.9);
+  box-shadow: 0 0 0 3px rgba(143, 194, 255, 0.2);
+}
+
+.streamobs-timery-color {
+  min-height: 40px;
+  padding: 3px;
+  cursor: pointer;
+}
+
 .streamobs-links-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1655,6 +1702,7 @@ body.obs-wheel-overlay #adminPanel,
 body.obs-wheel-overlay .admin-dashboard-head,
 body.obs-wheel-overlay .admin-tabs,
 body.obs-wheel-overlay .streamobs-links-wrap,
+body.obs-wheel-overlay .streamobs-timery-wrap,
 body.obs-wheel-overlay .streamobs-config,
 body.obs-wheel-overlay .streamobs-note {
   display: none !important;
@@ -1691,6 +1739,117 @@ body.obs-wheel-overlay .streamobs-result {
   margin-top: 8px;
   text-align: center;
   font-size: clamp(1.1rem, 2.4vw, 1.8rem);
+}
+
+body.obs-timery-overlay,
+body.obs-timery-overlay::before {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+body.obs-timery-overlay .stream-topbar,
+body.obs-timery-overlay .stream-layout,
+body.obs-timery-overlay .route-panel,
+body.obs-timery-overlay #friends,
+body.obs-timery-overlay .site-footer,
+body.obs-timery-overlay #adminPanel,
+body.obs-timery-overlay #timeryPanel,
+body.obs-timery-overlay #licznikiPanel,
+body.obs-timery-overlay #karyPanel,
+body.obs-timery-overlay main.wrap {
+  display: none !important;
+}
+
+#timeryObsOverlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  justify-content: start;
+  gap: 12px;
+  padding: 14px;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+#timeryObsOverlay[hidden] {
+  display: none !important;
+}
+
+.timery-obs-list {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+.timery-obs-list.is-horizontal {
+  grid-template-columns: repeat(auto-fit, minmax(210px, max-content));
+  align-items: start;
+}
+
+.timery-obs-list.is-vertical {
+  grid-template-columns: 1fr;
+}
+
+.timery-obs-card {
+  min-width: 210px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--timery-obs-card-bg, rgba(18, 22, 30, 0.92));
+  color: #ffffff;
+  padding: 11px 16px 13px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 2px;
+}
+
+.timery-obs-name {
+  margin: 0;
+  text-transform: uppercase;
+  font-size: 1.16rem;
+  letter-spacing: 0.04em;
+  font-weight: 900;
+  font-family: "Arial Black", Impact, "Segoe UI", sans-serif;
+  line-height: 1.1;
+  text-align: center;
+  color: #ffffff;
+  -webkit-text-stroke: 0.7px rgba(0, 0, 0, 0.78);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.78), 0 4px 12px rgba(0, 0, 0, 0.75);
+  opacity: 1;
+}
+
+.timery-obs-time {
+  margin: 0;
+  font-size: clamp(2.35rem, 4.9vw, 3.8rem);
+  line-height: 1;
+  font-weight: 950;
+  font-family: "Arial Black", Impact, "Segoe UI", sans-serif;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.84);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.86), 0 6px 18px rgba(0, 0, 0, 0.82);
+}
+
+.timery-obs-progress {
+  margin-top: 6px;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.48);
+  overflow: hidden;
+}
+
+.timery-obs-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--timery-obs-progress-fill-bg, linear-gradient(90deg, rgba(107, 255, 193, 0.95), rgba(166, 255, 225, 0.95)));
+  box-shadow: 0 0 10px var(--timery-obs-progress-fill-shadow, rgba(133, 255, 212, 0.42));
+  transition: width 0.24s linear;
 }
 
 .admin-section-title {
@@ -3914,6 +4073,30 @@ h1 {
   color: #f4f8ff;
 }
 
+.kary-price-list .kary-price-value {
+  justify-self: end;
+  border-radius: 999px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #f4f8ff;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  transition: color 0.22s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, padding 0.22s ease;
+}
+
+.kary-price-list .kary-price-value.is-pln,
+.kary-price-list .kary-price-value.is-suby,
+.kary-price-list .kary-price-value.is-kicksy {
+  padding: 6px 12px;
+  border-color: rgba(47, 226, 164, 0.58);
+  background:
+    radial-gradient(120% 170% at 20% 0%, rgba(95, 255, 190, 0.26), rgba(95, 255, 190, 0) 52%),
+    linear-gradient(180deg, rgba(7, 54, 41, 0.96), rgba(5, 34, 26, 0.96));
+  color: #77f1c9;
+  box-shadow: inset 0 0 0 1px rgba(124, 255, 209, 0.18), 0 0 0 1px rgba(26, 124, 92, 0.38), 0 6px 14px rgba(2, 24, 18, 0.38);
+}
+
 .kary-price-list small {
   grid-column: 1 / -1;
   color: #b6c7e7;
@@ -4319,6 +4502,10 @@ h1 {
   }
 
   .timery-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .streamobs-timery-config-grid {
     grid-template-columns: 1fr;
   }
 

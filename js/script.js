@@ -52,6 +52,17 @@
     const adminKaryTabEl = document.getElementById("adminKaryTab");
     const adminStreamObsTabEl = document.getElementById("adminStreamObsTab");
     const adminAccountsTabEl = document.getElementById("adminAccountsTab");
+    const streamObsLinksEl = document.getElementById("streamObsLinks");
+    const streamObsLinksStatusEl = document.getElementById("streamObsLinksStatus");
+    const streamObsTimeryConfigToggleEl = document.getElementById("streamObsTimeryConfigToggle");
+    const streamObsTimeryConfigBodyEl = document.getElementById("streamObsTimeryConfigBody");
+    const streamObsTimeryLayoutSelectEl = document.getElementById("streamObsTimeryLayoutSelect");
+    const streamObsTimeryColorInputEl = document.getElementById("streamObsTimeryColorInput");
+    const streamObsTimeryProgressColorInputEl = document.getElementById("streamObsTimeryProgressColorInput");
+    const streamObsLicznikiConfigToggleEl = document.getElementById("streamObsLicznikiConfigToggle");
+    const streamObsLicznikiConfigBodyEl = document.getElementById("streamObsLicznikiConfigBody");
+    const streamObsLicznikiLayoutSelectEl = document.getElementById("streamObsLicznikiLayoutSelect");
+    const streamObsLicznikiColorInputEl = document.getElementById("streamObsLicznikiColorInput");
     const adminMemberFormEl = document.getElementById("adminMemberForm");
     const adminMemberSubmitBtnEl = adminMemberFormEl ? adminMemberFormEl.querySelector('button[type="submit"]') : null;
     const adminMemberStatusEl = document.getElementById("adminMemberStatus");
@@ -240,6 +251,8 @@
     const KARY_CENNIK_KEY = "takuu_kary_cennik_items";
     const KARY_CENNIK_MIGRATION_KEY = "takuu_kary_cennik_kicksy_migration_v1";
     const TIMERY_CONFIG_KEY = "takuu_timery_view_config";
+    const STREAMOBS_TIMERY_CONFIG_KEY = "takuu_streamobs_timery_config";
+    const STREAMOBS_LICZNIKI_CONFIG_KEY = "takuu_streamobs_liczniki_config";
     const LICZNIKI_CONFIG_KEY = "takuu_liczniki_view_config";
     const WHEEL_CONFIG_STORAGE_KEY = "takuu_wheel_config";
     const WHEEL_SYNC_STORAGE_KEY = "takuu_wheel_sync_event";
@@ -306,6 +319,17 @@
       showTitle: true,
       showProgress: true,
       showStatus: true
+    };
+    let streamObsTimeryConfigState = {
+      panelOpen: false,
+      layout: "vertical",
+      color: "#1a1e26",
+      progressColor: "#6bffc1"
+    };
+    let streamObsLicznikiConfigState = {
+      panelOpen: false,
+      layout: "vertical",
+      color: "#1a1e26"
     };
     let licznikiConfigState = {
       panelOpen: false,
@@ -2982,6 +3006,10 @@
         const isStreamObs = activeAdminTab === "streamobs";
         adminStreamObsTabEl.hidden = !isStreamObs;
         adminStreamObsTabEl.classList.toggle("is-active", isStreamObs);
+        if (isStreamObs) {
+          applyStreamObsTimeryConfig();
+          applyStreamObsLicznikiConfig();
+        }
       }
     }
 
@@ -3277,6 +3305,9 @@
 
       const dataKey = nextCurrency === "suby" ? "suby" : nextCurrency === "kicksy" ? "kicksy" : "pln";
       getKaryPriceValueElements().forEach((price) => {
+        price.classList.toggle("is-pln", dataKey === "pln");
+        price.classList.toggle("is-suby", dataKey === "suby");
+        price.classList.toggle("is-kicksy", dataKey === "kicksy");
         const nextValue = String(price.dataset[dataKey] || "").trim();
         if (nextValue) {
           price.textContent = nextValue;
@@ -3414,6 +3445,280 @@
       if (timeryShowStatusEl) {
         timeryShowStatusEl.checked = timeryConfigState.showStatus;
       }
+    }
+
+    function normalizeStreamObsTimeryConfig(rawValue, fallbackState = null) {
+      const fallback =
+        fallbackState && typeof fallbackState === "object"
+          ? fallbackState
+          : {
+              panelOpen: false,
+              layout: "vertical",
+              color: "#1a1e26",
+              progressColor: "#6bffc1"
+            };
+      const asObject = rawValue && typeof rawValue === "object" ? rawValue : {};
+      const layoutRaw = String(asObject.layout || fallback.layout || "vertical").toLowerCase();
+      return {
+        panelOpen: Boolean(asObject.panelOpen),
+        layout: layoutRaw === "horizontal" ? "horizontal" : "vertical",
+        color: /^#[\da-f]{6}$/i.test(String(asObject.color || ""))
+          ? String(asObject.color)
+          : String(fallback.color || "#1a1e26"),
+        progressColor: /^#[\da-f]{6}$/i.test(String(asObject.progressColor || ""))
+          ? String(asObject.progressColor)
+          : String(fallback.progressColor || "#6bffc1")
+      };
+    }
+
+    function loadStreamObsTimeryConfig() {
+      const raw = readStorageJson(STREAMOBS_TIMERY_CONFIG_KEY, streamObsTimeryConfigState);
+      streamObsTimeryConfigState = normalizeStreamObsTimeryConfig(raw, streamObsTimeryConfigState);
+    }
+
+    function saveStreamObsTimeryConfig() {
+      saveStorageJson(STREAMOBS_TIMERY_CONFIG_KEY, streamObsTimeryConfigState);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
+    }
+
+    function normalizeStreamObsLicznikiConfig(rawValue, fallbackState = null) {
+      const fallback =
+        fallbackState && typeof fallbackState === "object"
+          ? fallbackState
+          : {
+              panelOpen: false,
+              layout: "vertical",
+              color: "#1a1e26"
+            };
+      const asObject = rawValue && typeof rawValue === "object" ? rawValue : {};
+      const layoutRaw = String(asObject.layout || fallback.layout || "vertical").toLowerCase();
+      return {
+        panelOpen: Boolean(asObject.panelOpen),
+        layout: layoutRaw === "horizontal" ? "horizontal" : "vertical",
+        color: /^#[\da-f]{6}$/i.test(String(asObject.color || ""))
+          ? String(asObject.color)
+          : String(fallback.color || "#1a1e26")
+      };
+    }
+
+    function loadStreamObsLicznikiConfig() {
+      const raw = readStorageJson(STREAMOBS_LICZNIKI_CONFIG_KEY, streamObsLicznikiConfigState);
+      streamObsLicznikiConfigState = normalizeStreamObsLicznikiConfig(raw, streamObsLicznikiConfigState);
+    }
+
+    function saveStreamObsLicznikiConfig() {
+      saveStorageJson(STREAMOBS_LICZNIKI_CONFIG_KEY, streamObsLicznikiConfigState);
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
+    }
+
+    function syncObsCounterColorWithTimerColor(options = {}) {
+      const persist = options && options.persist === false ? false : true;
+      const timerColor = String(streamObsTimeryConfigState.color || "").trim();
+      if (!/^#[\da-f]{6}$/i.test(timerColor)) {
+        return false;
+      }
+      if (String(streamObsLicznikiConfigState.color || "").toLowerCase() === timerColor.toLowerCase()) {
+        return false;
+      }
+
+      streamObsLicznikiConfigState.color = timerColor;
+      if (persist) {
+        saveStreamObsLicznikiConfig();
+      }
+      return true;
+    }
+
+    async function copyTextWithFallback(text) {
+      const value = String(text || "");
+      if (!value) {
+        return false;
+      }
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+          return true;
+        }
+      } catch (_error) {
+        // Fallback below.
+      }
+
+      try {
+        const temp = document.createElement("textarea");
+        temp.value = value;
+        temp.setAttribute("readonly", "");
+        temp.style.position = "fixed";
+        temp.style.top = "-9999px";
+        temp.style.left = "-9999px";
+        document.body.appendChild(temp);
+        temp.focus();
+        temp.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(temp);
+        return Boolean(copied);
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    function buildStreamObsTimeryUrl() {
+      let url = null;
+      try {
+        url = new URL(TIMERY_ROUTE_PATH, window.location.href);
+      } catch (_error) {
+        return String(TIMERY_ROUTE_PATH || "/timery");
+      }
+      url.searchParams.set("timeryObs", "1");
+      url.searchParams.set("timeryObsLayout", streamObsTimeryConfigState.layout);
+      url.searchParams.set("timeryObsColor", streamObsTimeryConfigState.color.replace("#", ""));
+      url.searchParams.set("timeryObsProgressColor", streamObsTimeryConfigState.progressColor.replace("#", ""));
+      return url.toString();
+    }
+
+    function buildStreamObsLicznikiUrl() {
+      let url = null;
+      try {
+        url = new URL(LICZNIKI_ROUTE_PATH, window.location.href);
+      } catch (_error) {
+        return String(LICZNIKI_ROUTE_PATH || "/liczniki");
+      }
+      url.searchParams.set("licznikiObs", "1");
+      url.searchParams.set("licznikiObsLayout", streamObsLicznikiConfigState.layout);
+      url.searchParams.set("licznikiObsColor", streamObsLicznikiConfigState.color.replace("#", ""));
+      return url.toString();
+    }
+
+    function upsertStreamObsTimeryLinkCard() {
+      if (!streamObsLinksEl) {
+        return;
+      }
+
+      const linkUrl = buildStreamObsTimeryUrl();
+      let card = streamObsLinksEl.querySelector('[data-streamobs-link-id="obs_timery_active"]');
+      if (!card) {
+        card = document.createElement("article");
+        card.className = "streamobs-link-card";
+        card.dataset.streamobsLinkId = "obs_timery_active";
+        card.innerHTML = `
+          <h5 class="streamobs-link-title">OBS - Timery Aktywne</h5>
+          <p class="streamobs-link-desc">Browser Source do /timery. Pokazuje wyłącznie aktywne timery w stylu overlay.</p>
+          <div class="streamobs-link-row">
+            <input class="streamobs-link-input" type="text" readonly aria-label="OBS - Timery Aktywne URL">
+            <button class="admin-kary-btn" type="button">Kopiuj</button>
+          </div>
+        `;
+
+        const copyBtn = card.querySelector("button");
+        if (copyBtn) {
+          copyBtn.addEventListener("click", async () => {
+            const currentUrl = String(card.dataset.streamobsLinkUrl || "");
+            const copied = await copyTextWithFallback(currentUrl);
+            if (copied) {
+              setPanelStatus(streamObsLinksStatusEl, "Skopiowano link: OBS - Timery Aktywne", "success");
+            } else {
+              setPanelStatus(streamObsLinksStatusEl, "Nie udało się skopiować linku. Skopiuj go ręcznie z pola.", "error");
+            }
+          });
+        }
+
+        streamObsLinksEl.appendChild(card);
+      }
+
+      const input = card.querySelector("input");
+      if (input) {
+        input.value = linkUrl;
+      }
+      card.dataset.streamobsLinkUrl = linkUrl;
+    }
+
+    function upsertStreamObsLicznikiLinkCard() {
+      if (!streamObsLinksEl) {
+        return;
+      }
+
+      const linkUrl = buildStreamObsLicznikiUrl();
+      let card = streamObsLinksEl.querySelector('[data-streamobs-link-id="obs_liczniki_active"]');
+      if (!card) {
+        card = document.createElement("article");
+        card.className = "streamobs-link-card";
+        card.dataset.streamobsLinkId = "obs_liczniki_active";
+        card.innerHTML = `
+          <h5 class="streamobs-link-title">OBS - Liczniki Aktywne</h5>
+          <p class="streamobs-link-desc">Browser Source do /liczniki. Pokazuje aktywne liczniki w stylu overlay.</p>
+          <div class="streamobs-link-row">
+            <input class="streamobs-link-input" type="text" readonly aria-label="OBS - Liczniki Aktywne URL">
+            <button class="admin-kary-btn" type="button">Kopiuj</button>
+          </div>
+        `;
+
+        const copyBtn = card.querySelector("button");
+        if (copyBtn) {
+          copyBtn.addEventListener("click", async () => {
+            const currentUrl = String(card.dataset.streamobsLinkUrl || "");
+            const copied = await copyTextWithFallback(currentUrl);
+            if (copied) {
+              setPanelStatus(streamObsLinksStatusEl, "Skopiowano link: OBS - Liczniki Aktywne", "success");
+            } else {
+              setPanelStatus(streamObsLinksStatusEl, "Nie udało się skopiować linku. Skopiuj go ręcznie z pola.", "error");
+            }
+          });
+        }
+
+        streamObsLinksEl.appendChild(card);
+      }
+
+      const input = card.querySelector("input");
+      if (input) {
+        input.value = linkUrl;
+      }
+      card.dataset.streamobsLinkUrl = linkUrl;
+    }
+
+    function applyStreamObsTimeryConfig() {
+      if (streamObsTimeryConfigBodyEl) {
+        streamObsTimeryConfigBodyEl.hidden = !streamObsTimeryConfigState.panelOpen;
+      }
+      if (streamObsTimeryConfigToggleEl) {
+        streamObsTimeryConfigToggleEl.setAttribute("aria-expanded", streamObsTimeryConfigState.panelOpen ? "true" : "false");
+        streamObsTimeryConfigToggleEl.textContent = streamObsTimeryConfigState.panelOpen
+          ? "Ukryj konfigurację timerów OBS"
+          : "Konfiguracja timerów OBS";
+      }
+      if (streamObsTimeryLayoutSelectEl) {
+        streamObsTimeryLayoutSelectEl.value = streamObsTimeryConfigState.layout;
+      }
+      if (streamObsTimeryColorInputEl) {
+        streamObsTimeryColorInputEl.value = streamObsTimeryConfigState.color;
+      }
+      if (streamObsTimeryProgressColorInputEl) {
+        streamObsTimeryProgressColorInputEl.value = streamObsTimeryConfigState.progressColor;
+      }
+
+      upsertStreamObsTimeryLinkCard();
+    }
+
+    function applyStreamObsLicznikiConfig() {
+      if (streamObsLicznikiConfigBodyEl) {
+        streamObsLicznikiConfigBodyEl.hidden = !streamObsLicznikiConfigState.panelOpen;
+      }
+      if (streamObsLicznikiConfigToggleEl) {
+        streamObsLicznikiConfigToggleEl.setAttribute("aria-expanded", streamObsLicznikiConfigState.panelOpen ? "true" : "false");
+        streamObsLicznikiConfigToggleEl.textContent = streamObsLicznikiConfigState.panelOpen
+          ? "Ukryj konfigurację liczników OBS"
+          : "Konfiguracja liczników OBS";
+      }
+      if (streamObsLicznikiLayoutSelectEl) {
+        streamObsLicznikiLayoutSelectEl.value = streamObsLicznikiConfigState.layout;
+      }
+      if (streamObsLicznikiColorInputEl) {
+        streamObsLicznikiColorInputEl.value = streamObsLicznikiConfigState.color;
+      }
+
+      upsertStreamObsLicznikiLinkCard();
     }
 
     function normalizeLicznikiConfig(rawValue, fallbackState = null) {
@@ -4010,7 +4315,9 @@
         membersOrder: normalizedMembersOrder,
         karyCennikItems: normalizeKaryCennikItems(source.karyCennikItems),
         timeryConfig: normalizeTimeryConfig(source.timeryConfig, timeryConfigState),
-        licznikiConfig: normalizeLicznikiConfig(source.licznikiConfig, licznikiConfigState)
+        licznikiConfig: normalizeLicznikiConfig(source.licznikiConfig, licznikiConfigState),
+        streamObsTimeryConfig: normalizeStreamObsTimeryConfig(source.streamObsTimeryConfig, streamObsTimeryConfigState),
+        streamObsLicznikiConfig: normalizeStreamObsLicznikiConfig(source.streamObsLicznikiConfig, streamObsLicznikiConfigState)
       };
     }
 
@@ -4022,7 +4329,9 @@
         membersOrder: normalizeMembersOrder(membersOrder),
         karyCennikItems: normalizeKaryCennikItems(karyCennikItems),
         timeryConfig: normalizeTimeryConfig(timeryConfigState, timeryConfigState),
-        licznikiConfig: normalizeLicznikiConfig(licznikiConfigState, licznikiConfigState)
+        licznikiConfig: normalizeLicznikiConfig(licznikiConfigState, licznikiConfigState),
+        streamObsTimeryConfig: normalizeStreamObsTimeryConfig(streamObsTimeryConfigState, streamObsTimeryConfigState),
+        streamObsLicznikiConfig: normalizeStreamObsLicznikiConfig(streamObsLicznikiConfigState, streamObsLicznikiConfigState)
       };
       return snapshot;
     }
@@ -4036,6 +4345,8 @@
       saveStorageJson(KARY_CENNIK_KEY, source.karyCennikItems);
       saveStorageJson(TIMERY_CONFIG_KEY, source.timeryConfig);
       saveStorageJson(LICZNIKI_CONFIG_KEY, source.licznikiConfig);
+      saveStorageJson(STREAMOBS_TIMERY_CONFIG_KEY, source.streamObsTimeryConfig);
+      saveStorageJson(STREAMOBS_LICZNIKI_CONFIG_KEY, source.streamObsLicznikiConfig);
     }
 
     function getAdminSnapshotKey(snapshot) {
@@ -4066,6 +4377,9 @@
         karyCennikItems = normalized.karyCennikItems;
         timeryConfigState = normalized.timeryConfig;
         licznikiConfigState = normalized.licznikiConfig;
+        streamObsTimeryConfigState = normalized.streamObsTimeryConfig;
+        streamObsLicznikiConfigState = normalized.streamObsLicznikiConfig;
+        syncObsCounterColorWithTimerColor({ persist: true });
 
         baseMembers = loadBaseMembersFromGrid();
         refreshMembersOrder(false);
@@ -4083,6 +4397,8 @@
         renderAdminMembersTable();
         renderAdminAccountsTable();
         applyTimeryConfig();
+        applyStreamObsTimeryConfig();
+        applyStreamObsLicznikiConfig();
         applyLicznikiConfig();
         restoreAdminSession();
       } finally {
@@ -7065,6 +7381,9 @@
       renderWheelStats();
     });
     loadTimeryConfig();
+    loadStreamObsTimeryConfig();
+    loadStreamObsLicznikiConfig();
+    syncObsCounterColorWithTimerColor({ persist: true });
     loadLicznikiConfig();
     saveAdminAccounts();
     restoreAdminSession();
@@ -7074,6 +7393,8 @@
     resetAdminCennikForm();
     populateKaryAdminControls();
     applyTimeryConfig();
+    applyStreamObsTimeryConfig();
+    applyStreamObsLicznikiConfig();
     applyLicznikiConfig();
     renderKaryLiveState();
     startKaryTimerTick();
@@ -7988,6 +8309,120 @@
       });
     }
 
+    if (streamObsTimeryConfigToggleEl) {
+      streamObsTimeryConfigToggleEl.addEventListener("click", () => {
+        streamObsTimeryConfigState.panelOpen = !streamObsTimeryConfigState.panelOpen;
+        saveStreamObsTimeryConfig();
+        applyStreamObsTimeryConfig();
+        sendAdminWebhookEvent("streamobs_timer_config_toggle", "StreamOBS - Timery OBS", {
+          panelOpen: streamObsTimeryConfigState.panelOpen
+        });
+      });
+    }
+
+    if (streamObsTimeryLayoutSelectEl) {
+      streamObsTimeryLayoutSelectEl.addEventListener("change", () => {
+        const nextLayout = String(streamObsTimeryLayoutSelectEl.value || "").toLowerCase();
+        streamObsTimeryConfigState.layout = nextLayout === "horizontal" ? "horizontal" : "vertical";
+        saveStreamObsTimeryConfig();
+        applyStreamObsTimeryConfig();
+        sendAdminWebhookEvent("streamobs_timer_layout_change", "StreamOBS - Timery OBS", {
+          layout: streamObsTimeryConfigState.layout
+        });
+      });
+    }
+
+    if (streamObsTimeryColorInputEl) {
+      streamObsTimeryColorInputEl.addEventListener("input", () => {
+        const color = String(streamObsTimeryColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        streamObsTimeryConfigState.color = color;
+        saveStreamObsTimeryConfig();
+        syncObsCounterColorWithTimerColor();
+        applyStreamObsTimeryConfig();
+        applyStreamObsLicznikiConfig();
+      });
+      streamObsTimeryColorInputEl.addEventListener("change", () => {
+        const color = String(streamObsTimeryColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        sendAdminWebhookEvent("streamobs_timer_color_change", "StreamOBS - Timery OBS", {
+          color
+        });
+      });
+    }
+
+    if (streamObsTimeryProgressColorInputEl) {
+      streamObsTimeryProgressColorInputEl.addEventListener("input", () => {
+        const color = String(streamObsTimeryProgressColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        streamObsTimeryConfigState.progressColor = color;
+        saveStreamObsTimeryConfig();
+        applyStreamObsTimeryConfig();
+      });
+      streamObsTimeryProgressColorInputEl.addEventListener("change", () => {
+        const color = String(streamObsTimeryProgressColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        sendAdminWebhookEvent("streamobs_timer_progress_color_change", "StreamOBS - Timery OBS", {
+          progressColor: color
+        });
+      });
+    }
+
+    if (streamObsLicznikiConfigToggleEl) {
+      streamObsLicznikiConfigToggleEl.addEventListener("click", () => {
+        streamObsLicznikiConfigState.panelOpen = !streamObsLicznikiConfigState.panelOpen;
+        saveStreamObsLicznikiConfig();
+        applyStreamObsLicznikiConfig();
+        sendAdminWebhookEvent("streamobs_counter_config_toggle", "StreamOBS - Liczniki OBS", {
+          panelOpen: streamObsLicznikiConfigState.panelOpen
+        });
+      });
+    }
+
+    if (streamObsLicznikiLayoutSelectEl) {
+      streamObsLicznikiLayoutSelectEl.addEventListener("change", () => {
+        const nextLayout = String(streamObsLicznikiLayoutSelectEl.value || "").toLowerCase();
+        streamObsLicznikiConfigState.layout = nextLayout === "horizontal" ? "horizontal" : "vertical";
+        saveStreamObsLicznikiConfig();
+        applyStreamObsLicznikiConfig();
+        sendAdminWebhookEvent("streamobs_counter_layout_change", "StreamOBS - Liczniki OBS", {
+          layout: streamObsLicznikiConfigState.layout
+        });
+      });
+    }
+
+    if (streamObsLicznikiColorInputEl) {
+      streamObsLicznikiColorInputEl.addEventListener("input", () => {
+        const color = String(streamObsLicznikiColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        streamObsLicznikiConfigState.color = color;
+        saveStreamObsLicznikiConfig();
+        streamObsTimeryConfigState.color = color;
+        saveStreamObsTimeryConfig();
+        applyStreamObsTimeryConfig();
+        applyStreamObsLicznikiConfig();
+      });
+      streamObsLicznikiColorInputEl.addEventListener("change", () => {
+        const color = String(streamObsLicznikiColorInputEl.value || "").trim();
+        if (!/^#[\da-f]{6}$/i.test(color)) {
+          return;
+        }
+        sendAdminWebhookEvent("streamobs_counter_color_change", "StreamOBS - Liczniki OBS", {
+          color
+        });
+      });
+    }
+
     if (licznikiConfigBtnEl) {
       licznikiConfigBtnEl.addEventListener("click", () => {
         licznikiConfigState.panelOpen = !licznikiConfigState.panelOpen;
@@ -8672,6 +9107,9 @@
           var dataKey = next === "suby" ? "suby" : next === "kicksy" ? "kicksy" : "pln";
           var priceNodes = document.querySelectorAll(".kary-price-value");
           priceNodes.forEach(function (price) {
+            price.classList.toggle("is-pln", dataKey === "pln");
+            price.classList.toggle("is-suby", dataKey === "suby");
+            price.classList.toggle("is-kicksy", dataKey === "kicksy");
             var nextValue = String(price.dataset[dataKey] || "").trim();
             if (nextValue) {
               price.textContent = nextValue;

@@ -733,7 +733,14 @@
     wheel_config_segment_remove: "Kolo fortuny - Usunieto segment",
     wheel_config_reorder: "Kolo fortuny - Zmieniono kolejnosc segmentow",
     wheel_config_save: "Kolo fortuny - Zapisano konfiguracje",
-    wheel_config_set_items: "Kolo fortuny - Ustawiono segmenty"
+    wheel_config_set_items: "Kolo fortuny - Ustawiono segmenty",
+    streamobs_timer_config_toggle: "StreamOBS Timery - Pokazano lub ukryto konfiguracje",
+    streamobs_timer_layout_change: "StreamOBS Timery - Zmieniono uklad",
+    streamobs_timer_color_change: "StreamOBS Timery - Zmieniono kolor kart",
+    streamobs_timer_progress_color_change: "StreamOBS Timery - Zmieniono kolor paska postepu",
+    streamobs_counter_config_toggle: "StreamOBS Liczniki - Pokazano lub ukryto konfiguracje",
+    streamobs_counter_layout_change: "StreamOBS Liczniki - Zmieniono uklad",
+    streamobs_counter_color_change: "StreamOBS Liczniki - Zmieniono kolor kart"
   });
 
   function humanizeActionCode(action) {
@@ -775,7 +782,13 @@
       save: "zapis",
       items: "elementy",
       change: "zmiana",
-      wheel: "kolo"
+      wheel: "kolo",
+      layout: "uklad",
+      color: "kolor",
+      progress: "postep",
+      toggle: "pokaz lub ukryj",
+      show: "pokaz",
+      hide: "ukryj"
     };
 
     const text = clean
@@ -802,6 +815,7 @@
     }
 
     const prefixMap = [
+      { prefix: "streamobs_", title: "StreamOBS" },
       { prefix: "wheel_", title: "Kolo fortuny" },
       { prefix: "timer_", title: "Timery" },
       { prefix: "counter_", title: "Liczniki" },
