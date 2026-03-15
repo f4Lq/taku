@@ -3199,6 +3199,204 @@ h1 {
   font-size: 0.95rem;
 }
 
+.kary-stats-section {
+  border: 1px solid rgba(132, 176, 244, 0.26);
+  border-radius: 14px;
+  background: rgba(7, 13, 30, 0.64);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.kary-stats-section-title {
+  margin: 0 0 12px;
+  font-size: 1.55rem;
+  color: #f4f9ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.kary-timer-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.kary-counter-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.kary-stats-timer-card,
+.kary-stats-counter-card {
+  border: 1px solid rgba(132, 176, 244, 0.36);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(8, 14, 35, 0.88), rgba(6, 11, 28, 0.82)),
+    radial-gradient(circle at 12% 0%, rgba(120, 183, 255, 0.1), transparent 52%);
+  padding: 12px 14px;
+}
+
+.kary-stats-counter-card {
+  padding: 9px 12px;
+}
+
+.kary-stats-counter-card .kary-stats-item-title {
+  font-size: 0.86rem;
+}
+
+.kary-stats-timer-card.is-active {
+  border-color: rgba(132, 176, 244, 0.36);
+  box-shadow: none;
+}
+
+.kary-stats-timer-card {
+  padding: 10px 12px;
+}
+
+.kary-stats-timer-card .kary-stats-item-title {
+  font-size: 0.95rem;
+}
+
+.kary-stats-timer-card .kary-stats-item-current {
+  margin-top: 2px;
+  font-size: clamp(1.1rem, 1.9vw, 1.7rem);
+}
+
+.kary-stats-timer-card .kary-stats-item-status {
+  margin-top: 3px;
+  font-size: 0.75rem;
+  gap: 5px;
+}
+
+.kary-stats-timer-card .kary-stats-status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.kary-stats-timer-card .kary-stats-item-divider {
+  margin: 6px 0 7px;
+}
+
+.kary-stats-timer-card .kary-stats-item-metrics {
+  gap: 7px;
+}
+
+.kary-stats-timer-card .kary-stats-item-label {
+  font-size: 0.65rem;
+}
+
+.kary-stats-timer-card .kary-stats-item-value {
+  margin-top: 2px;
+  font-size: 1.05rem;
+}
+
+.kary-stats-item-title {
+  margin: 0;
+  color: #cfe2ff;
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.kary-stats-item-current {
+  margin: 4px 0 0;
+  color: #ffffff;
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.kary-stats-item-status {
+  margin: 4px 0 0;
+  color: #a7bce0;
+  font-size: 0.96rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.kary-stats-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2d3a4d;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.kary-stats-status-dot.is-active {
+  background: #2ecc71;
+  box-shadow: 0 0 9px rgba(38, 206, 119, 0.55);
+}
+
+.kary-stats-status-dot.is-idle {
+  background: #256fb3;
+  box-shadow: 0 0 8px rgba(66, 132, 209, 0.5);
+}
+
+.kary-stats-item-divider {
+  margin: 9px 0 10px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(104, 141, 201, 0.3), rgba(104, 141, 201, 0.1));
+}
+
+.kary-stats-item-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kary-stats-item-label {
+  margin: 0;
+  color: #92accf;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.kary-stats-item-value {
+  margin: 4px 0 0;
+  color: #f6fbff;
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.kary-stats-item-value.is-record {
+  color: #ffd02f;
+}
+
+.kary-stats-item-value.is-added {
+  color: #1ff3bb;
+}
+
+.kary-stats-counter-row {
+  margin-top: 5px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.kary-stats-counter-label {
+  margin: 0;
+  color: #b0c4e5;
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.kary-stats-counter-value {
+  margin: 2px 0 0;
+  color: #ffffff;
+  font-size: 1.7rem;
+  line-height: 1.05;
+  font-weight: 800;
+}
+
+.kary-stats-counter-value.is-max {
+  color: #1ff3bb;
+}
+
 .wheel-stats-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -5377,6 +5575,19 @@ body.route-clips .clip-actions-menu {
   .stats-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .kary-stats-timer-card .kary-stats-item-current {
+    font-size: 1.35rem;
+  }
+
+  .kary-stats-item-metrics {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .kary-stats-counter-value {
+    font-size: 1.45rem;
   }
 
   .wheel-stats-recent-item {

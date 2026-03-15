@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-  <link rel="stylesheet" href="styles/styles.css?v=20260315-obs-timery-5">
+  <link rel="stylesheet" href="styles/styles.css?v=20260315-stats-kary-9">
   <link rel="shortcut icon" type="x-icon" href="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" />
 </head>
 <body>
@@ -56,7 +56,6 @@
         <span class="route-glow route-glow-green" aria-hidden="true"></span>
         <div class="route-copy">
           <span id="routeBadge" class="route-badge">WKRÓTCE...</span>
-          <p id="routeSubtext" class="route-subtext">Timery działałące w OBS.</p>
           <p id="routeSubtext" class="route-subtext">Informacje z liczników/timerów w statystykach.</p>   
           <p id="routeSubtext" class="route-subtext">Ruleta(czerwone/czarne 2x zielone 36x) i Koło z ulgami(2x -30min itp.) działałące w OBS + dodawanie kary czasowej po wylosowanmiu automatycznie na żywo.</p>
           <p id="routeSubtext" class="route-subtext">Webhook dla koła/ruletka/koło z ulgami + ich konfiguracji.</p>
@@ -64,15 +63,18 @@
       </div>
     </section>
 
-    <section id="statsPanel" class="stats-panel" aria-label="Statystyki koła" hidden>
+    <section id="statsPanel" class="stats-panel" aria-label="Statystyki streama" hidden>
       <header class="stats-head">
         <div>
-          <h2 class="stats-title">Statystyki koła</h2>
-          <p class="stats-subtitle">Wszystkie statystyki związane z kołem losującym.</p>
+          <h2 class="stats-title">Statystyki streama</h2>
+          <p class="stats-subtitle">Timery, liczniki i statystyki koła losującego.</p>
         </div>
       </header>
 
-      <div id="wheelStatsSummary" class="wheel-stats-summary" aria-live="polite"></div>
+      <section class="wheel-stats-section" aria-labelledby="wheelStatsSummaryTitle">
+        <h3 id="wheelStatsSummaryTitle" class="wheel-stats-heading">Podsumowanie koła</h3>
+        <div id="wheelStatsSummary" class="wheel-stats-summary" aria-live="polite"></div>
+      </section>
 
       <section class="wheel-stats-section" aria-labelledby="wheelStatsTableTitle">
         <h3 id="wheelStatsTableTitle" class="wheel-stats-heading">Ranking segmentów</h3>
@@ -95,6 +97,20 @@
       <section class="wheel-stats-section" aria-labelledby="wheelStatsRecentTitle">
         <h3 id="wheelStatsRecentTitle" class="wheel-stats-heading">Ostatnie losowania</h3>
         <ol id="wheelStatsRecentList" class="wheel-stats-recent"></ol>
+      </section>
+
+      <section class="kary-stats-section" aria-labelledby="karyTimerStatsTitle">
+        <h3 id="karyTimerStatsTitle" class="kary-stats-section-title">
+          Timery
+        </h3>
+        <div id="karyTimerStatsGrid" class="kary-timer-stats-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="kary-stats-section" aria-labelledby="karyCounterStatsTitle">
+        <h3 id="karyCounterStatsTitle" class="kary-stats-section-title">
+          Liczniki
+        </h3>
+        <div id="karyCounterStatsGrid" class="kary-counter-stats-grid" aria-live="polite"></div>
       </section>
     </section>
 
@@ -983,7 +999,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="js/webhook.js?v=20260315-webhook-obs-config-1"></script>
   <script src="js/wheel.js?v=20260310-livefix7"></script>
-  <script src="js/script.js?v=20260315-obs-timery-10"></script>
+  <script src="js/script.js?v=20260315-stats-kary-12"></script>
   <script src="js/timery-liczniki.js?v=20260315-obs-timery-9"></script>
 </body>
 </html>

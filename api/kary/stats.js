@@ -1,44 +1,77 @@
-﻿const { createRedisClient } = require('../_lib/redis.js');
+const { createRedisClient } = require('../_lib/redis.js');
 const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require('../_lib/http.js');
 
-const ADMIN_STATE_DATA_KEY = 'admin:state:data';
-const ADMIN_STATE_UPDATED_AT_KEY = 'admin:state:updated_at';
-function toSafeJsonValue(value, fallback) {
-  try {
-    if (value == null) {
-      return fallback;
+const KARY_STATS_DATA_KEY = 'kary:stats:data';
+const KARY_STATS_UPDATED_AT_KEY = 'kary:stats:updated_at';
+
+function normalizeTimerStatsMap(rawValue) {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) {
+    return {};
+  }
+
+  const normalized = {};
+  Object.entries(rawValue).forEach(([rawKey, rawEntry]) => {
+    const key = String(rawKey || '').trim();
+    if (!key) {
+      return;
     }
-    return JSON.parse(JSON.stringify(value));
-  } catch (_error) {
-    return fallback;
-  }
+
+    const source = rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry) ? rawEntry : {};
+    const recordSeconds = Math.max(
+      0,
+      getSafeInt(
+        source.recordSeconds != null ? source.recordSeconds : source.record,
+        0
+      )
+    );
+    const totalAddedSeconds = Math.max(
+      0,
+      getSafeInt(
+        source.totalAddedSeconds != null ? source.totalAddedSeconds : source.totalAdded,
+        0
+      )
+    );
+    normalized[key] = {
+      recordSeconds,
+      totalAddedSeconds,
+    };
+  });
+
+  return normalized;
 }
 
-function normalizeStringList(value) {
-  if (!Array.isArray(value)) {
-    return [];
+function normalizeCounterStatsMap(rawValue) {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) {
+    return {};
   }
-  return value
-    .map((item) => String(item || '').trim())
-    .filter(Boolean);
+
+  const normalized = {};
+  Object.entries(rawValue).forEach(([rawKey, rawEntry]) => {
+    const key = String(rawKey || '').trim();
+    if (!key) {
+      return;
+    }
+
+    const source = rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry) ? rawEntry : {};
+    const maxValue = Math.max(
+      0,
+      getSafeInt(
+        source.maxValue != null ? source.maxValue : source.max,
+        0
+      )
+    );
+    normalized[key] = { maxValue };
+  });
+
+  return normalized;
 }
 
-function normalizeAdminState(rawState) {
-  const source =
-    rawState && typeof rawState === 'object' && !Array.isArray(rawState)
-      ? rawState
-      : {};
+function normalizeKaryStats(rawState) {
+  const source = rawState && typeof rawState === 'object' && !Array.isArray(rawState) ? rawState : {};
 
   return {
-    accounts: Array.isArray(source.accounts) ? toSafeJsonValue(source.accounts, []) : [],
-    baseMemberOverrides: toSafeJsonValue(source.baseMemberOverrides, {}),
-    customMembers: Array.isArray(source.customMembers) ? toSafeJsonValue(source.customMembers, []) : [],
-    membersOrder: normalizeStringList(source.membersOrder),
-    karyCennikItems: Array.isArray(source.karyCennikItems) ? toSafeJsonValue(source.karyCennikItems, []) : [],
-    timeryConfig: toSafeJsonValue(source.timeryConfig, {}),
-    licznikiConfig: toSafeJsonValue(source.licznikiConfig, {}),
-    streamObsTimeryConfig: toSafeJsonValue(source.streamObsTimeryConfig, {}),
-    streamObsLicznikiConfig: toSafeJsonValue(source.streamObsLicznikiConfig, {}),
+    timers: normalizeTimerStatsMap(source.timers),
+    counters: normalizeCounterStatsMap(source.counters),
   };
 }
 
@@ -49,7 +82,7 @@ function parseStoredState(rawValue) {
   }
 
   try {
-    return normalizeAdminState(JSON.parse(text));
+    return normalizeKaryStats(JSON.parse(text));
   } catch (_error) {
     return null;
   }
@@ -87,8 +120,8 @@ module.exports = async function handler(req, res) {
       const afterUpdatedAt = Math.max(0, getSafeInt(url.searchParams.get('after'), 0));
 
       const [rawState, rawUpdatedAt] = await redis.pipeline([
-        ['GET', ADMIN_STATE_DATA_KEY],
-        ['GET', ADMIN_STATE_UPDATED_AT_KEY],
+        ['GET', KARY_STATS_DATA_KEY],
+        ['GET', KARY_STATS_UPDATED_AT_KEY],
       ]);
       const state = parseStoredState(rawState);
       const updatedAt = Math.max(0, getSafeInt(rawUpdatedAt, 0));
@@ -129,11 +162,11 @@ module.exports = async function handler(req, res) {
     }
 
     const now = Date.now();
-    const nextState = normalizeAdminState(payload.state);
+    const nextState = normalizeKaryStats(payload.state);
 
     await redis.pipeline([
-      ['SET', ADMIN_STATE_DATA_KEY, JSON.stringify(nextState)],
-      ['SET', ADMIN_STATE_UPDATED_AT_KEY, now],
+      ['SET', KARY_STATS_DATA_KEY, JSON.stringify(nextState)],
+      ['SET', KARY_STATS_UPDATED_AT_KEY, now],
     ]);
 
     sendJson(res, {
@@ -147,7 +180,7 @@ module.exports = async function handler(req, res) {
       res,
       {
         ok: false,
-        error: `ADMIN_STATE_API_ERROR: ${String(error?.message || 'request_failed')}`,
+        error: `KARY_STATS_API_ERROR: ${String(error?.message || 'request_failed')}`,
       },
       500
     );

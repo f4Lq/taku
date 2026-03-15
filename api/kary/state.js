@@ -3,19 +3,6 @@ const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = requi
 
 const KARY_STATE_DATA_KEY = 'kary:state:data';
 const KARY_STATE_UPDATED_AT_KEY = 'kary:state:updated_at';
-const KARY_STATE_MEMORY_SYMBOL = Symbol.for('takuu.kary_state.memory_store.v1');
-
-function getKaryStateMemoryStore() {
-  const scope = globalThis;
-  if (!scope[KARY_STATE_MEMORY_SYMBOL]) {
-    scope[KARY_STATE_MEMORY_SYMBOL] = {
-      state: null,
-      updatedAt: 0,
-    };
-  }
-  return scope[KARY_STATE_MEMORY_SYMBOL];
-}
-
 function normalizeStateMap(rawValue) {
   if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) {
     return {};
@@ -95,27 +82,30 @@ module.exports = async function handler(req, res) {
   }
 
   const redis = createRedisClient();
-  const useRedis = Boolean(redis);
-  const memoryStore = useRedis ? null : getKaryStateMemoryStore();
+  if (!redis) {
+    sendJson(
+      res,
+      {
+        ok: false,
+        error: 'MISSING_KV_REST_ENV',
+        requiredEnv: ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+      },
+      500
+    );
+    return;
+  }
 
   try {
     if (method === 'GET') {
       const url = getRequestUrl(req);
       const afterUpdatedAt = Math.max(0, getSafeInt(url.searchParams.get('after'), 0));
 
-      let state = null;
-      let updatedAt = 0;
-      if (useRedis) {
-        const [rawState, rawUpdatedAt] = await redis.pipeline([
-          ['GET', KARY_STATE_DATA_KEY],
-          ['GET', KARY_STATE_UPDATED_AT_KEY],
-        ]);
-        state = parseStoredState(rawState);
-        updatedAt = Math.max(0, getSafeInt(rawUpdatedAt, 0));
-      } else {
-        state = memoryStore && memoryStore.state ? normalizeKaryState(memoryStore.state) : null;
-        updatedAt = Math.max(0, getSafeInt(memoryStore?.updatedAt, 0));
-      }
+      const [rawState, rawUpdatedAt] = await redis.pipeline([
+        ['GET', KARY_STATE_DATA_KEY],
+        ['GET', KARY_STATE_UPDATED_AT_KEY],
+      ]);
+      const state = parseStoredState(rawState);
+      const updatedAt = Math.max(0, getSafeInt(rawUpdatedAt, 0));
 
       if (afterUpdatedAt > 0 && updatedAt > 0 && updatedAt <= afterUpdatedAt) {
         sendJson(res, {
@@ -124,7 +114,7 @@ module.exports = async function handler(req, res) {
           updatedAt,
           state: null,
           serverTime: Date.now(),
-          storage: useRedis ? 'redis' : 'memory',
+          storage: 'redis',
         });
         return;
       }
@@ -135,7 +125,7 @@ module.exports = async function handler(req, res) {
         updatedAt,
         state,
         serverTime: Date.now(),
-        storage: useRedis ? 'redis' : 'memory',
+        storage: 'redis',
       });
       return;
     }
@@ -155,21 +145,16 @@ module.exports = async function handler(req, res) {
     const now = Date.now();
     const nextState = normalizeKaryState(payload.state, now);
 
-    if (useRedis) {
-      await redis.pipeline([
-        ['SET', KARY_STATE_DATA_KEY, JSON.stringify(nextState)],
-        ['SET', KARY_STATE_UPDATED_AT_KEY, now],
-      ]);
-    } else {
-      memoryStore.state = nextState;
-      memoryStore.updatedAt = now;
-    }
+    await redis.pipeline([
+      ['SET', KARY_STATE_DATA_KEY, JSON.stringify(nextState)],
+      ['SET', KARY_STATE_UPDATED_AT_KEY, now],
+    ]);
 
     sendJson(res, {
       ok: true,
       updatedAt: now,
       state: nextState,
-      storage: useRedis ? 'redis' : 'memory',
+      storage: 'redis',
     });
   } catch (error) {
     sendJson(

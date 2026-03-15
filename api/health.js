@@ -34,12 +34,13 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const [ping, syncCountRaw, statsCountRaw, adminStateUpdatedAtRaw, karyStateUpdatedAtRaw] = await redis.pipeline([
+    const [ping, syncCountRaw, statsCountRaw, adminStateUpdatedAtRaw, karyStateUpdatedAtRaw, karyStatsUpdatedAtRaw] = await redis.pipeline([
       ["PING"],
       ["LLEN", "wheel:sync:events"],
       ["LLEN", "wheel:stats:history"],
       ["GET", "admin:state:updated_at"],
       ["GET", "kary:state:updated_at"],
+      ["GET", "kary:stats:updated_at"],
     ]);
 
     sendJson(res, {
@@ -55,6 +56,7 @@ module.exports = async function handler(req, res) {
       state: {
         adminUpdatedAt: Math.max(0, Number.parseInt(String(adminStateUpdatedAtRaw || "0"), 10) || 0),
         karyUpdatedAt: Math.max(0, Number.parseInt(String(karyStateUpdatedAtRaw || "0"), 10) || 0),
+        karyStatsUpdatedAt: Math.max(0, Number.parseInt(String(karyStatsUpdatedAtRaw || "0"), 10) || 0),
       },
       env: {
         KICK_CHANNEL_SLUG: String(process.env.KICK_CHANNEL_SLUG || "takuu").trim() || "takuu",

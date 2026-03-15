@@ -18,6 +18,8 @@
     const wheelStatsSummaryEl = document.getElementById("wheelStatsSummary");
     const wheelStatsSegmentBodyEl = document.getElementById("wheelStatsSegmentBody");
     const wheelStatsRecentListEl = document.getElementById("wheelStatsRecentList");
+    const karyTimerStatsGridEl = document.getElementById("karyTimerStatsGrid");
+    const karyCounterStatsGridEl = document.getElementById("karyCounterStatsGrid");
     const karyPanelEl = document.getElementById("karyPanel");
     const timeryPanelEl = document.getElementById("timeryPanel");
     const timeryConfigBtnEl = document.getElementById("timeryConfigBtn");
@@ -119,6 +121,7 @@
     let lastAppliedRouteName = "";
     const FRIENDS_LIVE_POLL_MS = 5000;
     const WHEEL_STATS_LIVE_REFRESH_MS = 1000;
+    const WHEEL_STATS_RECENT_LIMIT = 5;
     let friendsLivePollId = null;
     let friendsLivePollBusy = false;
     let friendsLiveRequestSeq = 0;
@@ -248,6 +251,7 @@
     const CCI_BASE_MEMBER_OVERRIDES_KEY = "takuu_base_members_overrides";
     const CCI_MEMBERS_ORDER_KEY = "takuu_members_order";
     const KARY_STATE_KEY = "takuu_kary_live_state";
+    const KARY_STATS_KEY = "takuu_kary_stats_state";
     const KARY_CENNIK_KEY = "takuu_kary_cennik_items";
     const KARY_CENNIK_MIGRATION_KEY = "takuu_kary_cennik_kicksy_migration_v1";
     const TIMERY_CONFIG_KEY = "takuu_timery_view_config";
@@ -261,6 +265,7 @@
     const WHEEL_SYNC_API_ENDPOINT = "/api/wheel/sync";
     const WHEEL_STATS_API_ENDPOINT = "/api/wheel/stats";
     const KARY_STATE_API_ENDPOINT = "/api/kary/state";
+    const KARY_STATS_API_ENDPOINT = "/api/kary/stats";
     const ADMIN_STATE_API_ENDPOINT = "/api/admin/state";
     const WHEEL_WS_URL = resolveWheelWebSocketUrl();
     const WHEEL_WS_ENABLED = Boolean(WHEEL_WS_URL);
@@ -268,6 +273,7 @@
     const WHEEL_SYNC_SOCKET_RETRY_MS = 2500;
     const WHEEL_SYNC_MAX_PROCESSED_EVENTS = 600;
     const KARY_STATE_SYNC_POLL_MS = 1000;
+    const KARY_STATS_SYNC_POLL_MS = 1300;
     const ADMIN_STATE_SYNC_POLL_MS = 1300;
     const LAST_ROUTE_PATH_KEY = "takuu_last_route_path";
     const LAST_RELOAD_SOURCE_KEY = "takuu_last_reload_source_path";
@@ -300,6 +306,12 @@
     let karyStateRemoteUpdatedAt = 0;
     let karyStatePushInFlight = false;
     let karyStatePushQueued = false;
+    let karyStatsSyncPollId = null;
+    let karyStatsSyncBusy = false;
+    let karyStatsApiDisabled = false;
+    let karyStatsRemoteUpdatedAt = 0;
+    let karyStatsPushInFlight = false;
+    let karyStatsPushQueued = false;
     let adminStateSyncPollId = null;
     let adminStateSyncBusy = false;
     let adminStateApiDisabled = false;
@@ -311,6 +323,7 @@
     let adminStateApplyingRemote = false;
     let activeKaryCurrency = "pln";
     let karyLiveState = { timers: {}, timerTotals: {}, counters: {}, lastTickAt: 0 };
+    let karyStatsState = { timers: {}, counters: {} };
     let karyCennikItems = [];
     let timeryConfigState = {
       panelOpen: false,
@@ -1175,6 +1188,106 @@
       return mergeWheelHistoryEntries([], wheelStatsHistoryCache);
     }
 
+    function formatKaryStatsTimerClock(totalSeconds) {
+      const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      const hours = Math.floor(safe / 3600);
+      const minutes = Math.floor((safe % 3600) / 60);
+      const seconds = safe % 60;
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function formatKaryStatsAddedTime(totalSeconds) {
+      const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      if (safe <= 0) {
+        return "0 min";
+      }
+      const hours = Math.floor(safe / 3600);
+      const minutes = Math.floor((safe % 3600) / 60);
+      if (hours <= 0) {
+        return `${Math.floor(safe / 60)} min`;
+      }
+      if (minutes <= 0) {
+        return `${hours}h`;
+      }
+      return `${hours}h ${minutes}m`;
+    }
+
+    function renderKaryStats() {
+      if (!karyTimerStatsGridEl || !karyCounterStatsGridEl) {
+        return;
+      }
+
+      ensureKaryStateShape();
+      ensureKaryStatsShape();
+      syncKaryStatsRecordsFromCurrentState({ queueApi: false, render: false });
+
+      if (!karyTimerDefinitions.length) {
+        karyTimerStatsGridEl.innerHTML = `<p class="wheel-stats-empty">Brak timerów do wyświetlenia.</p>`;
+      } else {
+        karyTimerStatsGridEl.innerHTML = karyTimerDefinitions
+          .map((timer) => {
+            const remaining = Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0)));
+            const timerStats = karyStatsState.timers[timer.key] || { recordSeconds: 0, totalAddedSeconds: 0 };
+            const recordSeconds = Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)));
+            const totalAddedSeconds = Math.max(0, Math.floor(Number(timerStats.totalAddedSeconds || 0)));
+            const isActive = remaining > 0;
+
+            return `
+              <article class="kary-stats-timer-card${isActive ? " is-active" : ""}">
+                <h4 class="kary-stats-item-title">${escapeHtml(timer.label)}</h4>
+                <p class="kary-stats-item-current">${escapeHtml(formatKaryStatsTimerClock(remaining))}</p>
+                <p class="kary-stats-item-status">
+                  Status:
+                  <span class="kary-stats-status-dot${isActive ? " is-active" : " is-idle"}" aria-hidden="true"></span>
+                  ${isActive ? "Działa" : "Idle"}
+                </p>
+                <div class="kary-stats-item-divider"></div>
+                <div class="kary-stats-item-metrics">
+                  <div class="kary-stats-item-metric">
+                    <p class="kary-stats-item-label">REKORD (EVER)</p>
+                    <p class="kary-stats-item-value is-record">${escapeHtml(formatKaryStatsTimerClock(recordSeconds))}</p>
+                  </div>
+                  <div class="kary-stats-item-metric">
+                    <p class="kary-stats-item-label">ŁĄCZNIE DODANO (EVER)</p>
+                    <p class="kary-stats-item-value is-added">${escapeHtml(formatKaryStatsAddedTime(totalAddedSeconds))}</p>
+                  </div>
+                </div>
+              </article>`;
+          })
+          .join("");
+      }
+
+      if (!karyCounterDefinitions.length) {
+        karyCounterStatsGridEl.innerHTML = `<p class="wheel-stats-empty">Brak liczników do wyświetlenia.</p>`;
+      } else {
+        karyCounterStatsGridEl.innerHTML = karyCounterDefinitions
+          .map((counter) => {
+            const currentValue = Math.max(0, Math.floor(Number(karyLiveState.counters[counter.key] || 0)));
+            const counterStats = karyStatsState.counters[counter.key] || { maxValue: 0 };
+            const maxValue = Math.max(0, Math.floor(Number(counterStats.maxValue || 0)));
+
+            return `
+              <article class="kary-stats-counter-card">
+                <h4 class="kary-stats-item-title">${escapeHtml(counter.label)}</h4>
+                <div class="kary-stats-counter-row">
+                  <div class="kary-stats-counter-col">
+                    <p class="kary-stats-counter-label">Aktualnie</p>
+                    <p class="kary-stats-counter-value">${currentValue.toLocaleString("pl-PL")}</p>
+                  </div>
+                  <div class="kary-stats-counter-col">
+                    <p class="kary-stats-counter-label">Max (ever)</p>
+                    <p class="kary-stats-counter-value is-max">${maxValue.toLocaleString("pl-PL")}</p>
+                  </div>
+                </div>
+              </article>`;
+          })
+          .join("");
+      }
+    }
+
     function renderWheelStats() {
       if (!wheelStatsSummaryEl || !wheelStatsSegmentBodyEl || !wheelStatsRecentListEl) {
         return;
@@ -1309,7 +1422,7 @@
           .join("");
       }
 
-      const recentItems = historyItems.slice(-15).reverse();
+      const recentItems = historyItems.slice(-WHEEL_STATS_RECENT_LIMIT).reverse();
       if (!recentItems.length) {
         wheelStatsRecentListEl.innerHTML = `<li class="wheel-stats-empty">Brak historii losowań.</li>`;
       } else {
@@ -1341,8 +1454,12 @@
       if (!statsPanelEl || !wheelStatsSummaryEl || !wheelStatsSegmentBodyEl || !wheelStatsRecentListEl) {
         return;
       }
-      void fetchWheelStatsFromApiOnce().finally(() => {
+      void Promise.all([
+        fetchWheelStatsFromApiOnce(),
+        syncKaryStatsFromApiOnce({ force: true })
+      ]).finally(() => {
         renderWheelStats();
+        renderKaryStats();
       });
       if (wheelStatsLiveRefreshId) {
         return;
@@ -1351,8 +1468,12 @@
         if (document.hidden || lastAppliedRouteName !== "stats") {
           return;
         }
-        void fetchWheelStatsFromApiOnce().finally(() => {
+        void Promise.all([
+          fetchWheelStatsFromApiOnce(),
+          syncKaryStatsFromApiOnce()
+        ]).finally(() => {
           renderWheelStats();
+          renderKaryStats();
         });
       }, WHEEL_STATS_LIVE_REFRESH_MS);
     }
@@ -4014,6 +4135,233 @@
       });
     }
 
+    function ensureKaryStatsShape() {
+      if (!karyStatsState || typeof karyStatsState !== "object") {
+        karyStatsState = { timers: {}, counters: {} };
+      }
+      if (!karyStatsState.timers || typeof karyStatsState.timers !== "object") {
+        karyStatsState.timers = {};
+      }
+      if (!karyStatsState.counters || typeof karyStatsState.counters !== "object") {
+        karyStatsState.counters = {};
+      }
+
+      karyTimerDefinitions.forEach((timer) => {
+        const rawEntry = karyStatsState.timers[timer.key];
+        const source = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+        const recordSeconds = Math.max(
+          0,
+          Math.floor(
+            Number(
+              source.recordSeconds != null
+                ? source.recordSeconds
+                : (source.record != null ? source.record : 0)
+            ) || 0
+          )
+        );
+        const totalAddedSeconds = Math.max(
+          0,
+          Math.floor(
+            Number(
+              source.totalAddedSeconds != null
+                ? source.totalAddedSeconds
+                : (source.totalAdded != null ? source.totalAdded : 0)
+            ) || 0
+          )
+        );
+        karyStatsState.timers[timer.key] = {
+          recordSeconds,
+          totalAddedSeconds
+        };
+      });
+
+      karyCounterDefinitions.forEach((counter) => {
+        const rawEntry = karyStatsState.counters[counter.key];
+        const source = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+        const maxValue = Math.max(
+          0,
+          Math.floor(
+            Number(
+              source.maxValue != null
+                ? source.maxValue
+                : (source.max != null ? source.max : 0)
+            ) || 0
+          )
+        );
+        karyStatsState.counters[counter.key] = { maxValue };
+      });
+    }
+
+    function getKaryStatsSnapshot() {
+      ensureKaryStatsShape();
+      return {
+        timers: karyTimerDefinitions.reduce((acc, timer) => {
+          const entry = karyStatsState.timers[timer.key] || {};
+          acc[timer.key] = {
+            recordSeconds: Math.max(0, Math.floor(Number(entry.recordSeconds || 0) || 0)),
+            totalAddedSeconds: Math.max(0, Math.floor(Number(entry.totalAddedSeconds || 0) || 0))
+          };
+          return acc;
+        }, {}),
+        counters: karyCounterDefinitions.reduce((acc, counter) => {
+          const entry = karyStatsState.counters[counter.key] || {};
+          acc[counter.key] = {
+            maxValue: Math.max(0, Math.floor(Number(entry.maxValue || 0) || 0))
+          };
+          return acc;
+        }, {})
+      };
+    }
+
+    function getKaryStatsSnapshotKey(snapshot) {
+      try {
+        return JSON.stringify(snapshot || {});
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function normalizeKaryStatsSnapshot(rawState) {
+      const previousState = karyStatsState;
+      const source = rawState && typeof rawState === "object" && !Array.isArray(rawState) ? rawState : {};
+
+      karyStatsState = {
+        timers: source.timers && typeof source.timers === "object" ? { ...source.timers } : {},
+        counters: source.counters && typeof source.counters === "object" ? { ...source.counters } : {}
+      };
+      ensureKaryStatsShape();
+      const normalized = getKaryStatsSnapshot();
+      karyStatsState = previousState;
+      return normalized;
+    }
+
+    function loadKaryStats() {
+      karyStatsState = readStorageJson(KARY_STATS_KEY, { timers: {}, counters: {} });
+      ensureKaryStatsShape();
+    }
+
+    function saveKaryStats(options = {}) {
+      ensureKaryStatsShape();
+      saveStorageJson(KARY_STATS_KEY, karyStatsState);
+      if (options && options.queueApi === false) {
+        return;
+      }
+      queueKaryStatsApiPush();
+    }
+
+    function applyRemoteKaryStats(rawState, updatedAt = 0) {
+      const normalized = normalizeKaryStatsSnapshot(rawState);
+      const currentSnapshot = getKaryStatsSnapshot();
+      if (updatedAt > 0) {
+        karyStatsRemoteUpdatedAt = Math.max(karyStatsRemoteUpdatedAt, Math.floor(updatedAt));
+      }
+      if (getKaryStatsSnapshotKey(normalized) === getKaryStatsSnapshotKey(currentSnapshot)) {
+        return false;
+      }
+
+      karyStatsState = normalized;
+      saveStorageJson(KARY_STATS_KEY, normalized);
+      if (lastAppliedRouteName === "stats") {
+        renderKaryStats();
+      }
+      return true;
+    }
+
+    function syncKaryStatsRecordsFromCurrentState(options = {}) {
+      ensureKaryStateShape();
+      ensureKaryStatsShape();
+      let changed = false;
+
+      karyTimerDefinitions.forEach((timer) => {
+        const current = Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0)));
+        const timerStats = karyStatsState.timers[timer.key] || { recordSeconds: 0, totalAddedSeconds: 0 };
+        if (current > Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)))) {
+          timerStats.recordSeconds = current;
+          changed = true;
+        }
+        karyStatsState.timers[timer.key] = timerStats;
+      });
+
+      karyCounterDefinitions.forEach((counter) => {
+        const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counter.key] || 0)));
+        const counterStats = karyStatsState.counters[counter.key] || { maxValue: 0 };
+        if (current > Math.max(0, Math.floor(Number(counterStats.maxValue || 0)))) {
+          counterStats.maxValue = current;
+          changed = true;
+        }
+        karyStatsState.counters[counter.key] = counterStats;
+      });
+
+      if (changed) {
+        saveKaryStats({ queueApi: options && options.queueApi === false ? false : true });
+      }
+      if (options && options.render === true && lastAppliedRouteName === "stats") {
+        renderKaryStats();
+      }
+      return changed;
+    }
+
+    function updateKaryStatsFromStateTransition(previousSnapshot, nextSnapshot, options = {}) {
+      ensureKaryStatsShape();
+
+      const prevTimers =
+        previousSnapshot && previousSnapshot.timers && typeof previousSnapshot.timers === "object"
+          ? previousSnapshot.timers
+          : {};
+      const nextTimers =
+        nextSnapshot && nextSnapshot.timers && typeof nextSnapshot.timers === "object"
+          ? nextSnapshot.timers
+          : {};
+      const nextCounters =
+        nextSnapshot && nextSnapshot.counters && typeof nextSnapshot.counters === "object"
+          ? nextSnapshot.counters
+          : {};
+
+      let changed = false;
+      karyTimerDefinitions.forEach((timer) => {
+        const timerKey = timer.key;
+        const previousValue = Math.max(0, Math.floor(Number(prevTimers[timerKey] || 0)));
+        const nextValue = Math.max(0, Math.floor(Number(nextTimers[timerKey] || 0)));
+        const timerStats = karyStatsState.timers[timerKey] || { recordSeconds: 0, totalAddedSeconds: 0 };
+
+        if (nextValue > Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)))) {
+          timerStats.recordSeconds = nextValue;
+          changed = true;
+        }
+
+        if (nextValue > previousValue) {
+          timerStats.totalAddedSeconds = Math.max(0, Math.floor(Number(timerStats.totalAddedSeconds || 0))) + (nextValue - previousValue);
+          changed = true;
+        }
+
+        karyStatsState.timers[timerKey] = timerStats;
+      });
+
+      karyCounterDefinitions.forEach((counter) => {
+        const counterKey = counter.key;
+        const nextValue = Math.max(0, Math.floor(Number(nextCounters[counterKey] || 0)));
+        const counterStats = karyStatsState.counters[counterKey] || { maxValue: 0 };
+        if (nextValue > Math.max(0, Math.floor(Number(counterStats.maxValue || 0)))) {
+          counterStats.maxValue = nextValue;
+          changed = true;
+        }
+        karyStatsState.counters[counterKey] = counterStats;
+      });
+
+      if (!changed) {
+        return false;
+      }
+
+      saveKaryStats({ queueApi: options && options.queueApi === false ? false : true });
+      if (options && options.render === false) {
+        return true;
+      }
+      if (lastAppliedRouteName === "stats") {
+        renderKaryStats();
+      }
+      return true;
+    }
+
     function loadKaryState() {
       karyLiveState = readStorageJson(KARY_STATE_KEY, { timers: {}, timerTotals: {}, counters: {}, lastTickAt: 0 });
       ensureKaryStateShape();
@@ -4071,6 +4419,7 @@
       }
 
       karyLiveState = normalized;
+      updateKaryStatsFromStateTransition(currentSnapshot, getKaryStateSnapshot(), { render: false });
       saveKaryState();
       renderKaryLiveState();
       return true;
@@ -4274,6 +4623,206 @@
       karyStateSyncPollId = window.setInterval(() => {
         void syncKaryStateFromApiOnce();
       }, KARY_STATE_SYNC_POLL_MS);
+    }
+
+    function stopKaryStatsSyncBridge() {
+      if (!karyStatsSyncPollId) {
+        return;
+      }
+      window.clearInterval(karyStatsSyncPollId);
+      karyStatsSyncPollId = null;
+    }
+
+    async function pushKaryStatsToApiOnce() {
+      if (karyStatsApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return false;
+      }
+
+      const snapshot = getKaryStatsSnapshot();
+      karyStatsPushInFlight = true;
+
+      try {
+        const response = await fetch(KARY_STATS_API_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "set",
+            state: snapshot
+          }),
+          keepalive: true
+        });
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] POST /api/kary/stats failed", {
+            status: response.status,
+            details
+          });
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            karyStatsApiDisabled = true;
+            stopKaryStatsSyncBridge();
+          }
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuScript] POST /api/kary/stats returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        const updatedAt = Math.max(
+          0,
+          Math.floor(Number(payload?.updatedAt || payload?.serverTime || Date.now()) || 0)
+        );
+        if (updatedAt > 0) {
+          karyStatsRemoteUpdatedAt = Math.max(karyStatsRemoteUpdatedAt, updatedAt);
+        }
+        return Boolean(payload && payload.ok === true);
+      } catch (error) {
+        console.warn("[TakuuScript] POST /api/kary/stats request error", error);
+        return false;
+      } finally {
+        karyStatsPushInFlight = false;
+        if (karyStatsPushQueued) {
+          karyStatsPushQueued = false;
+          queueKaryStatsApiPush();
+        }
+      }
+    }
+
+    function queueKaryStatsApiPush() {
+      if (karyStatsApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return;
+      }
+      if (karyStatsPushInFlight) {
+        karyStatsPushQueued = true;
+        return;
+      }
+      void pushKaryStatsToApiOnce();
+    }
+
+    async function syncKaryStatsFromApiOnce(options = {}) {
+      if (karyStatsApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return false;
+      }
+      const force = options && options.force === true;
+      if (karyStatsSyncBusy) {
+        return false;
+      }
+      if (!force && (karyStatsPushInFlight || karyStatsPushQueued)) {
+        return false;
+      }
+
+      karyStatsSyncBusy = true;
+      const knownUpdatedAt = Math.max(0, Math.floor(Number(karyStatsRemoteUpdatedAt || 0)));
+      const query = !force && knownUpdatedAt > 0 ? `?after=${knownUpdatedAt}` : "";
+
+      try {
+        const response = await fetch(`${KARY_STATS_API_ENDPOINT}${query}`, { cache: "no-store" });
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] GET /api/kary/stats failed", {
+            status: response.status,
+            details
+          });
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            karyStatsApiDisabled = true;
+            stopKaryStatsSyncBridge();
+          }
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuScript] GET /api/kary/stats returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        if (!payload || typeof payload !== "object") {
+          return false;
+        }
+
+        const updatedAt = Math.max(0, Math.floor(Number(payload.updatedAt || 0)));
+        const state = payload.state && typeof payload.state === "object" && !Array.isArray(payload.state)
+          ? payload.state
+          : null;
+
+        if (!state) {
+          return false;
+        }
+        if (karyStatsPushInFlight || karyStatsPushQueued) {
+          return false;
+        }
+        if (!force && updatedAt > 0 && updatedAt <= knownUpdatedAt) {
+          return false;
+        }
+
+        return applyRemoteKaryStats(state, updatedAt);
+      } catch (error) {
+        console.warn("[TakuuScript] GET /api/kary/stats request error", error);
+        return false;
+      } finally {
+        karyStatsSyncBusy = false;
+      }
+    }
+
+    function startKaryStatsSyncBridge() {
+      if (karyStatsApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return;
+      }
+
+      void syncKaryStatsFromApiOnce({ force: true });
+      if (karyStatsSyncPollId) {
+        return;
+      }
+
+      karyStatsSyncPollId = window.setInterval(() => {
+        void syncKaryStatsFromApiOnce();
+      }, KARY_STATS_SYNC_POLL_MS);
     }
 
     function normalizeKaryCennikItems(rawItems) {
@@ -4701,6 +5250,10 @@
           valueEl.textContent = String(value);
         }
       });
+
+      if (lastAppliedRouteName === "stats") {
+        renderKaryStats();
+      }
     }
 
     function tickKaryTimers() {
@@ -4962,6 +5515,7 @@
         };
       }
 
+      const previousSnapshot = getKaryStateSnapshot();
       const current = Math.max(0, Math.floor(Number(karyLiveState.timers[normalizedKey] || 0)));
       const currentTotal = Math.max(current, Math.floor(Number(karyLiveState.timerTotals[normalizedKey] || 0)));
       const nextRemaining = current + normalizedDeltaSeconds;
@@ -4970,6 +5524,7 @@
       karyLiveState.timers[normalizedKey] = nextRemaining;
       karyLiveState.timerTotals[normalizedKey] = nextTotal;
       karyLiveState.lastTickAt = Date.now();
+      updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
 
       saveKaryState();
       queueKaryStateApiPush();
@@ -5159,11 +5714,13 @@
         return;
       }
       const timerLabel = getTimerLabel(timerKey);
+      const previousSnapshot = getKaryStateSnapshot();
 
       if (normalizedAction === "reset") {
         karyLiveState.timers[timerKey] = 0;
         karyLiveState.timerTotals[timerKey] = 0;
         karyLiveState.lastTickAt = Date.now();
+        updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
         saveKaryState();
         queueKaryStateApiPush();
         renderKaryLiveState();
@@ -5185,6 +5742,7 @@
         karyLiveState.timers[timerKey] = nextRemaining;
         karyLiveState.timerTotals[timerKey] = nextRemaining > 0 ? Math.max(nextRemaining, currentTotal) : 0;
         karyLiveState.lastTickAt = Date.now();
+        updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
         saveKaryState();
         queueKaryStateApiPush();
         renderKaryLiveState();
@@ -5245,6 +5803,7 @@
         return;
       }
       karyLiveState.lastTickAt = Date.now();
+      updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
       saveKaryState();
       queueKaryStateApiPush();
       renderKaryLiveState();
@@ -5286,9 +5845,11 @@
         return;
       }
       const counterLabel = getCounterLabel(counterKey);
+      const previousSnapshot = getKaryStateSnapshot();
 
       if (normalizedAction === "reset") {
         karyLiveState.counters[counterKey] = 0;
+        updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
         saveKaryState();
         queueKaryStateApiPush();
         renderKaryLiveState();
@@ -5305,6 +5866,7 @@
         const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)));
         const nextValue = Math.max(0, current - 1);
         karyLiveState.counters[counterKey] = nextValue;
+        updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
         saveKaryState();
         queueKaryStateApiPush();
         renderKaryLiveState();
@@ -5322,6 +5884,7 @@
         const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)));
         const nextValue = current + 1;
         karyLiveState.counters[counterKey] = nextValue;
+        updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
         saveKaryState();
         queueKaryStateApiPush();
         renderKaryLiveState();
@@ -5344,6 +5907,7 @@
 
       const current = Math.max(0, Math.floor(Number(karyLiveState.counters[counterKey] || 0)));
       karyLiveState.counters[counterKey] = normalizedAction === "set" ? deltaValue : current + deltaValue;
+      updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
       saveKaryState();
       queueKaryStateApiPush();
       renderKaryLiveState();
@@ -7330,6 +7894,7 @@
         }
         void syncAdminStateFromApiOnce({ force: true });
         void syncKaryStateFromApiOnce({ force: true });
+        void syncKaryStatsFromApiOnce({ force: true });
         updateFriendsLiveBadges();
         return;
       }
@@ -7356,7 +7921,9 @@
     loadKaryCennikItems();
     migrateDuplicatedKicksyPrices();
     loadKaryState();
+    loadKaryStats();
     startKaryStateSyncBridge();
+    startKaryStatsSyncBridge();
     bindExternalTimerBridge();
     startWheelSyncBridge();
     void fetchWheelStatsFromApiOnce().finally(() => {
@@ -7378,6 +7945,7 @@
     applyStreamObsLicznikiConfig();
     applyLicznikiConfig();
     renderKaryLiveState();
+    renderKaryStats();
     startKaryTimerTick();
     renderCustomMembersCards();
     startFriendsLivePolling();
