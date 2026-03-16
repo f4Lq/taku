@@ -658,15 +658,14 @@ body.route-admin #friends {
 }
 
 .stream-followers-slot {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  margin: -4px 0 2px;
-  padding-left: clamp(110px, 12vw, 110px);
-  padding-right: 0;
+  margin: 2px 0 0;
+  padding: 0;
   transform: none;
 }
 
