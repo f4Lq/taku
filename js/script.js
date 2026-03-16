@@ -2234,10 +2234,9 @@
         updateKickOAuthPanelView(cachedKickOAuthStatus);
         setKickSubsBadgeState({
           count: null,
-          text: "ładowanie danych z Kick...",
-          state: "loading"
+          text: "połącz konto Kick",
+          state: "ready"
         });
-        void updateKickFollowersBadge(true);
       } catch (_error) {
         setKickOAuthPanelStatus("Nie udalo sie odlaczyc konta Kick.", "error");
       }
@@ -3595,8 +3594,8 @@
             if (payload.linked === false) {
               setKickSubsBadgeState({
                 count: null,
-                text: "brak danych z Kick",
-                state: "error"
+                text: "połącz konto Kick",
+                state: "ready"
               });
               return;
             }
@@ -3608,24 +3607,11 @@
             });
           })
           .catch(() => {
-            if (
-              cachedKickOAuthStatus &&
-              cachedKickOAuthStatus.linked === true &&
-              Number.isFinite(Number(cachedKickOAuthStatus.subscribersCount))
-            ) {
-              setKickSubsBadgeState({
-                count: Number(cachedKickOAuthStatus.subscribersCount),
-                text: "subów na Kicku",
-                state: "ready"
-              });
-              return;
-            }
-
             if (!hasSubsRenderedOnce) {
               setKickSubsBadgeState({
                 count: null,
-                text: IS_FILE_PROTOCOL ? "brak danych (odpal przez serwer)" : "brak danych z Kick",
-                state: "error"
+                text: IS_FILE_PROTOCOL ? "brak danych (odpal przez serwer)" : "połącz konto Kick",
+                state: IS_FILE_PROTOCOL ? "error" : "ready"
               });
             } else {
               streamIntroSubsStatEl.classList.remove("is-loading");
