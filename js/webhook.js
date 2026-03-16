@@ -413,7 +413,7 @@
       return true;
     }
     const linkedAccount = findAdminAccountByDiscordId(accounts, session.id);
-    return Boolean(linkedAccount && (linkedAccount.canAccessAdmin || linkedAccount.canAccessStreamObs));
+    return Boolean(linkedAccount && (linkedAccount.canAccessAdmin || linkedAccount.canAccessStreamObs || linkedAccount.canAccessBindings));
   }
 
   function upsertAdminAccountFromDiscordSession(session, accounts) {
@@ -435,6 +435,9 @@
       if (typeof existing.canAccessStreamObs === "undefined") {
         existing.canAccessStreamObs = Boolean(existing.canAccessAdmin);
       }
+      if (typeof existing.canAccessBindings === "undefined") {
+        existing.canAccessBindings = Boolean(existing.canAccessAdmin);
+      }
       const previous = JSON.stringify({
         login: existing.login,
         password: existing.password,
@@ -442,6 +445,7 @@
         discordName: existing.discordName,
         canAccessAdmin: existing.canAccessAdmin,
         canAccessStreamObs: existing.canAccessStreamObs,
+        canAccessBindings: existing.canAccessBindings,
         isDiscordAccount: existing.isDiscordAccount
       });
 
@@ -455,6 +459,7 @@
       if (ownerAccess) {
         existing.canAccessAdmin = true;
         existing.canAccessStreamObs = true;
+        existing.canAccessBindings = true;
       }
 
       const next = JSON.stringify({
@@ -464,6 +469,7 @@
         discordName: existing.discordName,
         canAccessAdmin: existing.canAccessAdmin,
         canAccessStreamObs: existing.canAccessStreamObs,
+        canAccessBindings: existing.canAccessBindings,
         isDiscordAccount: existing.isDiscordAccount
       });
 
@@ -478,6 +484,7 @@
       discordName,
       canAccessAdmin: ownerAccess,
       canAccessStreamObs: ownerAccess,
+      canAccessBindings: ownerAccess,
       isRoot: false,
       isDiscordAccount: true
     };
@@ -600,7 +607,8 @@
     const ownerAccess = isDiscordOwnerSession(session);
     const canAccessPanelAdmin = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessAdmin);
     const canAccessStreamObs = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessStreamObs);
-    const hasAnyAdminAccess = canAccessPanelAdmin || canAccessStreamObs;
+    const canAccessBindings = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessBindings);
+    const hasAnyAdminAccess = canAccessPanelAdmin || canAccessStreamObs || canAccessBindings;
 
     return {
       ok: true,
@@ -613,6 +621,7 @@
       canAccessAdmin: hasAnyAdminAccess,
       canAccessPanelAdmin,
       canAccessStreamObs,
+      canAccessBindings,
       hasAnyAdminAccess
     };
   }

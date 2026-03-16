@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-  <link rel="stylesheet" href="styles/styles.css?v=20260315-stats-kary-9">
+  <link rel="stylesheet" href="styles/styles.css?v=20260316-subs-green-1">
   <link rel="shortcut icon" type="x-icon" href="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" />
 </head>
 <body>
@@ -55,7 +55,8 @@
         <span class="route-glow route-glow-white" aria-hidden="true"></span>
         <span class="route-glow route-glow-green" aria-hidden="true"></span>
         <div class="route-copy">
-          <span id="routeBadge" class="route-badge">WKRÓTCE...</span>  
+          <span id="routeBadge" class="route-badge">WKRÓTCE...</span>
+          <p id="routeSubtext" class="route-subtext">Overlay subów w OBS</p>
           <p id="routeSubtext" class="route-subtext">Ruleta(czerwone/czarne 2x zielone 36x) i Koło z ulgami(2x -30min itp.) działałące w OBS + dodawanie kary czasowej po wylosowanmiu automatycznie na żywo.</p>
           <p id="routeSubtext" class="route-subtext">Webhook dla koła/ruletka/koło z ulgami + ich konfiguracji.</p>
         </div>
@@ -478,6 +479,7 @@
           <button class="admin-tab-btn" type="button" data-tab="kary">Kary</button>
           <button class="admin-tab-btn" type="button" data-tab="streamobs">StreamOBS</button>
           <button class="admin-tab-btn" type="button" data-tab="accounts">Panel Admina</button>
+          <button class="admin-tab-btn" type="button" data-tab="bindings">Powiązania</button>
         </nav>
 
         <section id="adminMembersTab" class="admin-tab-panel is-active">
@@ -743,6 +745,29 @@
           <p class="streamobs-note">Po zapisaniu konfiguracja zapisuje się lokalnie w przeglądarce.</p>
         </section>
 
+        <section id="adminBindingsTab" class="admin-tab-panel" hidden>
+          <h3 class="admin-section-title">Powiązania</h3>
+          <section class="streamobs-links-wrap kick-bindings-wrap" aria-labelledby="kickBindingsTitle">
+            <h4 id="kickBindingsTitle" class="admin-kary-title">Kick OAuth - subskrypcje streamera</h4>
+            <p class="streamobs-help">
+              Połącz konto streamera Kick, aby odczytywać liczbę subskrypcji na żywo przez oficjalny access token.
+            </p>
+            <div class="kick-bindings-grid">
+              <p><strong>Status:</strong> <span id="kickOauthStatusText">Sprawdzanie...</span></p>
+              <p><strong>Kanał:</strong> <span id="kickOauthChannelText">-</span></p>
+              <p><strong>Subskrypcje:</strong> <span id="kickOauthSubscribersText">--</span></p>
+              <p><strong>Ważność tokena:</strong> <span id="kickOauthExpiresText">-</span></p>
+              <p><strong>Redirect URI:</strong> <span id="kickOauthRedirectText">-</span></p>
+            </div>
+            <div class="admin-kary-actions kick-bindings-actions">
+              <button id="kickOauthConnectBtn" class="admin-kary-btn" type="button">Połącz konto Kick</button>
+              <button id="kickOauthRefreshBtn" class="admin-kary-btn" type="button">Odśwież status</button>
+              <button id="kickOauthUnlinkBtn" class="admin-kary-btn admin-kary-btn-danger" type="button">Odłącz konto</button>
+            </div>
+            <p id="kickOauthStatus" class="admin-panel-status" aria-live="polite"></p>
+          </section>
+        </section>
+
         <section id="adminAccountsTab" class="admin-tab-panel" hidden>
           <h3 class="admin-section-title">Panel Admina</h3>
           <div class="admin-table-wrap">
@@ -756,6 +781,7 @@
                   <th>Ukryj hasło</th>
                   <th>Panel Admina</th>
                   <th>StreamOBS</th>
+                  <th>Powiązania</th>
                   <th>Akcje</th>
                 </tr>
               </thead>
@@ -784,6 +810,10 @@
             <label class="admin-checkbox-line">
               <input type="checkbox" name="accountAccessStreamObs" checked>
               Widzi zakładkę StreamOBS
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessBindings" checked>
+              Widzi zakładkę Powiązania
             </label>
             <button class="admin-submit" type="submit">Dodaj / Aktualizuj</button>
           </form>
@@ -816,7 +846,7 @@
               <img src="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" alt="">
               <span>TAKUU</span>
             </a>
-            <p class="stream-intro-live is-inactive">
+            <p id="streamIntroActiveStat" class="stream-intro-live is-inactive">
               <span class="stream-intro-live-dot" aria-hidden="true"></span>
               <strong id="streamIntroActiveCount">0</strong>
               <span id="streamIntroActiveText">aktywnych kar teraz</span>
@@ -824,6 +854,19 @@
           </div>
         </div>
       </section>
+
+      <div class="stream-followers-slot">
+        <p id="streamIntroFollowersStat" class="stream-kick-followers is-loading" aria-live="polite">
+          <span class="stream-kick-followers-icon" aria-hidden="true"></span>
+          <strong id="streamIntroFollowersCount">--</strong>
+          <span id="streamIntroFollowersText">obserwujących na Kicku</span>
+        </p>
+        <p id="streamIntroSubsStat" class="stream-kick-subs is-loading" aria-live="polite">
+          <span class="stream-kick-subs-icon" aria-hidden="true"></span>
+          <strong id="streamIntroSubsCount">--</strong>
+          <span id="streamIntroSubsText">subów na Kicku</span>
+        </p>
+      </div>
 
       <div class="stream-columns-head" aria-hidden="true">
         <p class="stream-live-badge">
@@ -996,9 +1039,9 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="js/webhook.js?v=20260315-webhook-obs-config-1"></script>
+  <script src="js/webhook.js?v=20260316-bindings-permission-1"></script>
   <script src="js/wheel.js?v=20260310-livefix7"></script>
-  <script src="js/script.js?v=20260315-stats-kary-12"></script>
+  <script src="js/script.js?v=20260316-fast-kick-load-1"></script>
   <script src="js/timery-liczniki.js?v=20260315-obs-timery-9"></script>
 </body>
 </html>

@@ -3,6 +3,11 @@
     const ALL_ORIGINS_RAW_PREFIX = "https://api.allorigins.win/raw?url=";
     const CORS_PROXY_PREFIX = "https://corsproxy.io/?";
     const LOCAL_KICK_CLIPS_ENDPOINT = "/api/kick/clips";
+    const LOCAL_KICK_CHANNEL_ENDPOINT = "/api/kick/channel";
+    const LOCAL_KICK_SUBSCRIPTIONS_ENDPOINT = "/api/kick/subscriptions";
+    const LOCAL_KICK_OAUTH_START_ENDPOINT = "/api/kick/oauth/start";
+    const LOCAL_KICK_OAUTH_STATUS_ENDPOINT = "/api/kick/oauth/status";
+    const LOCAL_KICK_OAUTH_UNLINK_ENDPOINT = "/api/kick/oauth/unlink";
     const CLIPS_MAX_ITEMS = 150; // liczba ładowania klipów w /klipy
     const CHANNEL_AVATAR_FALLBACK = "https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp";
     const KICK_ICON_URL = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp";
@@ -52,6 +57,7 @@
     const adminTabsWrapEl = document.querySelector(".admin-tabs");
     const adminMembersTabEl = document.getElementById("adminMembersTab");
     const adminKaryTabEl = document.getElementById("adminKaryTab");
+    const adminBindingsTabEl = document.getElementById("adminBindingsTab");
     const adminStreamObsTabEl = document.getElementById("adminStreamObsTab");
     const adminAccountsTabEl = document.getElementById("adminAccountsTab");
     const streamObsLinksEl = document.getElementById("streamObsLinks");
@@ -86,7 +92,22 @@
     const friendsGridEl = document.querySelector(".friends-grid");
     const streamIntroActiveCountEl = document.getElementById("streamIntroActiveCount");
     const streamIntroActiveTextEl = document.getElementById("streamIntroActiveText");
-    const streamIntroLiveEl = document.querySelector(".stream-intro-live");
+    const streamIntroLiveEl = document.getElementById("streamIntroActiveStat");
+    const streamIntroFollowersStatEl = document.getElementById("streamIntroFollowersStat");
+    const streamIntroFollowersCountEl = document.getElementById("streamIntroFollowersCount");
+    const streamIntroFollowersTextEl = document.getElementById("streamIntroFollowersText");
+    const streamIntroSubsStatEl = document.getElementById("streamIntroSubsStat");
+    const streamIntroSubsCountEl = document.getElementById("streamIntroSubsCount");
+    const streamIntroSubsTextEl = document.getElementById("streamIntroSubsText");
+    const kickOauthConnectBtnEl = document.getElementById("kickOauthConnectBtn");
+    const kickOauthRefreshBtnEl = document.getElementById("kickOauthRefreshBtn");
+    const kickOauthUnlinkBtnEl = document.getElementById("kickOauthUnlinkBtn");
+    const kickOauthStatusEl = document.getElementById("kickOauthStatus");
+    const kickOauthStatusTextEl = document.getElementById("kickOauthStatusText");
+    const kickOauthChannelTextEl = document.getElementById("kickOauthChannelText");
+    const kickOauthSubscribersTextEl = document.getElementById("kickOauthSubscribersText");
+    const kickOauthExpiresTextEl = document.getElementById("kickOauthExpiresText");
+    const kickOauthRedirectTextEl = document.getElementById("kickOauthRedirectText");
     const streamIntroTitleEl = document.querySelector(".stream-intro-title");
     const streamIntroTitleAccentEl = streamIntroTitleEl ? streamIntroTitleEl.querySelector(".stream-intro-title-accent") : null;
     const streamIntroSubtitleEl = document.querySelector(".stream-intro-subtitle");
@@ -120,11 +141,22 @@
     let introTypingStartDelayId = null;
     let lastAppliedRouteName = "";
     const FRIENDS_LIVE_POLL_MS = 5000;
+    const KICK_FOLLOWERS_POLL_MS = 900;
+    const KICK_OAUTH_STATUS_POLL_MS = 2000;
+    const KICK_CHANNEL_REQUEST_TIMEOUT_MS = 1600;
+    const KICK_CHANNEL_PROXY_TIMEOUT_MS = 1400;
+    const KICK_CHANNEL_JINA_TIMEOUT_MS = 1700;
+    const KICK_SUBSCRIPTIONS_REQUEST_TIMEOUT_MS = 1800;
     const WHEEL_STATS_LIVE_REFRESH_MS = 1000;
     const WHEEL_STATS_RECENT_LIMIT = 5;
     let friendsLivePollId = null;
     let friendsLivePollBusy = false;
     let friendsLiveRequestSeq = 0;
+    let kickFollowersPollId = null;
+    let kickFollowersPollBusy = false;
+    let kickOAuthStatusPollId = null;
+    let kickOAuthStatusBusy = false;
+    let cachedKickOAuthStatus = null;
     let wheelStatsLiveRefreshId = null;
     let wheelSyncChannel = null;
     let wheelSyncPollId = null;
@@ -151,6 +183,7 @@
     const STATS_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=stats" : "/stats";
     const LOGIN_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=logowanie" : "/logowanie";
     const ADMIN_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=admin" : "/admin";
+
     function isObsOverlayFlagEnabled(value) {
       const normalized = String(value || "").trim().toLowerCase();
       return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
@@ -1934,6 +1967,281 @@
       setPanelStatus(adminDiscordStatusEl, text, type);
     }
 
+    function formatAbsoluteDateTime(value) {
+      const timestamp = Math.max(0, Math.floor(Number(value || 0)));
+      if (timestamp <= 0) {
+        return "-";
+      }
+      try {
+        return new Date(timestamp).toLocaleString("pl-PL");
+      } catch (_error) {
+        return "-";
+      }
+    }
+
+    function getKickOAuthReturnPath() {
+      if (IS_FILE_PROTOCOL) {
+        return ADMIN_ROUTE_PATH;
+      }
+      try {
+        return getCanonicalRoutePath("admin");
+      } catch (_error) {
+        return ADMIN_ROUTE_PATH;
+      }
+    }
+
+    function buildKickOAuthRedirectUriPreview() {
+      if (IS_FILE_PROTOCOL) {
+        return "http://localhost:5500/api/kick/oauth/callback";
+      }
+      return `${window.location.origin.replace(/\/+$/, "")}/api/kick/oauth/callback`;
+    }
+
+    function setKickOAuthPanelStatus(message, type = "info") {
+      setPanelStatus(kickOauthStatusEl, message, type);
+    }
+
+    function updateKickOAuthPanelView(status = null) {
+      const state = status && typeof status === "object" ? status : {};
+      const linked = state.linked === true;
+      const hasSubscribers = Number.isFinite(Number(state.subscribersCount));
+
+      if (kickOauthStatusTextEl) {
+        kickOauthStatusTextEl.textContent = linked ? "Powiazane" : "Niepowiazane";
+      }
+      if (kickOauthChannelTextEl) {
+        const channelLabel = String(state.channelSlug || state.channelName || "").trim();
+        kickOauthChannelTextEl.textContent = channelLabel || "-";
+      }
+      if (kickOauthSubscribersTextEl) {
+        kickOauthSubscribersTextEl.textContent = hasSubscribers
+          ? Number(state.subscribersCount).toLocaleString("pl-PL")
+          : "--";
+      }
+      if (kickOauthExpiresTextEl) {
+        kickOauthExpiresTextEl.textContent = linked ? formatAbsoluteDateTime(state.expiresAt) : "-";
+      }
+      if (kickOauthRedirectTextEl) {
+        kickOauthRedirectTextEl.textContent = buildKickOAuthRedirectUriPreview();
+      }
+
+      const bindingsAccess = hasBindingsAccess();
+      if (kickOauthConnectBtnEl) {
+        kickOauthConnectBtnEl.disabled = !bindingsAccess;
+      }
+      if (kickOauthRefreshBtnEl) {
+        kickOauthRefreshBtnEl.disabled = false;
+      }
+      if (kickOauthUnlinkBtnEl) {
+        kickOauthUnlinkBtnEl.disabled = !bindingsAccess || !linked;
+      }
+    }
+
+    async function fetchKickOAuthStatus(force = false) {
+      if (kickOAuthStatusBusy && !force) {
+        return cachedKickOAuthStatus;
+      }
+      if (IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        cachedKickOAuthStatus = { linked: false, subscribersCount: null };
+        updateKickOAuthPanelView(cachedKickOAuthStatus);
+        return cachedKickOAuthStatus;
+      }
+
+      kickOAuthStatusBusy = true;
+      const statusParams = new URLSearchParams();
+      if (force) {
+        statusParams.set("force", "1");
+      }
+      statusParams.set("_", String(Date.now()));
+      const query = `?${statusParams.toString()}`;
+
+      try {
+        const response = await fetch(`${LOCAL_KICK_OAUTH_STATUS_ENDPOINT}${query}`, {
+          method: "GET",
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP_${response.status}`);
+        }
+
+        const payload = await response.json();
+        if (!payload || payload.ok !== true) {
+          throw new Error(String(payload?.error || "KICK_OAUTH_STATUS_INVALID"));
+        }
+
+        if (payload.linked === false) {
+          cachedKickOAuthStatus = { linked: false, subscribersCount: null };
+        } else {
+          cachedKickOAuthStatus = {
+            linked: true,
+            channelSlug: String(payload.channelSlug || "").trim(),
+            channelName: String(payload.channelName || "").trim(),
+            subscribersCount: parseKickCountValue(payload.subscribersCount),
+            canceledSubscribersCount: parseKickCountValue(payload.canceledSubscribersCount),
+            followersCount: parseKickCountValue(payload.followersCount),
+            scope: String(payload.scope || "").trim(),
+            expiresAt: Math.max(0, Math.floor(Number(payload.expiresAt || 0))),
+            updatedAt: Math.max(0, Math.floor(Number(payload.updatedAt || Date.now()))),
+            lastChannelSyncAt: Math.max(0, Math.floor(Number(payload.lastChannelSyncAt || 0)))
+          };
+        }
+
+        updateKickOAuthPanelView(cachedKickOAuthStatus);
+        return cachedKickOAuthStatus;
+      } catch (_error) {
+        if (!cachedKickOAuthStatus) {
+          cachedKickOAuthStatus = { linked: false, subscribersCount: null };
+        }
+        updateKickOAuthPanelView(cachedKickOAuthStatus);
+        return cachedKickOAuthStatus;
+      } finally {
+        kickOAuthStatusBusy = false;
+      }
+    }
+
+    function startKickOAuthStatusPolling() {
+      void fetchKickOAuthStatus();
+      if (kickOAuthStatusPollId) {
+        return;
+      }
+
+      kickOAuthStatusPollId = window.setInterval(() => {
+        void fetchKickOAuthStatus();
+      }, KICK_OAUTH_STATUS_POLL_MS);
+    }
+
+    function consumeKickOAuthResultFromUrl() {
+      let currentUrl = null;
+      try {
+        currentUrl = new URL(window.location.href);
+      } catch (_error) {
+        return;
+      }
+
+      const oauthState = String(currentUrl.searchParams.get("kick_oauth") || "").trim().toLowerCase();
+      if (!oauthState) {
+        return;
+      }
+      const oauthMessage = String(currentUrl.searchParams.get("kick_oauth_msg") || "").trim();
+
+      if (oauthState === "success") {
+        setKickOAuthPanelStatus(oauthMessage || "Konto Kick zostalo pomyslnie powiazane.", "success");
+      } else {
+        setKickOAuthPanelStatus(oauthMessage || "Nie udalo sie powiazac konta Kick.", "error");
+      }
+
+      currentUrl.searchParams.delete("kick_oauth");
+      currentUrl.searchParams.delete("kick_oauth_msg");
+      const nextRelative = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+      try {
+        window.history.replaceState(window.history.state, "", nextRelative);
+      } catch (_error) {
+        // Ignore URL cleanup failures.
+      }
+
+      void fetchKickOAuthStatus(true);
+      if (oauthState === "success") {
+        void updateKickFollowersBadge(true);
+      }
+    }
+
+    async function fetchKickSubscribersFromOAuth() {
+      if (IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        return { linked: false, count: null };
+      }
+
+      const response = await withKickChannelTimeout(
+        () =>
+          fetch(`${LOCAL_KICK_SUBSCRIPTIONS_ENDPOINT}?_=${Date.now()}`, {
+            method: "GET",
+            cache: "no-store"
+          }),
+        KICK_SUBSCRIPTIONS_REQUEST_TIMEOUT_MS,
+        "KICK_SUBSCRIPTIONS_TIMEOUT"
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP_${response.status}`);
+      }
+
+      const payload = await response.json();
+      if (!payload || payload.ok !== true) {
+        throw new Error(String(payload?.error || "KICK_SUBSCRIPTIONS_INVALID"));
+      }
+
+      if (payload.linked === false) {
+        cachedKickOAuthStatus = {
+          linked: false,
+          subscribersCount: null
+        };
+        updateKickOAuthPanelView(cachedKickOAuthStatus);
+        return { linked: false, count: null };
+      }
+
+      const nextState = {
+        ...(cachedKickOAuthStatus && typeof cachedKickOAuthStatus === "object" ? cachedKickOAuthStatus : {}),
+        linked: true,
+        channelSlug: String(payload.channelSlug || "").trim(),
+        channelName: String(payload.channelName || "").trim(),
+        subscribersCount: parseKickCountValue(payload.subscribersCount),
+        canceledSubscribersCount: parseKickCountValue(payload.canceledSubscribersCount),
+        followersCount: parseKickCountValue(payload.followersCount),
+        expiresAt: Math.max(0, Math.floor(Number(payload.expiresAt || 0))),
+        updatedAt: Math.max(0, Math.floor(Number(payload.updatedAt || Date.now()))),
+        lastChannelSyncAt: Math.max(0, Math.floor(Number(payload.lastChannelSyncAt || 0)))
+      };
+      cachedKickOAuthStatus = nextState;
+      updateKickOAuthPanelView(cachedKickOAuthStatus);
+
+      return {
+        linked: true,
+        count: Number.isFinite(Number(nextState.subscribersCount)) ? Number(nextState.subscribersCount) : null
+      };
+    }
+
+    function startKickOAuthConnectionFlow() {
+      if (IS_FILE_PROTOCOL) {
+        setKickOAuthPanelStatus("Kick OAuth wymaga uruchomienia strony przez localhost lub domene.", "error");
+        return;
+      }
+
+      const returnTo = getKickOAuthReturnPath();
+      const oauthStartUrl = new URL(LOCAL_KICK_OAUTH_START_ENDPOINT, window.location.origin);
+      oauthStartUrl.searchParams.set("redirect", "1");
+      oauthStartUrl.searchParams.set("return_to", returnTo);
+      window.location.href = oauthStartUrl.toString();
+    }
+
+    async function unlinkKickOAuthConnection() {
+      if (IS_FILE_PROTOCOL || typeof fetch !== "function") {
+        setKickOAuthPanelStatus("Kick OAuth unlink nie dziala w trybie file://", "error");
+        return;
+      }
+
+      try {
+        const response = await fetch(LOCAL_KICK_OAUTH_UNLINK_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ action: "unlink" }),
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP_${response.status}`);
+        }
+        setKickOAuthPanelStatus("Polaczenie Kick OAuth zostalo odlaczone.", "success");
+        cachedKickOAuthStatus = { linked: false, subscribersCount: null };
+        updateKickOAuthPanelView(cachedKickOAuthStatus);
+        setKickSubsBadgeState({
+          count: null,
+          text: "połącz konto Kick",
+          state: "ready"
+        });
+      } catch (_error) {
+        setKickOAuthPanelStatus("Nie udalo sie odlaczyc konta Kick.", "error");
+      }
+    }
+
     function getAdminActorContext() {
       if (window.TakuuWebhook && typeof window.TakuuWebhook.getActorIdentity === "function") {
         const actor = window.TakuuWebhook.getActorIdentity(currentAdminLogin);
@@ -1975,7 +2283,7 @@
       if (normalizeDiscordUserId(account.discordUserId) === ROOT_ADMIN_DISCORD_ID) {
         return true;
       }
-      return Boolean(account.canAccessAdmin || account.canAccessStreamObs);
+      return Boolean(account.canAccessAdmin || account.canAccessStreamObs || account.canAccessBindings);
     }
 
     function hasOwnerAdminAccess() {
@@ -2075,6 +2383,53 @@
       );
     }
 
+    function hasBindingsAccess() {
+      if (!isAdminAuthenticated) {
+        return false;
+      }
+
+      const currentLogin = String(currentAdminLogin || "").trim().toLowerCase();
+      if (currentLogin && currentLogin === String(ROOT_ADMIN_LOGIN).toLowerCase()) {
+        return true;
+      }
+
+      const currentAccount = adminAccounts.find(
+        (item) => String(item.login || "").trim().toLowerCase() === currentLogin
+      );
+      if (
+        currentAccount &&
+        (
+          currentAccount.isRoot ||
+          currentAccount.canAccessBindings ||
+          normalizeDiscordUserId(currentAccount.discordUserId) === ROOT_ADMIN_DISCORD_ID
+        )
+      ) {
+        return true;
+      }
+
+      if (activeDiscordSession && normalizeDiscordUserId(activeDiscordSession.id) === ROOT_ADMIN_DISCORD_ID) {
+        return true;
+      }
+      if (
+        activeDiscordSession &&
+        adminAccounts.some(
+          (item) =>
+            normalizeDiscordUserId(item.discordUserId) === normalizeDiscordUserId(activeDiscordSession.id) &&
+            (item.canAccessBindings || item.isRoot)
+        )
+      ) {
+        return true;
+      }
+      if (!activeDiscordSession) {
+        return false;
+      }
+      return Boolean(
+        window.TakuuWebhook &&
+          typeof window.TakuuWebhook.isDiscordOwnerSession === "function" &&
+          window.TakuuWebhook.isDiscordOwnerSession(activeDiscordSession)
+      );
+    }
+
     function setLoginPasswordVisibility(visible) {
       if (adminLoginPasswordEl) {
         adminLoginPasswordEl.type = visible ? "text" : "password";
@@ -2140,6 +2495,7 @@
         discordName: String(discordName || ""),
         canAccessAdmin: true,
         canAccessStreamObs: true,
+        canAccessBindings: true,
         isRoot: true,
         isDiscordAccount: false
       };
@@ -2158,6 +2514,8 @@
               canAccessAdmin: Boolean(item.canAccessAdmin),
               canAccessStreamObs:
                 item.canAccessStreamObs == null ? Boolean(item.canAccessAdmin) : Boolean(item.canAccessStreamObs),
+              canAccessBindings:
+                item.canAccessBindings == null ? Boolean(item.canAccessAdmin) : Boolean(item.canAccessBindings),
               isRoot: Boolean(item.isRoot),
               isDiscordAccount: Boolean(item.isDiscordAccount || item.discordUserId)
             }))
@@ -2865,42 +3223,435 @@
       }
     }
 
+    function buildChannelInfoApiUrl(channelSlug) {
+      return `https://kick.com/api/v2/channels/${encodeURIComponent(String(channelSlug || "").trim())}/info`;
+    }
+
     function buildChannelApiUrl(channelSlug) {
       return `https://kick.com/api/v2/channels/${encodeURIComponent(String(channelSlug || "").trim())}`;
     }
 
+    function buildChannelApiV1Url(channelSlug) {
+      return `https://kick.com/api/v1/channels/${encodeURIComponent(String(channelSlug || "").trim())}`;
+    }
+
+    function isLikelyKickChannelPayload(payload) {
+      if (!payload || typeof payload !== "object") {
+        return false;
+      }
+      const hasSlug = typeof payload.slug === "string" && payload.slug.trim().length > 0;
+      const hasId = Number.isFinite(Number(payload.id));
+      const hasUserId = Number.isFinite(Number(payload.user_id ?? payload.userId));
+      const hasLivestream = typeof payload.livestream === "object";
+      return (hasSlug && hasId) || (hasSlug && hasUserId) || (hasSlug && hasLivestream);
+    }
+
+    async function withKickChannelTimeout(taskFactory, timeoutMs, timeoutLabel) {
+      let timeoutId = null;
+      try {
+        return await Promise.race([
+          taskFactory(),
+          new Promise((_, reject) => {
+            timeoutId = window.setTimeout(() => {
+              reject(new Error(`${timeoutLabel}_${timeoutMs}`));
+            }, timeoutMs);
+          })
+        ]);
+      } finally {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+      }
+    }
+
+    function buildLocalKickChannelUrl(channelSlug = CHANNEL_SLUG) {
+      const params = new URLSearchParams();
+      const cleanSlug = String(channelSlug || "").trim();
+      if (cleanSlug) {
+        params.set("slug", cleanSlug);
+      }
+      params.set("_", String(Date.now()));
+      return `${LOCAL_KICK_CHANNEL_ENDPOINT}?${params.toString()}`;
+    }
+
+    async function fetchLocalKickChannelJson(channelSlug = CHANNEL_SLUG) {
+      if (IS_FILE_PROTOCOL) {
+        throw new Error("LOCAL_CHANNEL_PROXY_UNAVAILABLE_FILE_PROTOCOL");
+      }
+
+      const response = await withKickChannelTimeout(
+        () =>
+          fetch(buildLocalKickChannelUrl(channelSlug), {
+            cache: "no-store",
+            headers: {
+              Accept: "application/json"
+            }
+          }),
+        KICK_CHANNEL_REQUEST_TIMEOUT_MS,
+        "LOCAL_CHANNEL_TIMEOUT"
+      );
+      if (!response.ok) {
+        throw new Error(`LOCAL_CHANNEL_PROXY_HTTP_${response.status}`);
+      }
+
+      const payload = await response.json();
+      if (!payload || typeof payload !== "object") {
+        throw new Error("LOCAL_CHANNEL_PROXY_INVALID_JSON");
+      }
+
+      if (isLikelyKickChannelPayload(payload)) {
+        return payload;
+      }
+
+      const nestedPayload = payload.channel ?? payload.data ?? null;
+      if (isLikelyKickChannelPayload(nestedPayload)) {
+        return { ...nestedPayload };
+      }
+
+      throw new Error("LOCAL_CHANNEL_PROXY_INVALID_PAYLOAD");
+    }
+
     async function fetchKickChannelJson(channelSlug) {
-      const directUrl = `${buildChannelApiUrl(channelSlug)}?_=${Date.now()}`;
+      const cleanSlug = String(channelSlug || "").trim();
+      const stamp = Date.now();
+      const directUrls = [
+        `${buildChannelInfoApiUrl(cleanSlug)}?_=${stamp}`,
+        `${buildChannelApiUrl(cleanSlug)}?_=${stamp}`,
+        `${buildChannelApiV1Url(cleanSlug)}?_=${stamp}`
+      ];
+
+      let bestPayload = null;
+      function rememberBetterPayload(payload) {
+        if (!isLikelyKickChannelPayload(payload)) {
+          return false;
+        }
+        if (!bestPayload) {
+          bestPayload = payload;
+        }
+        return true;
+      }
 
       try {
-        const directResponse = await fetch(directUrl, {
-          mode: "cors",
-          cache: "no-store",
-          headers: {
-            Accept: "application/json"
-          }
-        });
-        if (directResponse.ok) {
-          return await directResponse.json();
+        const localPayload = await fetchLocalKickChannelJson(cleanSlug);
+        if (rememberBetterPayload(localPayload)) {
+          return localPayload;
         }
       } catch (_error) {
-        // Fall back to proxy options below.
+        // Local API may be unavailable on file:// or while running without serverless routes.
+      }
+
+      for (const directUrl of directUrls) {
+        try {
+          const directResponse = await withKickChannelTimeout(
+            () =>
+              fetch(directUrl, {
+                mode: "cors",
+                cache: "no-store",
+                headers: {
+                  Accept: "application/json"
+                }
+              }),
+            KICK_CHANNEL_REQUEST_TIMEOUT_MS,
+            "CHANNEL_DIRECT_TIMEOUT"
+          );
+          if (!directResponse.ok) {
+            continue;
+          }
+          const directPayload = await directResponse.json();
+          if (rememberBetterPayload(directPayload)) {
+            return directPayload;
+          }
+        } catch (_error) {
+          // Fall back to proxy options below.
+        }
       }
 
       const proxyPrefixes = [ALL_ORIGINS_RAW_PREFIX, CORS_PROXY_PREFIX];
-      for (const proxyPrefix of proxyPrefixes) {
-        try {
-          const proxyPayload = await fetchViaProxyJson(directUrl, proxyPrefix);
-          if (proxyPayload && typeof proxyPayload === "object") {
-            return proxyPayload;
+      for (const directUrl of directUrls) {
+        for (const proxyPrefix of proxyPrefixes) {
+          try {
+            const proxyPayload = await withKickChannelTimeout(
+              () => fetchViaProxyJson(directUrl, proxyPrefix),
+              KICK_CHANNEL_PROXY_TIMEOUT_MS,
+              "CHANNEL_PROXY_TIMEOUT"
+            );
+            if (rememberBetterPayload(proxyPayload)) {
+              return proxyPayload;
+            }
+          } catch (_error) {
+            // Try next proxy.
           }
-        } catch (_error) {
-          // Try next proxy.
         }
       }
 
       // Last fallback for environments where proxy CORS works but direct/proxy API calls are blocked.
-      return fetchJinaJson(directUrl.replace(/^https:\/\//i, "http://"));
+      for (const directUrl of directUrls) {
+        try {
+          const jinaPayload = await withKickChannelTimeout(
+            () => fetchJinaJson(directUrl.replace(/^https:\/\//i, "http://")),
+            KICK_CHANNEL_JINA_TIMEOUT_MS,
+            "CHANNEL_JINA_TIMEOUT"
+          );
+          if (rememberBetterPayload(jinaPayload)) {
+            return jinaPayload;
+          }
+        } catch (_error) {
+          // Try next source variant.
+        }
+      }
+
+      if (isLikelyKickChannelPayload(bestPayload)) {
+        return bestPayload;
+      }
+
+      throw new Error("KICK_CHANNEL_FETCH_FAILED");
+    }
+
+    function parseKickCountValue(rawValue) {
+      if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+        return Math.max(0, Math.floor(rawValue));
+      }
+      if (typeof rawValue !== "string") {
+        return null;
+      }
+      const digitsOnly = rawValue.replace(/\D+/g, "");
+      if (!digitsOnly) {
+        return null;
+      }
+      const parsed = Number.parseInt(digitsOnly, 10);
+      return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+    }
+
+    function readKickNumericCandidate(source, path) {
+      let current = source;
+      for (const segment of path) {
+        if (!current || typeof current !== "object" || !(segment in current)) {
+          return null;
+        }
+        current = current[segment];
+      }
+      return parseKickCountValue(current);
+    }
+
+    function readKickNumericCandidates(source, paths) {
+      for (const path of paths) {
+        const value = readKickNumericCandidate(source, path);
+        if (Number.isFinite(value)) {
+          return value;
+        }
+      }
+      return null;
+    }
+
+    function extractKickFollowersCount(channelData) {
+      const followerPaths = [
+        ["followers_count"],
+        ["followersCount"],
+        ["follower_count"],
+        ["followerCount"],
+        ["stats", "followers_count"],
+        ["stats", "followersCount"],
+        ["channel", "followers_count"],
+        ["channel", "followersCount"],
+        ["data", "followers_count"],
+        ["data", "followersCount"],
+        ["user", "followers_count"],
+        ["user", "followersCount"]
+      ];
+      return readKickNumericCandidates(channelData, followerPaths);
+    }
+
+    function extractKickSubscribersCount(channelData) {
+      const subscriberPaths = [
+        ["subscribers_last_count"],
+        ["subscribersLastCount"],
+        ["subscribers_count"],
+        ["subscribersCount"],
+        ["subscriber_count"],
+        ["subscriberCount"],
+        ["sub_count"],
+        ["subCount"],
+        ["subscriptions_count"],
+        ["subscriptionsCount"],
+        ["subscription_count"],
+        ["subscriptionCount"],
+        ["paid_subscribers_count"],
+        ["paidSubscribersCount"],
+        ["total_subscribers"],
+        ["totalSubscribers"],
+        ["subscribers"],
+        ["last_subscriber", "count"],
+        ["lastSubscriber", "count"],
+        ["data", "count"],
+        ["data", "sub_count"],
+        ["data", "subscribers_count"],
+        ["stats", "subscribers_count"],
+        ["stats", "subscribersCount"],
+        ["stats", "subscriptions_count"],
+        ["stats", "subscriptionsCount"],
+        ["metrics", "subscribers_count"],
+        ["metrics", "subscribersCount"],
+        ["channel", "subscribers_count"],
+        ["channel", "subscribersCount"],
+        ["channel", "sub_count"],
+        ["channel", "last_subscriber", "count"],
+        ["channel", "lastSubscriber", "count"],
+        ["user", "subscribers_count"],
+        ["user", "subscribersCount"],
+        ["user", "sub_count"],
+        ["profile", "subscribers_count"],
+        ["profile", "subscribersCount"]
+      ];
+      return readKickNumericCandidates(channelData, subscriberPaths);
+    }
+
+    function setKickSubsBadgeState({ count = null, text = "subów na Kicku", state = "ready" } = {}) {
+      if (!streamIntroSubsStatEl || !streamIntroSubsCountEl || !streamIntroSubsTextEl) {
+        return;
+      }
+
+      streamIntroSubsCountEl.textContent = Number.isFinite(count) ? count.toLocaleString("pl-PL") : "--";
+      streamIntroSubsTextEl.textContent = text;
+      streamIntroSubsStatEl.classList.toggle("is-loading", state === "loading");
+      streamIntroSubsStatEl.classList.toggle("is-error", state === "error");
+    }
+
+    function setKickFollowersBadgeState({ count = null, text = "obserwujących na Kicku", state = "ready" } = {}) {
+      if (!streamIntroFollowersStatEl || !streamIntroFollowersCountEl || !streamIntroFollowersTextEl) {
+        return;
+      }
+
+      streamIntroFollowersCountEl.textContent = Number.isFinite(count) ? count.toLocaleString("pl-PL") : "--";
+      streamIntroFollowersTextEl.textContent = text;
+      streamIntroFollowersStatEl.classList.toggle("is-loading", state === "loading");
+      streamIntroFollowersStatEl.classList.toggle("is-error", state === "error");
+    }
+
+    async function updateKickFollowersBadge(force = false) {
+      const hasFollowersBadge = Boolean(streamIntroFollowersStatEl && streamIntroFollowersCountEl && streamIntroFollowersTextEl);
+      const hasSubsBadge = Boolean(streamIntroSubsStatEl && streamIntroSubsCountEl && streamIntroSubsTextEl);
+      if (!hasFollowersBadge && !hasSubsBadge) {
+        return;
+      }
+      if (kickFollowersPollBusy && !force) {
+        return;
+      }
+
+      kickFollowersPollBusy = true;
+      const hasFollowersRenderedOnce = hasFollowersBadge ? streamIntroFollowersStatEl.dataset.ready === "1" : true;
+      const hasSubsRenderedOnce = hasSubsBadge ? streamIntroSubsStatEl.dataset.ready === "1" : true;
+      if (!hasFollowersRenderedOnce && hasFollowersBadge) {
+        setKickFollowersBadgeState({
+          count: null,
+          text: "ładowanie danych z Kick...",
+          state: "loading"
+        });
+      }
+      if (!hasSubsRenderedOnce && hasSubsBadge) {
+        setKickSubsBadgeState({
+          count: null,
+          text: "ładowanie danych z Kick...",
+          state: "loading"
+        });
+      }
+
+      const pendingTasks = [];
+
+      if (hasFollowersBadge) {
+        const followersTask = Promise.resolve()
+          .then(() => fetchKickChannelJson(CHANNEL_SLUG))
+          .then((channelPayload) => {
+            const followersCount = extractKickFollowersCount(channelPayload);
+            setKickFollowersBadgeState({
+              count: Number.isFinite(followersCount) ? followersCount : null,
+              text: "obserwujących na Kicku",
+              state: Number.isFinite(followersCount) ? "ready" : "error"
+            });
+          })
+          .catch(() => {
+            if (!hasFollowersRenderedOnce) {
+              setKickFollowersBadgeState({
+                count: null,
+                text: IS_FILE_PROTOCOL ? "brak danych (odpal przez serwer)" : "brak danych z Kick",
+                state: "error"
+              });
+            } else {
+              streamIntroFollowersStatEl.classList.remove("is-loading");
+            }
+          })
+          .finally(() => {
+            streamIntroFollowersStatEl.dataset.ready = "1";
+          });
+        pendingTasks.push(followersTask);
+      }
+
+      if (hasSubsBadge) {
+        const subsTask = Promise.resolve()
+          .then(() => fetchKickSubscribersFromOAuth())
+          .then((subsPayload) => {
+            const payload = subsPayload || {};
+            const subscribersCount = Number.isFinite(Number(payload.count)) ? Number(payload.count) : null;
+            if (payload.linked === false) {
+              setKickSubsBadgeState({
+                count: null,
+                text: "połącz konto Kick",
+                state: "ready"
+              });
+              return;
+            }
+
+            setKickSubsBadgeState({
+              count: Number.isFinite(subscribersCount) ? subscribersCount : null,
+              text: "subów na Kicku",
+              state: Number.isFinite(subscribersCount) ? "ready" : "error"
+            });
+          })
+          .catch(() => {
+            if (
+              cachedKickOAuthStatus &&
+              cachedKickOAuthStatus.linked === true &&
+              Number.isFinite(Number(cachedKickOAuthStatus.subscribersCount))
+            ) {
+              setKickSubsBadgeState({
+                count: Number(cachedKickOAuthStatus.subscribersCount),
+                text: "subów na Kicku",
+                state: "ready"
+              });
+              return;
+            }
+
+            if (!hasSubsRenderedOnce) {
+              setKickSubsBadgeState({
+                count: null,
+                text: IS_FILE_PROTOCOL ? "brak danych (odpal przez serwer)" : "połącz konto Kick",
+                state: IS_FILE_PROTOCOL ? "error" : "ready"
+              });
+            } else {
+              streamIntroSubsStatEl.classList.remove("is-loading");
+            }
+          })
+          .finally(() => {
+            streamIntroSubsStatEl.dataset.ready = "1";
+          });
+        pendingTasks.push(subsTask);
+      }
+
+      try {
+        await Promise.all(pendingTasks);
+      } finally {
+        kickFollowersPollBusy = false;
+      }
+    }
+
+    function startKickFollowersPolling() {
+      void updateKickFollowersBadge();
+      if (kickFollowersPollId) {
+        return;
+      }
+
+      kickFollowersPollId = window.setInterval(() => {
+        void updateKickFollowersBadge();
+      }, KICK_FOLLOWERS_POLL_MS);
     }
 
     async function updateFriendsLiveBadges(force = false) {
@@ -3044,6 +3795,7 @@
         const discordName = String(account.discordName || "").trim();
         const panelPermissionLabel = account.canAccessAdmin ? "Zabierz Panel" : "Nadaj Panel";
         const streamObsPermissionLabel = account.canAccessStreamObs ? "Zabierz StreamOBS" : "Nadaj StreamOBS";
+        const bindingsPermissionLabel = account.canAccessBindings ? "Zabierz Powiązania" : "Nadaj Powiązania";
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${escapeHtml(account.login)}</td>
@@ -3059,6 +3811,7 @@
           </td>
           <td>${account.canAccessAdmin ? "Tak" : "Nie"}</td>
           <td>${account.canAccessStreamObs ? "Tak" : "Nie"}</td>
+          <td>${account.canAccessBindings ? "Tak" : "Nie"}</td>
           <td>
             ${
               account.isRoot
@@ -3066,6 +3819,7 @@
                 : `
                   <button class="admin-row-btn" type="button" data-account-permission-admin="${escapeHtml(account.id)}">${escapeHtml(panelPermissionLabel)}</button>
                   <button class="admin-row-btn" type="button" data-account-permission-streamobs="${escapeHtml(account.id)}">${escapeHtml(streamObsPermissionLabel)}</button>
+                  <button class="admin-row-btn" type="button" data-account-permission-bindings="${escapeHtml(account.id)}">${escapeHtml(bindingsPermissionLabel)}</button>
                   <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtml(account.id)}">Usuń</button>
                 `
             }
@@ -3078,11 +3832,21 @@
     function setActiveAdminTab(tabName) {
       const ownerAccess = hasOwnerAdminAccess();
       const streamObsAccess = hasStreamObsAccess();
+      const bindingsAccess = hasBindingsAccess();
       const requestedTab =
-        tabName === "accounts" || tabName === "kary" || tabName === "members" || tabName === "streamobs" ? tabName : "members";
+        tabName === "accounts" ||
+        tabName === "bindings" ||
+        tabName === "kary" ||
+        tabName === "members" ||
+        tabName === "streamobs"
+          ? tabName
+          : "members";
       if (requestedTab === "accounts" && !ownerAccess) {
         activeAdminTab = "members";
         setPanelStatus(adminAccountStatusEl, "Brak permisji do zakładki Panel Admina.", "error");
+      } else if (requestedTab === "bindings" && !bindingsAccess) {
+        activeAdminTab = "members";
+        setPanelStatus(kickOauthStatusEl, "Brak permisji do zakładki Powiązania.", "error");
       } else if (requestedTab === "streamobs" && !streamObsAccess) {
         activeAdminTab = "members";
         setPanelStatus(adminAccountStatusEl, "Brak permisji do zakładki StreamOBS.", "error");
@@ -3092,9 +3856,13 @@
 
       if (adminTabsWrapEl) {
         const accountsBtn = adminTabsWrapEl.querySelector('[data-tab="accounts"]');
+        const bindingsBtn = adminTabsWrapEl.querySelector('[data-tab="bindings"]');
         const streamObsBtn = adminTabsWrapEl.querySelector('[data-tab="streamobs"]');
         if (accountsBtn) {
           accountsBtn.hidden = !ownerAccess;
+        }
+        if (bindingsBtn) {
+          bindingsBtn.hidden = !bindingsAccess;
         }
         if (streamObsBtn) {
           streamObsBtn.hidden = !streamObsAccess;
@@ -3123,6 +3891,11 @@
         adminAccountsTabEl.hidden = !isAccounts;
         adminAccountsTabEl.classList.toggle("is-active", isAccounts);
       }
+      if (adminBindingsTabEl) {
+        const isBindings = activeAdminTab === "bindings";
+        adminBindingsTabEl.hidden = !isBindings;
+        adminBindingsTabEl.classList.toggle("is-active", isBindings);
+      }
       if (adminStreamObsTabEl) {
         const isStreamObs = activeAdminTab === "streamobs";
         adminStreamObsTabEl.hidden = !isStreamObs;
@@ -3132,6 +3905,8 @@
           applyStreamObsLicznikiConfig();
         }
       }
+
+      updateKickOAuthPanelView(cachedKickOAuthStatus);
     }
 
     function getKaryPricePairs() {
@@ -5438,6 +6213,7 @@
       );
       const canAccessPanelAdmin = Boolean(callbackResult.canAccessPanelAdmin);
       const canAccessStreamObs = Boolean(callbackResult.canAccessStreamObs);
+      const canAccessBindings = Boolean(callbackResult.canAccessBindings);
       activeDiscordSession = session;
       isAdminAuthenticated = hasAnyAdminAccess;
       currentAdminLogin = isAdminAuthenticated ? `discord:${session.username}` : "";
@@ -5453,12 +6229,13 @@
         discordDisplayName: session.displayName,
         canAccessAnyAdminArea: hasAnyAdminAccess,
         canAccessPanelAdmin,
-        canAccessStreamObs
+        canAccessStreamObs,
+        canAccessBindings
       });
       renderAdminAccountsTable();
 
       if (!isAdminAuthenticated) {
-        setAdminStatus("Konto Discord zapisane, ale nie ma permisji do Panelu Admina ani StreamOBS.", "error");
+        setAdminStatus("Konto Discord zapisane, ale nie ma permisji do Panelu Admina, StreamOBS ani Powiązań.", "error");
         setDiscordStatus("Brak permisji. Owner ma dostep automatyczny, pozostale ID musza dostac permisje.", "error");
         sendAdminWebhookEvent("admin_login_discord_denied", "Panel Administratora", {
           discordId: session.id,
@@ -7896,15 +8673,24 @@
         void syncKaryStateFromApiOnce({ force: true });
         void syncKaryStatsFromApiOnce({ force: true });
         updateFriendsLiveBadges();
+        void updateKickFollowersBadge(true);
         return;
       }
       stopWheelStatsLiveUpdates();
+    });
+    window.addEventListener("focus", () => {
+      if (document.hidden) {
+        return;
+      }
+      void updateKickFollowersBadge(true);
     });
 
     bindInternalRouteLinks();
 
     // Apply route view immediately so layout is visible even if later init fails.
     applyView(getRouteFromPath(`${window.location.pathname}${window.location.search}${window.location.hash}`));
+    void fetchKickOAuthStatus();
+    void updateKickFollowersBadge();
 
     if (adminRememberMeEl) {
       adminRememberMeEl.checked = isRememberMeEnabled();
@@ -7949,6 +8735,9 @@
     startKaryTimerTick();
     renderCustomMembersCards();
     startFriendsLivePolling();
+    consumeKickOAuthResultFromUrl();
+    startKickOAuthStatusPolling();
+    startKickFollowersPolling();
     renderAdminMembersTable();
     renderAdminAccountsTable();
     setActiveAdminTab(activeAdminTab);
@@ -7960,6 +8749,39 @@
           return;
         }
         setActiveAdminTab(button.dataset.tab || "members");
+      });
+    }
+
+    if (kickOauthConnectBtnEl) {
+      kickOauthConnectBtnEl.addEventListener("click", () => {
+        if (!hasBindingsAccess()) {
+          setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
+          return;
+        }
+        setKickOAuthPanelStatus("Przekierowanie do logowania Kick...", "info");
+        startKickOAuthConnectionFlow();
+      });
+    }
+
+    if (kickOauthRefreshBtnEl) {
+      kickOauthRefreshBtnEl.addEventListener("click", () => {
+        setKickOAuthPanelStatus("Odswiezanie statusu Kick OAuth...", "info");
+        void fetchKickOAuthStatus(true).then(() => {
+          void updateKickFollowersBadge(true);
+        });
+      });
+    }
+
+    if (kickOauthUnlinkBtnEl) {
+      kickOauthUnlinkBtnEl.addEventListener("click", () => {
+        if (!hasBindingsAccess()) {
+          setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
+          return;
+        }
+        void unlinkKickOAuthConnection().then(() => {
+          void fetchKickOAuthStatus(true);
+          void updateKickFollowersBadge(true);
+        });
       });
     }
 
@@ -8394,6 +9216,7 @@
         const discordUserId = normalizeDiscordUserId(formData.get("accountDiscordId"));
         const canAccessAdmin = formData.get("accountAccessAdmin") === "on";
         const canAccessStreamObs = formData.get("accountAccessStreamObs") === "on";
+        const canAccessBindings = formData.get("accountAccessBindings") === "on";
         const isDiscordAccount = Boolean(discordUserId);
         let accountAction = "account_add";
 
@@ -8427,6 +9250,7 @@
             discordName: String(adminAccounts[existingIndex].discordName || ""),
             canAccessAdmin,
             canAccessStreamObs,
+            canAccessBindings,
             isDiscordAccount
           };
           accountAction = "account_update";
@@ -8440,6 +9264,7 @@
             discordName: "",
             canAccessAdmin,
             canAccessStreamObs,
+            canAccessBindings,
             isRoot: false,
             isDiscordAccount
           };
@@ -8454,7 +9279,8 @@
           login: normalizedLogin,
           discordUserId: discordUserId || "",
           canAccessAdmin,
-          canAccessStreamObs
+          canAccessStreamObs,
+          canAccessBindings
         });
       });
     }
@@ -8502,7 +9328,8 @@
             login: account.login,
             discordUserId: normalizeDiscordUserId(account.discordUserId),
             canAccessAdmin: account.canAccessAdmin,
-            canAccessStreamObs: account.canAccessStreamObs
+            canAccessStreamObs: account.canAccessStreamObs,
+            canAccessBindings: account.canAccessBindings
           });
           return;
         }
@@ -8527,7 +9354,34 @@
             login: account.login,
             discordUserId: normalizeDiscordUserId(account.discordUserId),
             canAccessAdmin: account.canAccessAdmin,
-            canAccessStreamObs: account.canAccessStreamObs
+            canAccessStreamObs: account.canAccessStreamObs,
+            canAccessBindings: account.canAccessBindings
+          });
+          return;
+        }
+
+        const bindingsPermissionBtn = event.target.closest("[data-account-permission-bindings]");
+        if (bindingsPermissionBtn) {
+          const accountId = String(bindingsPermissionBtn.dataset.accountPermissionBindings || "");
+          const account = adminAccounts.find((item) => item.id === accountId);
+          if (!account || account.isRoot) {
+            return;
+          }
+
+          account.canAccessBindings = !account.canAccessBindings;
+          saveAdminAccounts();
+          renderAdminAccountsTable();
+          setPanelStatus(
+            adminAccountStatusEl,
+            account.canAccessBindings ? "Nadano permisję do Powiązań." : "Odebrano permisję do Powiązań.",
+            "success"
+          );
+          sendAdminWebhookEvent("account_access_bindings_change", account.login, {
+            login: account.login,
+            discordUserId: normalizeDiscordUserId(account.discordUserId),
+            canAccessAdmin: account.canAccessAdmin,
+            canAccessStreamObs: account.canAccessStreamObs,
+            canAccessBindings: account.canAccessBindings
           });
           return;
         }
@@ -8549,7 +9403,8 @@
             login: accountToDelete.login,
             discordUserId: normalizeDiscordUserId(accountToDelete.discordUserId),
             canAccessAdmin: accountToDelete.canAccessAdmin,
-            canAccessStreamObs: accountToDelete.canAccessStreamObs
+            canAccessStreamObs: accountToDelete.canAccessStreamObs,
+            canAccessBindings: accountToDelete.canAccessBindings
           });
         }
 
@@ -8605,6 +9460,7 @@
               discordUserId: ROOT_ADMIN_DISCORD_ID,
               canAccessAdmin: true,
               canAccessStreamObs: true,
+              canAccessBindings: true,
               isRoot: true,
               isDiscordAccount: false
             };
@@ -9371,6 +10227,7 @@
           password: ROOT_ADMIN_PASSWORD,
           canAccessAdmin: true,
           canAccessStreamObs: true,
+          canAccessBindings: true,
           isRoot: true
         };
         var stored = readStorageJsonFallback("takuu_admin_accounts", []);
@@ -9393,14 +10250,15 @@
           return {
             login: ROOT_ADMIN_LOGIN,
             canAccessAdmin: true,
-            canAccessStreamObs: true
+            canAccessStreamObs: true,
+            canAccessBindings: true
           };
         }
 
         var accounts = getInlineAdminAccountsFallback();
         for (var i = 0; i < accounts.length; i += 1) {
           var account = accounts[i] || {};
-          if (!(account && (account.canAccessAdmin || account.canAccessStreamObs || account.isRoot))) continue;
+          if (!(account && (account.canAccessAdmin || account.canAccessStreamObs || account.canAccessBindings || account.isRoot))) continue;
           if (String(account.login || "") === cleanLogin && String(account.password || "") === cleanPassword) {
             return account;
           }
@@ -9565,7 +10423,7 @@
               if (!result.ok || !hasAnyAdminAccess) {
                 setInlineLoginStatus(
                   discordStatus,
-                  (result && result.error) || "Brak permisji do Panelu Admina ani StreamOBS.",
+                  (result && result.error) || "Brak permisji do Panelu Admina, StreamOBS ani Powiązań.",
                   "error"
                 );
                 return;
@@ -9949,7 +10807,7 @@
         setVisible(friends, route === "home");
 
         if (isObsOverlay) {
-          var tabsToHide = ["adminMembersTab", "adminKaryTab", "adminAccountsTab"];
+          var tabsToHide = ["adminMembersTab", "adminKaryTab", "adminBindingsTab", "adminAccountsTab"];
           tabsToHide.forEach(function (id) {
             var tab = document.getElementById(id);
             if (!tab) return;
@@ -9980,4 +10838,13 @@
       });
     })();
   
+
+
+
+
+
+
+
+
+
 

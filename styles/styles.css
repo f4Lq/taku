@@ -657,6 +657,200 @@ body.route-admin #friends {
   font-weight: 700;
 }
 
+.stream-followers-slot {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: -4px 0 2px;
+  padding-left: clamp(110px, 12vw, 110px);
+  padding-right: 0;
+  transform: none;
+}
+
+.stream-kick-followers {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: 0;
+  min-height: 48px;
+  padding: 9px 16px 9px 12px;
+  border-radius: 16px 6px 16px 6px;
+  border: 1px solid rgba(117, 228, 255, 0.66);
+  background: linear-gradient(135deg, rgba(7, 18, 40, 0.95), rgba(10, 40, 72, 0.92) 58%, rgba(18, 20, 56, 0.94));
+  color: #e2f8ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(169, 238, 255, 0.12);
+}
+
+.stream-kick-followers > * {
+  position: relative;
+  z-index: 1;
+}
+
+.stream-kick-followers::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: linear-gradient(180deg, rgba(135, 249, 255, 0.95), rgba(64, 170, 255, 0.95));
+  box-shadow: 0 0 14px rgba(89, 203, 255, 0.65);
+}
+
+.stream-kick-followers::after {
+  content: "";
+  position: absolute;
+  inset: -40% -20%;
+  background: radial-gradient(circle at 35% 50%, rgba(160, 236, 255, 0.2), transparent 46%);
+  transform: translateX(-24%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.stream-kick-followers-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 8px;
+  background: url("../img/malpa_1.png") center / 18px 18px no-repeat, linear-gradient(150deg, rgba(10, 22, 43, 0.95), rgba(14, 44, 78, 0.9));
+  box-shadow:
+    0 0 0 1px rgba(126, 226, 255, 0.5),
+    0 0 12px rgba(95, 196, 255, 0.34);
+}
+
+.stream-kick-followers strong {
+  font-size: 1.2rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #f2fcff;
+}
+
+.stream-kick-followers.is-error {
+  border-color: rgba(255, 150, 150, 0.72);
+  background: linear-gradient(135deg, rgba(46, 18, 30, 0.95), rgba(63, 24, 34, 0.93));
+  color: #ffd4d4;
+}
+
+.stream-kick-followers.is-loading::after {
+  background: linear-gradient(100deg, rgba(160, 236, 255, 0), rgba(160, 236, 255, 0.24), rgba(160, 236, 255, 0));
+  animation: followersShimmer 1.4s linear infinite;
+}
+
+#streamIntroFollowersText {
+  color: rgba(208, 242, 255, 0.94);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.stream-kick-followers.is-error #streamIntroFollowersText {
+  color: rgba(255, 218, 218, 0.95);
+}
+
+.stream-kick-subs {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: 0;
+  min-height: 48px;
+  padding: 9px 16px 9px 12px;
+  border-radius: 16px 6px 16px 6px;
+  border: 1px solid rgba(130, 246, 180, 0.66);
+  background: linear-gradient(135deg, rgba(8, 30, 26, 0.95), rgba(10, 58, 44, 0.93) 58%, rgba(10, 35, 40, 0.94));
+  color: #e9fff4;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(184, 255, 214, 0.14);
+}
+
+.stream-kick-subs > * {
+  position: relative;
+  z-index: 1;
+}
+
+.stream-kick-subs::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: linear-gradient(180deg, rgba(150, 255, 198, 0.96), rgba(77, 230, 153, 0.95));
+  box-shadow: 0 0 14px rgba(102, 240, 173, 0.62);
+}
+
+.stream-kick-subs::after {
+  content: "";
+  position: absolute;
+  inset: -40% -20%;
+  background: radial-gradient(circle at 35% 50%, rgba(168, 255, 212, 0.24), transparent 46%);
+  transform: translateX(-24%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.stream-kick-subs-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 8px;
+  background: url("../img/malpa_2.png") center / 18px 18px no-repeat, linear-gradient(150deg, rgba(11, 30, 33, 0.96), rgba(18, 72, 55, 0.9));
+  box-shadow:
+    0 0 0 1px rgba(137, 244, 188, 0.56),
+    0 0 12px rgba(95, 224, 163, 0.38);
+}
+
+.stream-kick-subs strong {
+  font-size: 1.16rem;
+  line-height: 1;
+  color: #f4fff8;
+  font-variant-numeric: tabular-nums;
+}
+
+#streamIntroSubsText {
+  color: rgba(206, 255, 228, 0.95);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.stream-kick-subs.is-error {
+  border-color: rgba(255, 150, 150, 0.72);
+  background: linear-gradient(135deg, rgba(46, 18, 30, 0.95), rgba(63, 24, 34, 0.93));
+  color: #ffd4d4;
+}
+
+.stream-kick-subs.is-loading::after {
+  background: linear-gradient(100deg, rgba(154, 255, 206, 0), rgba(154, 255, 206, 0.24), rgba(154, 255, 206, 0));
+  animation: followersShimmer 1.4s linear infinite;
+}
+
+.stream-kick-subs.is-error #streamIntroSubsText {
+  color: rgba(255, 218, 218, 0.95);
+}
+
+@keyframes followersShimmer {
+  from {
+    transform: translateX(-55%);
+  }
+  to {
+    transform: translateX(55%);
+  }
+}
+
 .stream-intro-live-dot {
   width: 8px;
   height: 8px;
@@ -2036,6 +2230,33 @@ body.obs-timery-overlay main.wrap {
 
 .admin-panel-status.is-success {
   color: #7fd6ff;
+}
+
+.kick-bindings-wrap {
+  display: grid;
+  gap: 12px;
+}
+
+.kick-bindings-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+
+.kick-bindings-grid p {
+  margin: 0;
+  color: #d6e7ff;
+  font-size: 0.95rem;
+}
+
+.kick-bindings-grid strong {
+  color: #f1f7ff;
+  font-weight: 700;
+}
+
+.kick-bindings-actions {
+  margin-top: 2px;
 }
 
 .stream-player-wrap {
@@ -4660,6 +4881,36 @@ h1 {
   .stream-intro-live {
     width: 100%;
     justify-content: center;
+  }
+
+  .stream-followers-slot {
+    margin-top: 2px;
+    justify-content: center;
+    transform: none;
+  }
+
+  .stream-kick-followers {
+    width: min(100%, 460px);
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .stream-kick-subs {
+    width: min(100%, 460px);
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .stream-kick-followers strong {
+    font-size: 1.04rem;
+  }
+
+  .stream-kick-subs strong {
+    font-size: 1rem;
+  }
+
+  .kick-bindings-grid {
+    grid-template-columns: 1fr;
   }
 
   .kary-timers-grid,
