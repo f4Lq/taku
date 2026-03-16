@@ -1,5 +1,5 @@
-const { createRedisClient } = require("../_lib/redis.js");
-const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require("../_lib/http.js");
+const { createRedisClient } = require("../../lib/redis.js");
+const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require("../../lib/http.js");
 
 const STATS_HISTORY_KEY = "wheel:stats:history";
 const STATS_EVENT_KEYS_KEY = "wheel:stats:event_keys";

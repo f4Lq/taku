@@ -1,5 +1,5 @@
-const { createRedisClient } = require("../../_lib/redis.js");
-const { getRequestUrl, sendJson, sendOptions } = require("../../_lib/http.js");
+const { createRedisClient } = require("../../../lib/redis.js");
+const { getRequestUrl, sendJson, sendOptions } = require("../../../lib/http.js");
 const {
   createKickLinkFromToken,
   exchangeKickAuthorizationCode,
@@ -11,7 +11,7 @@ const {
   sanitizeReturnToPath,
   saveKickLink,
   verifyKickOAuthState
-} = require("../../_lib/kick-oauth.js");
+} = require("../../../lib/kick-oauth.js");
 
 function sanitizeMessage(rawValue, fallback = "oauth_error") {
   const text = String(rawValue || "").trim();

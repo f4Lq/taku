@@ -1,6 +1,6 @@
-const { createRedisClient } = require("../../_lib/redis.js");
-const { sendJson, sendOptions } = require("../../_lib/http.js");
-const { deleteKickLink } = require("../../_lib/kick-oauth.js");
+const { createRedisClient } = require("../../../lib/redis.js");
+const { sendJson, sendOptions } = require("../../../lib/http.js");
+const { deleteKickLink } = require("../../../lib/kick-oauth.js");
 
 module.exports = async function handler(req, res) {
   const method = String(req.method || "POST").toUpperCase();

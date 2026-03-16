@@ -1,5 +1,5 @@
-﻿const { createRedisClient } = require('../_lib/redis.js');
-const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require('../_lib/http.js');
+const { createRedisClient } = require('../../lib/redis.js');
+const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require('../../lib/http.js');
 
 const ADMIN_STATE_DATA_KEY = 'admin:state:data';
 const ADMIN_STATE_UPDATED_AT_KEY = 'admin:state:updated_at';
