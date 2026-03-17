@@ -302,6 +302,80 @@ async function fetchSubscribersLastCountViaJina(sourceUrl, authHeaders = {}) {
   return count;
 }
 
+function parseLoosePositiveInt(rawValue) {
+  const digitsOnly = String(rawValue || "").replace(/\D+/g, "");
+  if (!digitsOnly) {
+    return null;
+  }
+  const parsed = Number.parseInt(digitsOnly, 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+}
+
+function extractSubscribersGoalCountFromText(rawText) {
+  const text = String(rawText || "");
+  if (!text.trim()) {
+    return null;
+  }
+
+  const englishMatch = text.match(
+    /(\d[\d\s.,]*)\s+subscriptions?\s+to\s+go[^\n\r]*?(?:(\d[\d\s.,]*)\s*\/\s*(\d[\d\s.,]*))?/i
+  );
+  if (englishMatch) {
+    const toGo = parseLoosePositiveInt(englishMatch[1]);
+    const current = parseLoosePositiveInt(englishMatch[2]);
+    const target = parseLoosePositiveInt(englishMatch[3]);
+    if (Number.isFinite(current)) {
+      return current;
+    }
+    if (Number.isFinite(target) && Number.isFinite(toGo) && target >= toGo) {
+      return target - toGo;
+    }
+  }
+
+  const polishMatch = text.match(
+    /brakuje\s+jeszcze\s+(\d[\d\s.,]*)\s+subskryb\w*[^\n\r]*?(?:(\d[\d\s.,]*)\s*\/\s*(\d[\d\s.,]*))?/i
+  );
+  if (polishMatch) {
+    const toGo = parseLoosePositiveInt(polishMatch[1]);
+    const current = parseLoosePositiveInt(polishMatch[2]);
+    const target = parseLoosePositiveInt(polishMatch[3]);
+    if (Number.isFinite(current)) {
+      return current;
+    }
+    if (Number.isFinite(target) && Number.isFinite(toGo) && target >= toGo) {
+      return target - toGo;
+    }
+  }
+
+  return null;
+}
+
+async function fetchSubscribersGoalCountViaJinaPage(channelSlug) {
+  const normalizedSlug = normalizeChannelSlug(channelSlug);
+  if (!normalizedSlug) {
+    throw new Error("SUB_GOAL_INVALID_SLUG");
+  }
+
+  const response = await fetch(`${JINA_PREFIX}http://kick.com/${encodeURIComponent(normalizedSlug)}`, {
+    method: "GET",
+    headers: {
+      Accept: "text/plain, application/json;q=0.9, */*;q=0.8",
+      "User-Agent": "Mozilla/5.0 (TakuuVercel/1.0)"
+    },
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    throw new Error(`SUB_GOAL_JINA_HTTP_${response.status}`);
+  }
+
+  const rawText = await response.text();
+  const count = extractSubscribersGoalCountFromText(rawText);
+  if (!Number.isFinite(count)) {
+    throw new Error("SUB_GOAL_NOT_FOUND");
+  }
+  return count;
+}
+
 async function fetchSubscribersLastCount(channelSlug, attempts = [], requestHeaders = {}) {
   const authHeaders = buildKickAuthHeaders(requestHeaders);
   const subscribersLastUrl = `https://kick.com/api/v2/channels/${encodeURIComponent(channelSlug)}/subscribers/last`;
@@ -318,6 +392,13 @@ async function fetchSubscribersLastCount(channelSlug, attempts = [], requestHead
     return { count, source: "kick-v2-subs-last-jina" };
   } catch (error) {
     attempts.push(`kick-v2-subs-last-jina:${String(error?.message || "request_failed")}`);
+  }
+
+  try {
+    const count = await fetchSubscribersGoalCountViaJinaPage(channelSlug);
+    return { count, source: "kick-channel-goal-jina" };
+  } catch (error) {
+    attempts.push(`kick-channel-goal-jina:${String(error?.message || "request_failed")}`);
   }
 
   return { count: null, source: null };
