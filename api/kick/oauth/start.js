@@ -1,4 +1,4 @@
-const { getRequestUrl, sendJson, sendOptions } = require("../../../lib/http.js");
+const { getRequestUrl, sendJson, sendOptions } = require("../../_lib/http.js");
 const {
   createKickCodeChallenge,
   createKickCodeVerifier,
@@ -6,7 +6,7 @@ const {
   getKickOAuthConfig,
   resolveKickOAuthRedirectUri,
   sanitizeReturnToPath
-} = require("../../../lib/kick-oauth.js");
+} = require("../../_lib/kick-oauth.js");
 
 function sendRedirect(res, location) {
   res.setHeader("Cache-Control", "no-store");

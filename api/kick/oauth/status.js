@@ -1,5 +1,5 @@
-const { createRedisClient } = require("../../../lib/redis.js");
-const { getRequestUrl, sendJson, sendOptions } = require("../../../lib/http.js");
+const { createRedisClient } = require("../../_lib/redis.js");
+const { getRequestUrl, sendJson, sendOptions } = require("../../_lib/http.js");
 const {
   ensureKickLinkHasFreshAccessToken,
   fetchKickChannelsByAccessToken,
@@ -9,7 +9,7 @@ const {
   pickKickChannel,
   resolveKickOAuthRedirectUri,
   saveKickLink
-} = require("../../../lib/kick-oauth.js");
+} = require("../../_lib/kick-oauth.js");
 
 function toPublicLinkState(link, extra = {}) {
   const safe = link && typeof link === "object" ? link : {};
