@@ -1,9 +1,116 @@
 const { getRequestUrl, sendJson, sendOptions } = require("../_lib/http.js");
+const { createRedisClient } = require("../_lib/redis.js");
+const { loadKickLink, saveKickLink } = require("../_lib/kick-oauth.js");
 
 const DEFAULT_CHANNEL_SLUG = "takuu";
 const JINA_PREFIX = "https://r.jina.ai/";
 const SUB_GOAL_CACHE_TTL_MS = 4000;
+const SUB_GOAL_REDIS_KEY_PREFIX = "kick:channel:subs_goal:";
+const SUB_GOAL_REDIS_TTL_SEC = 60 * 60 * 24 * 30;
+const SUB_GOAL_REDIS_WRITE_INTERVAL_MS = 20 * 1000;
 const subscribersGoalCacheBySlug = new Map();
+const subscribersGoalRedisWriteCacheBySlug = new Map();
+
+function buildSubscribersGoalRedisKey(channelSlug) {
+  const normalizedSlug = normalizeChannelSlug(channelSlug);
+  if (!normalizedSlug) {
+    return "";
+  }
+  return `${SUB_GOAL_REDIS_KEY_PREFIX}${normalizedSlug}`;
+}
+
+async function loadSubscribersGoalCountFromRedis(channelSlug) {
+  const key = buildSubscribersGoalRedisKey(channelSlug);
+  if (!key) {
+    return null;
+  }
+
+  const redis = createRedisClient();
+  if (!redis) {
+    return null;
+  }
+
+  try {
+    const rawValue = await redis.command("GET", key);
+    const text = String(rawValue || "").trim();
+    if (!text) {
+      return null;
+    }
+
+    const directCount = parseCountValue(text);
+    if (Number.isFinite(directCount)) {
+      return directCount;
+    }
+
+    const parsed = JSON.parse(text);
+    const payloadCount = parseCountValue(parsed?.count);
+    return Number.isFinite(payloadCount) ? payloadCount : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function saveSubscribersGoalCountToRedis(channelSlug, count, source = "") {
+  const normalizedSlug = normalizeChannelSlug(channelSlug);
+  const safeCount = parseCountValue(count);
+  if (!normalizedSlug || !Number.isFinite(safeCount)) {
+    return;
+  }
+
+  const redis = createRedisClient();
+  if (!redis) {
+    return;
+  }
+
+  const now = Date.now();
+  const writeCacheEntry = subscribersGoalRedisWriteCacheBySlug.get(normalizedSlug);
+  if (
+    writeCacheEntry &&
+    Number(writeCacheEntry.count) === safeCount &&
+    now - Number(writeCacheEntry.savedAt || 0) < SUB_GOAL_REDIS_WRITE_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  const key = buildSubscribersGoalRedisKey(normalizedSlug);
+  if (!key) {
+    return;
+  }
+
+  try {
+    await redis.command(
+      "SET",
+      key,
+      JSON.stringify({
+        count: safeCount,
+        source: String(source || "").trim(),
+        updatedAt: now
+      }),
+      "EX",
+      SUB_GOAL_REDIS_TTL_SEC
+    );
+    subscribersGoalRedisWriteCacheBySlug.set(normalizedSlug, {
+      count: safeCount,
+      savedAt: now
+    });
+
+    // Keep OAuth state in sync when the linked channel matches.
+    const link = await loadKickLink(redis);
+    if (link && normalizeChannelSlug(link.channelSlug || "") === normalizedSlug) {
+      const linkCount = parseCountValue(link.activeSubscribersCount);
+      if (!Number.isFinite(linkCount) || linkCount !== safeCount) {
+        await saveKickLink(redis, {
+          ...link,
+          activeSubscribersCount: safeCount,
+          updatedAt: now,
+          lastChannelSyncAt: now
+        });
+      }
+    }
+  } catch (_error) {
+    // Ignore Redis write failures to avoid breaking public channel endpoint.
+  }
+}
 
 function parseCountValue(rawValue) {
   if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
@@ -259,6 +366,18 @@ function extractSubscribersCountFromChannelPayload(payload) {
   return readCountCandidates(payload, paths);
 }
 
+function extractSubscribersGoalCurrentFromChannelPayload(payload) {
+  const paths = [
+    ["subscribers_goal_current"],
+    ["subscribersGoalCurrent"],
+    ["goal", "current"],
+    ["goal", "subs", "current"],
+    ["subscription_goal", "current"],
+    ["subscriptionGoal", "current"]
+  ];
+  return readCountCandidates(payload, paths);
+}
+
 async function fetchSubscribersLastCountDirect(sourceUrl, authHeaders = {}) {
   const response = await fetch(sourceUrl, {
     method: "GET",
@@ -395,9 +514,19 @@ async function fetchSubscribersLastCount(channelSlug, attempts = [], requestHead
 
   try {
     const count = await fetchSubscribersGoalCountViaJinaPage(channelSlug);
+    await saveSubscribersGoalCountToRedis(channelSlug, count, "kick-channel-goal-jina");
     return { count, source: "kick-channel-goal-jina" };
   } catch (error) {
     attempts.push(`kick-channel-goal-jina:${String(error?.message || "request_failed")}`);
+  }
+
+  try {
+    const redisCount = await loadSubscribersGoalCountFromRedis(channelSlug);
+    if (Number.isFinite(redisCount)) {
+      return { count: redisCount, source: "kick-channel-goal-redis" };
+    }
+  } catch (error) {
+    attempts.push(`kick-channel-goal-redis:${String(error?.message || "request_failed")}`);
   }
 
   try {
@@ -422,15 +551,31 @@ async function withSubscribersLastCount(channelSlug, channel, attempts = [], req
     return { channel, subscribersSource: null };
   }
 
+  const goalCurrent = extractSubscribersGoalCurrentFromChannelPayload(channel);
+  if (Number.isFinite(goalCurrent)) {
+    await saveSubscribersGoalCountToRedis(channelSlug, goalCurrent, "kick-channel-data-goal");
+    return {
+      channel: {
+        ...channel,
+        subscribers_goal_current: goalCurrent,
+        subscribersGoalCurrent: goalCurrent,
+        subscribers_last_count: goalCurrent,
+        subscribersLastCount: goalCurrent
+      },
+      subscribersSource: "kick-channel-data-goal"
+    };
+  }
+
   const { count, source } = await fetchSubscribersLastCount(channelSlug, attempts, requestHeaders);
   if (Number.isFinite(count)) {
     const isGoalSource = source === "kick-channel-goal-jina";
+    const isRedisGoalSource = source === "kick-channel-goal-redis";
     return {
       channel: {
         ...channel,
         subscribers_last_count: count,
         subscribersLastCount: count,
-        ...(isGoalSource
+        ...(isGoalSource || isRedisGoalSource
           ? {
               subscribers_goal_current: count,
               subscribersGoalCurrent: count

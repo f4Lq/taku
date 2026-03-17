@@ -8,6 +8,7 @@
     const LOCAL_KICK_OAUTH_START_ENDPOINT = "/api/kick/oauth/start";
     const LOCAL_KICK_OAUTH_STATUS_ENDPOINT = "/api/kick/oauth/status";
     const LOCAL_KICK_OAUTH_UNLINK_ENDPOINT = "/api/kick/oauth/unlink";
+    const KICK_SUBS_LAST_COUNT_STORAGE_KEY = `takuu:kick:last-subs-goal:${CHANNEL_SLUG}`;
     const CLIPS_MAX_ITEMS = 150; // liczba ładowania klipów w /klipy
     const CHANNEL_AVATAR_FALLBACK = "https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp";
     const KICK_ICON_URL = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp";
@@ -157,6 +158,7 @@
     let kickOAuthStatusPollId = null;
     let kickOAuthStatusBusy = false;
     let cachedKickOAuthStatus = null;
+    let lastKnownKickSubsCount = null;
     let wheelStatsLiveRefreshId = null;
     let wheelSyncChannel = null;
     let wheelSyncPollId = null;
@@ -3426,6 +3428,43 @@
       return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
     }
 
+    function loadLastKnownKickSubsCount() {
+      try {
+        const storedValue = window.localStorage.getItem(KICK_SUBS_LAST_COUNT_STORAGE_KEY);
+        return parseKickCountValue(storedValue);
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function saveLastKnownKickSubsCount(count) {
+      const normalizedCount = parseKickCountValue(count);
+      if (!Number.isFinite(normalizedCount)) {
+        return;
+      }
+
+      lastKnownKickSubsCount = normalizedCount;
+      try {
+        window.localStorage.setItem(KICK_SUBS_LAST_COUNT_STORAGE_KEY, String(normalizedCount));
+      } catch (_error) {
+        // Ignore localStorage quota/privacy failures.
+      }
+    }
+
+    function getLastKnownKickSubsCount() {
+      if (Number.isFinite(lastKnownKickSubsCount)) {
+        return lastKnownKickSubsCount;
+      }
+
+      const storedCount = loadLastKnownKickSubsCount();
+      if (!Number.isFinite(storedCount)) {
+        return null;
+      }
+
+      lastKnownKickSubsCount = storedCount;
+      return storedCount;
+    }
+
     function readKickNumericCandidate(source, path) {
       let current = source;
       for (const segment of path) {
@@ -3615,13 +3654,34 @@
           .then(() => getSharedChannelPayload())
           .then((channelPayload) => {
             const subscribersCount = extractKickGoalSubscribersCount(channelPayload);
+            if (Number.isFinite(subscribersCount)) {
+              saveLastKnownKickSubsCount(subscribersCount);
+              setKickSubsBadgeState({
+                count: subscribersCount,
+                text: "subów na Kicku",
+                state: "ready"
+              });
+              return;
+            }
+
+            const fallbackCount = getLastKnownKickSubsCount();
             setKickSubsBadgeState({
-              count: Number.isFinite(subscribersCount) ? subscribersCount : null,
+              count: Number.isFinite(fallbackCount) ? fallbackCount : null,
               text: "subów na Kicku",
-              state: Number.isFinite(subscribersCount) ? "ready" : "error"
+              state: Number.isFinite(fallbackCount) ? "ready" : "error"
             });
           })
           .catch(() => {
+            const fallbackCount = getLastKnownKickSubsCount();
+            if (Number.isFinite(fallbackCount)) {
+              setKickSubsBadgeState({
+                count: fallbackCount,
+                text: "subów na Kicku",
+                state: "ready"
+              });
+              return;
+            }
+
             if (!hasSubsRenderedOnce) {
               setKickSubsBadgeState({
                 count: null,
@@ -3646,6 +3706,7 @@
     }
 
     function startKickFollowersPolling() {
+      lastKnownKickSubsCount = getLastKnownKickSubsCount();
       void updateKickFollowersBadge();
       if (kickFollowersPollId) {
         return;
