@@ -217,24 +217,24 @@ function readCountCandidates(source, paths) {
 }
 
 function extractKickSubscribersCount(channel) {
-  const active = readCountCandidates(channel, [["active_subscribers_count"], ["activeSubscribersCount"]]);
-  if (Number.isFinite(active)) {
-    return active;
-  }
-  return readCountCandidates(channel, [
+  const total = readCountCandidates(channel, [
     ["subscribers_last_count"],
     ["subscribersLastCount"],
+    ["total_subscribers"],
+    ["totalSubscribers"],
     ["subscribers_count"],
     ["subscribersCount"],
+    ["subscriptions_count"],
+    ["subscriptionsCount"],
     ["subscriber_count"],
     ["subscriberCount"],
     ["sub_count"],
-    ["subCount"],
-    ["subscriptions_count"],
-    ["subscriptionsCount"],
-    ["total_subscribers"],
-    ["totalSubscribers"]
+    ["subCount"]
   ]);
+  if (Number.isFinite(total)) {
+    return total;
+  }
+  return readCountCandidates(channel, [["active_subscribers_count"], ["activeSubscribersCount"]]);
 }
 
 function extractKickCanceledSubscribersCount(channel) {
