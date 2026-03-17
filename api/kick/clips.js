@@ -1,4 +1,4 @@
-const { getRequestUrl, sendJson, sendOptions, setCorsHeaders } = require("../../lib/http.js");
+const { getRequestUrl, sendJson, sendOptions, setCorsHeaders } = require("../../_lib/http.js");
 
 const DEFAULT_CHANNEL_SLUG = "takuu";
 
