@@ -317,13 +317,14 @@ function extractSubscribersGoalCountFromText(rawText) {
     return null;
   }
 
-  const englishMatch = text.match(
-    /(\d[\d\s.,]*)\s+subscriptions?\s+to\s+go[^\n\r]*?(?:(\d[\d\s.,]*)\s*\/\s*(\d[\d\s.,]*))?/i
-  );
+  const englishMatch = text.match(/(\d[\d\s.,]*)\s+subscriptions?\s+to\s+go!?/i);
   if (englishMatch) {
     const toGo = parseLoosePositiveInt(englishMatch[1]);
-    const current = parseLoosePositiveInt(englishMatch[2]);
-    const target = parseLoosePositiveInt(englishMatch[3]);
+    const englishTailStart = Math.max(0, (englishMatch.index || 0) + String(englishMatch[0] || "").length);
+    const englishTail = text.slice(englishTailStart, englishTailStart + 360);
+    const englishRatioMatch = englishTail.match(/(\d[\d\s.,]*)\s*\/\s*(\d[\d\s.,]*)/);
+    const current = parseLoosePositiveInt(englishRatioMatch?.[1] || "");
+    const target = parseLoosePositiveInt(englishRatioMatch?.[2] || "");
     if (Number.isFinite(current)) {
       return current;
     }
@@ -332,13 +333,14 @@ function extractSubscribersGoalCountFromText(rawText) {
     }
   }
 
-  const polishMatch = text.match(
-    /brakuje\s+jeszcze\s+(\d[\d\s.,]*)\s+subskryb\w*[^\n\r]*?(?:(\d[\d\s.,]*)\s*\/\s*(\d[\d\s.,]*))?/i
-  );
+  const polishMatch = text.match(/brakuje\s+jeszcze\s+(\d[\d\s.,]*)\s+subskryb\w*/i);
   if (polishMatch) {
     const toGo = parseLoosePositiveInt(polishMatch[1]);
-    const current = parseLoosePositiveInt(polishMatch[2]);
-    const target = parseLoosePositiveInt(polishMatch[3]);
+    const polishTailStart = Math.max(0, (polishMatch.index || 0) + String(polishMatch[0] || "").length);
+    const polishTail = text.slice(polishTailStart, polishTailStart + 360);
+    const polishRatioMatch = polishTail.match(/(\d[\d\s.,]*)\s*\/\s*(\d[\d\s.,]*)/);
+    const current = parseLoosePositiveInt(polishRatioMatch?.[1] || "");
+    const target = parseLoosePositiveInt(polishRatioMatch?.[2] || "");
     if (Number.isFinite(current)) {
       return current;
     }
