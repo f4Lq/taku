@@ -1,5 +1,5 @@
-const { createRedisClient } = require("../../lib/redis.js");
-const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require("../../lib/http.js");
+const { createRedisClient } = require("../_lib/redis.js");
+const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require("../_lib/http.js");
 
 const MAX_EVENTS = 1000;
 const SYNC_EVENTS_KEY = "wheel:sync:events";

@@ -1,5 +1,5 @@
-const { createRedisClient } = require('../../lib/redis.js');
-const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require('../../lib/http.js');
+const { createRedisClient } = require("../_lib/redis.js");
+const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require("../_lib/http.js");
 
 const KARY_STATS_DATA_KEY = 'kary:stats:data';
 const KARY_STATS_UPDATED_AT_KEY = 'kary:stats:updated_at';

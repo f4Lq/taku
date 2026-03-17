@@ -1,4 +1,4 @@
-const { getRequestUrl, sendJson, sendOptions } = require("../../_lib/http.js");
+const { getRequestUrl, sendJson, sendOptions } = require("../_lib/http.js");
 
 const DEFAULT_CHANNEL_SLUG = "takuu";
 const JINA_PREFIX = "https://r.jina.ai/";
