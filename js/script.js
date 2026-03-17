@@ -141,7 +141,7 @@
     let introTypingStartDelayId = null;
     let lastAppliedRouteName = "";
     const FRIENDS_LIVE_POLL_MS = 5000;
-    const KICK_FOLLOWERS_POLL_MS = 900;
+    const KICK_FOLLOWERS_POLL_MS = 2500;
     const KICK_OAUTH_STATUS_POLL_MS = 2000;
     const KICK_CHANNEL_REQUEST_TIMEOUT_MS = 1600;
     const KICK_CHANNEL_PROXY_TIMEOUT_MS = 1400;
@@ -2237,9 +2237,10 @@
         updateKickOAuthPanelView(cachedKickOAuthStatus);
         setKickSubsBadgeState({
           count: null,
-          text: "połącz konto Kick",
-          state: "ready"
+          text: "ładowanie danych z Kick...",
+          state: "loading"
         });
+        void updateKickFollowersBadge(true);
       } catch (_error) {
         setKickOAuthPanelStatus("Nie udalo sie odlaczyc konta Kick.", "error");
       }
@@ -3468,6 +3469,8 @@
       const subscriberPaths = [
         ["subscribers_last_count"],
         ["subscribersLastCount"],
+        ["subscribers_goal_current"],
+        ["subscribersGoalCurrent"],
         ["subscribers_count"],
         ["subscribersCount"],
         ["subscriber_count"],
@@ -3506,6 +3509,18 @@
         ["profile", "subscribersCount"]
       ];
       return readKickNumericCandidates(channelData, subscriberPaths);
+    }
+
+    function extractKickGoalSubscribersCount(channelData) {
+      const goalPaths = [
+        ["subscribers_goal_current"],
+        ["subscribersGoalCurrent"],
+        ["goal", "current"],
+        ["goal", "subs", "current"],
+        ["subscription_goal", "current"],
+        ["subscriptionGoal", "current"]
+      ];
+      return readKickNumericCandidates(channelData, goalPaths);
     }
 
     function setKickSubsBadgeState({ count = null, text = "subów na Kicku", state = "ready" } = {}) {
@@ -3559,10 +3574,17 @@
       }
 
       const pendingTasks = [];
+      let sharedChannelPayloadPromise = null;
+      const getSharedChannelPayload = () => {
+        if (!sharedChannelPayloadPromise) {
+          sharedChannelPayloadPromise = Promise.resolve().then(() => fetchKickChannelJson(CHANNEL_SLUG));
+        }
+        return sharedChannelPayloadPromise;
+      };
 
       if (hasFollowersBadge) {
         const followersTask = Promise.resolve()
-          .then(() => fetchKickChannelJson(CHANNEL_SLUG))
+          .then(() => getSharedChannelPayload())
           .then((channelPayload) => {
             const followersCount = extractKickFollowersCount(channelPayload);
             setKickFollowersBadgeState({
@@ -3590,19 +3612,9 @@
 
       if (hasSubsBadge) {
         const subsTask = Promise.resolve()
-          .then(() => fetchKickSubscribersFromOAuth())
-          .then((subsPayload) => {
-            const payload = subsPayload || {};
-            const subscribersCount = Number.isFinite(Number(payload.count)) ? Number(payload.count) : null;
-            if (payload.linked === false) {
-              setKickSubsBadgeState({
-                count: null,
-                text: "połącz konto Kick",
-                state: "ready"
-              });
-              return;
-            }
-
+          .then(() => getSharedChannelPayload())
+          .then((channelPayload) => {
+            const subscribersCount = extractKickGoalSubscribersCount(channelPayload);
             setKickSubsBadgeState({
               count: Number.isFinite(subscribersCount) ? subscribersCount : null,
               text: "subów na Kicku",
@@ -3613,8 +3625,8 @@
             if (!hasSubsRenderedOnce) {
               setKickSubsBadgeState({
                 count: null,
-                text: IS_FILE_PROTOCOL ? "brak danych (odpal przez serwer)" : "połącz konto Kick",
-                state: IS_FILE_PROTOCOL ? "error" : "ready"
+                text: IS_FILE_PROTOCOL ? "brak danych (odpal przez serwer)" : "brak danych z Kick",
+                state: "error"
               });
             } else {
               streamIntroSubsStatEl.classList.remove("is-loading");

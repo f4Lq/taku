@@ -12,6 +12,39 @@ const {
   saveKickLink
 } = require("../_lib/kick-oauth.js");
 
+function parseSafeCount(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.max(0, Math.floor(parsed));
+}
+
+function pickPublicSubscribersCount(payload) {
+  const channel = payload && typeof payload.channel === "object" ? payload.channel : null;
+  if (!channel) {
+    return null;
+  }
+
+  const goalCurrent =
+    parseSafeCount(channel.subscribers_goal_current) ?? parseSafeCount(channel.subscribersGoalCurrent);
+  if (Number.isFinite(goalCurrent)) {
+    return goalCurrent;
+  }
+
+  const source = String(payload?.subscribersSource || "").trim();
+  if (source === "kick-channel-goal-jina") {
+    const goalFallback =
+      parseSafeCount(channel.subscribers_last_count) ?? parseSafeCount(channel.subscribersLastCount);
+    if (Number.isFinite(goalFallback)) {
+      return goalFallback;
+    }
+  }
+
+  const fallback = extractKickSubscribersCount(channel);
+  return Number.isFinite(fallback) ? Math.max(0, Math.floor(fallback)) : null;
+}
+
 async function fetchPublicTotalSubscribersCount(requestUrl, channelSlug, accessToken = "") {
   const slug = String(channelSlug || "").trim();
   if (!slug) {
@@ -41,8 +74,7 @@ async function fetchPublicTotalSubscribersCount(requestUrl, channelSlug, accessT
       return null;
     }
 
-    const count = extractKickSubscribersCount(payload.channel);
-    return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null;
+    return pickPublicSubscribersCount(payload);
   } catch (_error) {
     return null;
   }

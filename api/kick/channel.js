@@ -2,6 +2,8 @@ const { getRequestUrl, sendJson, sendOptions } = require("../_lib/http.js");
 
 const DEFAULT_CHANNEL_SLUG = "takuu";
 const JINA_PREFIX = "https://r.jina.ai/";
+const SUB_GOAL_CACHE_TTL_MS = 4000;
+const subscribersGoalCacheBySlug = new Map();
 
 function parseCountValue(rawValue) {
   if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
@@ -358,6 +360,11 @@ async function fetchSubscribersGoalCountViaJinaPage(channelSlug) {
     throw new Error("SUB_GOAL_INVALID_SLUG");
   }
 
+  const cachedGoal = subscribersGoalCacheBySlug.get(normalizedSlug);
+  if (cachedGoal && Number.isFinite(cachedGoal.count) && Number(cachedGoal.expiresAt) > Date.now()) {
+    return Number(cachedGoal.count);
+  }
+
   const response = await fetch(`${JINA_PREFIX}http://kick.com/${encodeURIComponent(normalizedSlug)}`, {
     method: "GET",
     headers: {
@@ -375,12 +382,23 @@ async function fetchSubscribersGoalCountViaJinaPage(channelSlug) {
   if (!Number.isFinite(count)) {
     throw new Error("SUB_GOAL_NOT_FOUND");
   }
+  subscribersGoalCacheBySlug.set(normalizedSlug, {
+    count,
+    expiresAt: Date.now() + SUB_GOAL_CACHE_TTL_MS
+  });
   return count;
 }
 
 async function fetchSubscribersLastCount(channelSlug, attempts = [], requestHeaders = {}) {
   const authHeaders = buildKickAuthHeaders(requestHeaders);
   const subscribersLastUrl = `https://kick.com/api/v2/channels/${encodeURIComponent(channelSlug)}/subscribers/last`;
+
+  try {
+    const count = await fetchSubscribersGoalCountViaJinaPage(channelSlug);
+    return { count, source: "kick-channel-goal-jina" };
+  } catch (error) {
+    attempts.push(`kick-channel-goal-jina:${String(error?.message || "request_failed")}`);
+  }
 
   try {
     const count = await fetchSubscribersLastCountDirect(subscribersLastUrl, authHeaders);
@@ -396,13 +414,6 @@ async function fetchSubscribersLastCount(channelSlug, attempts = [], requestHead
     attempts.push(`kick-v2-subs-last-jina:${String(error?.message || "request_failed")}`);
   }
 
-  try {
-    const count = await fetchSubscribersGoalCountViaJinaPage(channelSlug);
-    return { count, source: "kick-channel-goal-jina" };
-  } catch (error) {
-    attempts.push(`kick-channel-goal-jina:${String(error?.message || "request_failed")}`);
-  }
-
   return { count: null, source: null };
 }
 
@@ -411,30 +422,37 @@ async function withSubscribersLastCount(channelSlug, channel, attempts = [], req
     return { channel, subscribersSource: null };
   }
 
-  const channelCount = extractSubscribersCountFromChannelPayload(channel);
-  if (Number.isFinite(channelCount)) {
+  const { count, source } = await fetchSubscribersLastCount(channelSlug, attempts, requestHeaders);
+  if (Number.isFinite(count)) {
+    const isGoalSource = source === "kick-channel-goal-jina";
     return {
       channel: {
         ...channel,
-        subscribers_last_count: channelCount,
-        subscribersLastCount: channelCount
+        subscribers_last_count: count,
+        subscribersLastCount: count,
+        ...(isGoalSource
+          ? {
+              subscribers_goal_current: count,
+              subscribersGoalCurrent: count
+            }
+          : {})
       },
-      subscribersSource: "kick-channel-data"
+      subscribersSource: source
     };
   }
 
-  const { count, source } = await fetchSubscribersLastCount(channelSlug, attempts, requestHeaders);
-  if (!Number.isFinite(count)) {
+  const channelCount = extractSubscribersCountFromChannelPayload(channel);
+  if (!Number.isFinite(channelCount)) {
     return { channel, subscribersSource: source };
   }
 
   return {
     channel: {
       ...channel,
-      subscribers_last_count: count,
-      subscribersLastCount: count
+      subscribers_last_count: channelCount,
+      subscribersLastCount: channelCount
     },
-    subscribersSource: source
+    subscribersSource: "kick-channel-data"
   };
 }
 
