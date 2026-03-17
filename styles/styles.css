@@ -3142,12 +3142,42 @@ h1 {
 
 .clip-author {
   margin: 0;
-  color: #f2f6ff;
+  color: #e8f4ff;
   font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+a.clip-author {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  width: fit-content;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 184, 255, 0.52);
+  background: linear-gradient(120deg, rgba(54, 88, 140, 0.36), rgba(32, 54, 95, 0.44));
+  box-shadow: 0 4px 12px rgba(18, 36, 72, 0.35);
+  text-decoration: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+a.clip-author:hover,
+a.clip-author:focus-visible {
+  color: #f4fbff;
+  border-color: rgba(160, 212, 255, 0.8);
+  box-shadow: 0 6px 16px rgba(28, 58, 112, 0.45);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+a.clip-author:focus-visible {
+  outline: 2px solid rgba(165, 220, 255, 0.65);
+  outline-offset: 2px;
 }
 
 .clip-menu {
@@ -5780,12 +5810,20 @@ body.route-clips .clip-meta-time {
 
 body.route-clips .clip-author {
   margin: 0;
-  color: #f2f7ff;
-  font-size: 0.74rem;
+  color: #eaf7ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.22;
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
   word-break: break-word;
+}
+
+body.route-clips a.clip-author {
+  padding: 1px 8px;
+  border-color: rgba(127, 191, 255, 0.56);
+  background: linear-gradient(120deg, rgba(67, 103, 160, 0.34), rgba(31, 51, 89, 0.46));
 }
 
 body.route-clips .clip-menu {

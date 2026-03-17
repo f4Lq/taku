@@ -7506,6 +7506,146 @@
       return "";
     }
 
+    function pickFirstNonEmptyString(values) {
+      if (!Array.isArray(values)) {
+        return "";
+      }
+
+      for (const value of values) {
+        const normalized = String(value ?? "").trim();
+        if (normalized) {
+          return normalized;
+        }
+      }
+
+      return "";
+    }
+
+    function normalizeKickSlug(value) {
+      const raw = String(value ?? "").trim();
+      if (!raw) {
+        return "";
+      }
+
+      const parsed = getKickSlugFromUrl(raw);
+      const cleaned = String(parsed || raw)
+        .trim()
+        .replace(/^@+/, "")
+        .split(/[/?#]/)[0]
+        .trim()
+        .toLowerCase();
+      return cleaned;
+    }
+
+    function buildKickProfileUrl(values) {
+      if (!Array.isArray(values)) {
+        return "";
+      }
+
+      for (const value of values) {
+        const slug = normalizeKickSlug(value);
+        if (slug) {
+          return `https://kick.com/${encodeURIComponent(slug)}`;
+        }
+      }
+
+      return "";
+    }
+
+    function resolveClipAuthorData(apiClip, channel, channelSlug) {
+      const authorObjects = [
+        apiClip?.creator,
+        apiClip?.created_by,
+        apiClip?.clipper,
+        apiClip?.author,
+        apiClip?.user,
+        apiClip?.owner,
+        apiClip?.uploader,
+        apiClip?.creator_user,
+        apiClip?.clipper_user
+      ].filter((entry) => entry && typeof entry === "object");
+
+      const nestedObjects = [];
+      authorObjects.forEach((entry) => {
+        if (entry.user && typeof entry.user === "object") {
+          nestedObjects.push(entry.user);
+        }
+        if (entry.channel && typeof entry.channel === "object") {
+          nestedObjects.push(entry.channel);
+        }
+      });
+      const allAuthorObjects = [...authorObjects, ...nestedObjects];
+
+      const authorName = pickFirstNonEmptyString([
+        apiClip?.creator_username,
+        apiClip?.created_by_username,
+        apiClip?.clipper_username,
+        apiClip?.author_name,
+        ...allAuthorObjects.map(
+          (entry) =>
+            entry.username ??
+            entry.display_name ??
+            entry.displayName ??
+            entry.name ??
+            entry.login ??
+            entry.slug
+        ),
+        channel?.username,
+        channel?.slug,
+        channelSlug,
+        CHANNEL_SLUG
+      ]) || CHANNEL_SLUG;
+
+      const authorUrl = buildKickProfileUrl([
+        apiClip?.creator_url,
+        apiClip?.created_by_url,
+        apiClip?.clipper_url,
+        apiClip?.author_url,
+        apiClip?.creator_slug,
+        apiClip?.created_by_slug,
+        apiClip?.clipper_slug,
+        apiClip?.author_slug,
+        ...allAuthorObjects.map(
+          (entry) =>
+            entry.channel_url ??
+            entry.channelUrl ??
+            entry.profile_url ??
+            entry.profileUrl ??
+            entry.url ??
+            entry.href ??
+            entry.slug ??
+            entry.username
+        ),
+        authorName,
+        channel?.slug,
+        channel?.username,
+        channelSlug,
+        CHANNEL_SLUG
+      ]);
+
+      const authorAvatar = pickFirstNonEmptyString([
+        apiClip?.creator_avatar,
+        apiClip?.author_avatar,
+        ...allAuthorObjects.map(
+          (entry) =>
+            entry.profile_picture ??
+            entry.profilePicture ??
+            entry.avatar_url ??
+            entry.avatarUrl ??
+            entry.avatar ??
+            entry.picture
+        ),
+        channel?.profile_picture,
+        CHANNEL_AVATAR_FALLBACK
+      ]) || CHANNEL_AVATAR_FALLBACK;
+
+      return {
+        name: authorName,
+        url: authorUrl,
+        avatar: authorAvatar
+      };
+    }
+
     function mapApiClip(apiClip) {
       if (!apiClip) {
         return null;
@@ -7524,6 +7664,7 @@
       const createdAt = apiClip.created_at || apiClip.createdAt || apiClip.published_at || "";
       const viewCount = apiClip.view_count ?? apiClip.views ?? apiClip.viewers ?? 0;
       const playlistUrl = pickClipPlaybackUrl(apiClip, thumbnail);
+      const author = resolveClipAuthorData(apiClip, channel, channelSlug);
 
       return {
         id: clipId,
@@ -7535,8 +7676,9 @@
         pageUrl: `https://kick.com/${channelSlug}/clips/${clipId}`,
         thumbnail,
         playlistUrl,
-        authorName: channel.username || CHANNEL_SLUG,
-        authorAvatar: channel.profile_picture || CHANNEL_AVATAR_FALLBACK
+        authorName: author.name,
+        authorUrl: author.url,
+        authorAvatar: author.avatar
       };
     }
 
@@ -8558,6 +8700,7 @@
         const categoryLabel = shortenCategory(clip.category) || "Klip";
         const metaTimeLabel = localizedTime || "";
         const authorName = clip.authorName || CHANNEL_SLUG;
+        const authorUrl = clip.authorUrl || "";
         const authorAvatar = clip.authorAvatar || CHANNEL_AVATAR_FALLBACK;
         const duration = clip.duration || "00:00";
         const clipPageUrl = clip.pageUrl || `https://kick.com/${CHANNEL_SLUG}`;
@@ -8603,7 +8746,9 @@
                 <span class="clip-meta-category">${escapeHtml(categoryLabel)}</span>
                 ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">·</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
               </p>
-              <p class="clip-author">${escapeHtml(authorName)}</p>
+              ${authorUrl
+                ? `<a class="clip-author" href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(authorName)}</a>`
+                : `<p class="clip-author">${escapeHtml(authorName)}</p>`}
             </div>
             <details class="clip-actions">
               <summary class="clip-menu" aria-label="Opcje klipu"><i class="fas fa-ellipsis-v" aria-hidden="true"></i></summary>
