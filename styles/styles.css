@@ -2212,6 +2212,65 @@ body.obs-timery-overlay main.wrap {
   margin-left: 8px;
 }
 
+.admin-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.admin-permissions-details {
+  position: relative;
+}
+
+.admin-permissions-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+}
+
+.admin-permissions-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-permissions-summary::after {
+  content: "▾";
+  font-size: 0.78rem;
+  opacity: 0.85;
+  transition: transform 140ms ease;
+}
+
+.admin-permissions-details[open] .admin-permissions-summary::after {
+  transform: rotate(180deg);
+}
+
+.admin-permissions-list {
+  margin: 8px 0 0;
+  padding: 10px;
+  min-width: 220px;
+  list-style: none;
+  border: 1px solid #2a4f79;
+  border-radius: 8px;
+  background: rgba(7, 18, 34, 0.92);
+  display: grid;
+  gap: 8px;
+}
+
+.admin-permission-item {
+  margin: 0;
+}
+
+.admin-permission-item label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #dce9ff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
 .admin-access-checkbox {
   accent-color: #3f97ea;
 }

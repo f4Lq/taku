@@ -307,6 +307,7 @@
     const WHEEL_SYNC_MAX_PROCESSED_EVENTS = 600;
     const KARY_STATE_SYNC_POLL_MS = 1000;
     const KARY_STATS_SYNC_POLL_MS = 1300;
+    const KARY_STATE_API_HEARTBEAT_MS = 10000;
     const ADMIN_STATE_SYNC_POLL_MS = 1300;
     const LAST_ROUTE_PATH_KEY = "takuu_last_route_path";
     const LAST_RELOAD_SOURCE_KEY = "takuu_last_reload_source_path";
@@ -339,6 +340,7 @@
     let karyStateRemoteUpdatedAt = 0;
     let karyStatePushInFlight = false;
     let karyStatePushQueued = false;
+    let karyStateLastApiHeartbeatAt = 0;
     let karyStatsSyncPollId = null;
     let karyStatsSyncBusy = false;
     let karyStatsApiDisabled = false;
@@ -1264,6 +1266,7 @@
           .map((timer) => {
             const remaining = Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0)));
             const timerStats = karyStatsState.timers[timer.key] || { recordSeconds: 0, totalAddedSeconds: 0 };
+            const timerCycleTotalSeconds = Math.max(0, Math.floor(Number(karyLiveState.timerTotals[timer.key] || 0)));
             const recordSeconds = Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)));
             const totalAddedSeconds = Math.max(0, Math.floor(Number(timerStats.totalAddedSeconds || 0)));
             const isActive = remaining > 0;
@@ -1280,7 +1283,7 @@
                 <div class="kary-stats-item-divider"></div>
                 <div class="kary-stats-item-metrics">
                   <div class="kary-stats-item-metric">
-                    <p class="kary-stats-item-label">REKORD (EVER)</p>
+                    <p class="kary-stats-item-label">CIĄGIEM (EVER)</p>
                     <p class="kary-stats-item-value is-record">${escapeHtml(formatKaryStatsTimerClock(recordSeconds))}</p>
                   </div>
                   <div class="kary-stats-item-metric">
@@ -3780,9 +3783,10 @@
         const visible = !account.isRoot && visibleAdminPasswords.has(account.id);
         const discordUserId = normalizeDiscordUserId(account.discordUserId);
         const discordName = String(account.discordName || "").trim();
-        const panelPermissionLabel = account.canAccessAdmin ? "Zabierz Panel" : "Nadaj Panel";
-        const streamObsPermissionLabel = account.canAccessStreamObs ? "Zabierz StreamOBS" : "Nadaj StreamOBS";
-        const bindingsPermissionLabel = account.canAccessBindings ? "Zabierz Powiązania" : "Nadaj Powiązania";
+        const permissionsEnabledCount =
+          (account.canAccessAdmin ? 1 : 0) +
+          (account.canAccessStreamObs ? 1 : 0) +
+          (account.canAccessBindings ? 1 : 0);
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${escapeHtml(account.login)}</td>
@@ -3804,10 +3808,52 @@
               account.isRoot
                 ? "-"
                 : `
-                  <button class="admin-row-btn" type="button" data-account-permission-admin="${escapeHtml(account.id)}">${escapeHtml(panelPermissionLabel)}</button>
-                  <button class="admin-row-btn" type="button" data-account-permission-streamobs="${escapeHtml(account.id)}">${escapeHtml(streamObsPermissionLabel)}</button>
-                  <button class="admin-row-btn" type="button" data-account-permission-bindings="${escapeHtml(account.id)}">${escapeHtml(bindingsPermissionLabel)}</button>
-                  <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtml(account.id)}">Usuń</button>
+                  <div class="admin-account-actions">
+                    <details class="admin-permissions-details">
+                      <summary class="admin-row-btn admin-permissions-summary">
+                        Permisje (${permissionsEnabledCount}/3)
+                      </summary>
+                      <ul class="admin-permissions-list">
+                        <li class="admin-permission-item">
+                          <label>
+                            <span>Panel Admina</span>
+                            <input
+                              class="admin-access-checkbox"
+                              type="checkbox"
+                              data-account-permission-checkbox="admin"
+                              data-account-id="${escapeHtml(account.id)}"
+                              ${account.canAccessAdmin ? "checked" : ""}
+                            >
+                          </label>
+                        </li>
+                        <li class="admin-permission-item">
+                          <label>
+                            <span>StreamOBS</span>
+                            <input
+                              class="admin-access-checkbox"
+                              type="checkbox"
+                              data-account-permission-checkbox="streamobs"
+                              data-account-id="${escapeHtml(account.id)}"
+                              ${account.canAccessStreamObs ? "checked" : ""}
+                            >
+                          </label>
+                        </li>
+                        <li class="admin-permission-item">
+                          <label>
+                            <span>Powiązania</span>
+                            <input
+                              class="admin-access-checkbox"
+                              type="checkbox"
+                              data-account-permission-checkbox="bindings"
+                              data-account-id="${escapeHtml(account.id)}"
+                              ${account.canAccessBindings ? "checked" : ""}
+                            >
+                          </label>
+                        </li>
+                      </ul>
+                    </details>
+                    <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtml(account.id)}">Usuń</button>
+                  </div>
                 `
             }
           </td>
@@ -4997,6 +5043,42 @@
       return normalized;
     }
 
+    function mergeKaryStatsSnapshots(baseSnapshot, incomingSnapshot) {
+      const base = normalizeKaryStatsSnapshot(baseSnapshot);
+      const incoming = normalizeKaryStatsSnapshot(incomingSnapshot);
+
+      return {
+        timers: karyTimerDefinitions.reduce((acc, timer) => {
+          const key = timer.key;
+          const baseEntry = base.timers[key] || {};
+          const incomingEntry = incoming.timers[key] || {};
+          acc[key] = {
+            recordSeconds: Math.max(
+              Math.max(0, Math.floor(Number(baseEntry.recordSeconds || 0) || 0)),
+              Math.max(0, Math.floor(Number(incomingEntry.recordSeconds || 0) || 0))
+            ),
+            totalAddedSeconds: Math.max(
+              Math.max(0, Math.floor(Number(baseEntry.totalAddedSeconds || 0) || 0)),
+              Math.max(0, Math.floor(Number(incomingEntry.totalAddedSeconds || 0) || 0))
+            )
+          };
+          return acc;
+        }, {}),
+        counters: karyCounterDefinitions.reduce((acc, counter) => {
+          const key = counter.key;
+          const baseEntry = base.counters[key] || {};
+          const incomingEntry = incoming.counters[key] || {};
+          acc[key] = {
+            maxValue: Math.max(
+              Math.max(0, Math.floor(Number(baseEntry.maxValue || 0) || 0)),
+              Math.max(0, Math.floor(Number(incomingEntry.maxValue || 0) || 0))
+            )
+          };
+          return acc;
+        }, {})
+      };
+    }
+
     function loadKaryStats() {
       karyStatsState = readStorageJson(KARY_STATS_KEY, { timers: {}, counters: {} });
       ensureKaryStatsShape();
@@ -5014,15 +5096,16 @@
     function applyRemoteKaryStats(rawState, updatedAt = 0) {
       const normalized = normalizeKaryStatsSnapshot(rawState);
       const currentSnapshot = getKaryStatsSnapshot();
+      const mergedSnapshot = mergeKaryStatsSnapshots(currentSnapshot, normalized);
       if (updatedAt > 0) {
         karyStatsRemoteUpdatedAt = Math.max(karyStatsRemoteUpdatedAt, Math.floor(updatedAt));
       }
-      if (getKaryStatsSnapshotKey(normalized) === getKaryStatsSnapshotKey(currentSnapshot)) {
+      if (getKaryStatsSnapshotKey(mergedSnapshot) === getKaryStatsSnapshotKey(currentSnapshot)) {
         return false;
       }
 
-      karyStatsState = normalized;
-      saveStorageJson(KARY_STATS_KEY, normalized);
+      karyStatsState = mergedSnapshot;
+      saveStorageJson(KARY_STATS_KEY, mergedSnapshot);
       if (lastAppliedRouteName === "stats") {
         renderKaryStats();
       }
@@ -5079,6 +5162,7 @@
           ? nextSnapshot.counters
           : {};
 
+      const skipAddedSeconds = options && options.skipAddedSeconds === true;
       let changed = false;
       karyTimerDefinitions.forEach((timer) => {
         const timerKey = timer.key;
@@ -5091,7 +5175,7 @@
           changed = true;
         }
 
-        if (nextValue > previousValue) {
+        if (!skipAddedSeconds && nextValue > previousValue) {
           timerStats.totalAddedSeconds = Math.max(0, Math.floor(Number(timerStats.totalAddedSeconds || 0))) + (nextValue - previousValue);
           changed = true;
         }
@@ -5181,7 +5265,12 @@
       }
 
       karyLiveState = normalized;
-      updateKaryStatsFromStateTransition(currentSnapshot, getKaryStateSnapshot(), { render: false });
+      updateKaryStatsFromStateTransition(currentSnapshot, getKaryStateSnapshot(), {
+        render: false,
+        queueApi: false,
+        skipAddedSeconds: true
+      });
+      karyStateLastApiHeartbeatAt = Date.now();
       saveKaryState();
       renderKaryLiveState();
       return true;
@@ -5261,6 +5350,7 @@
         if (updatedAt > 0) {
           karyStateRemoteUpdatedAt = Math.max(karyStateRemoteUpdatedAt, updatedAt);
         }
+        karyStateLastApiHeartbeatAt = Date.now();
         return Boolean(payload && payload.ok === true);
       } catch (error) {
         console.warn("[TakuuScript] POST /api/kary/state request error", error);
@@ -5377,7 +5467,12 @@
         return;
       }
 
-      void syncKaryStateFromApiOnce({ force: true });
+      void syncKaryStateFromApiOnce({ force: true }).finally(() => {
+        // If Redis has no snapshot yet, seed it with current local state.
+        if (karyStateRemoteUpdatedAt <= 0) {
+          queueKaryStateApiPush();
+        }
+      });
       if (karyStateSyncPollId) {
         return;
       }
@@ -5577,7 +5672,13 @@
         return;
       }
 
-      void syncKaryStatsFromApiOnce({ force: true });
+      void syncKaryStatsFromApiOnce({ force: true }).finally(() => {
+        // If Redis has no snapshot yet, seed timer/counter stats.
+        if (karyStatsRemoteUpdatedAt <= 0) {
+          syncKaryStatsRecordsFromCurrentState({ queueApi: false, render: false });
+          queueKaryStatsApiPush();
+        }
+      });
       if (karyStatsSyncPollId) {
         return;
       }
@@ -6025,8 +6126,9 @@
       const now = Date.now();
       const lastTickAt = Math.max(0, Math.floor(Number(karyLiveState.lastTickAt || now)));
       const elapsedSeconds = Math.max(0, Math.floor((now - lastTickAt) / 1000));
+      const consumedSeconds = document.hidden ? elapsedSeconds : Math.min(1, elapsedSeconds);
 
-      if (elapsedSeconds <= 0) {
+      if (consumedSeconds <= 0) {
         renderKaryLiveState();
         return;
       }
@@ -6035,7 +6137,7 @@
       karyTimerDefinitions.forEach((timer) => {
         const current = Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0)));
         if (current > 0) {
-          const nextValue = Math.max(0, current - elapsedSeconds);
+          const nextValue = Math.max(0, current - consumedSeconds);
           if (nextValue !== current) {
             changed = true;
             karyLiveState.timers[timer.key] = nextValue;
@@ -6043,9 +6145,18 @@
         }
       });
 
-      karyLiveState.lastTickAt = now;
+      karyLiveState.lastTickAt = Math.min(now, lastTickAt + consumedSeconds * 1000);
       if (changed) {
         saveKaryState();
+        const hasActiveTimers = karyTimerDefinitions.some(
+          (timer) => Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0))) > 0
+        );
+        const shouldHeartbeatStatePush =
+          !hasActiveTimers || (now - karyStateLastApiHeartbeatAt >= KARY_STATE_API_HEARTBEAT_MS);
+        if (shouldHeartbeatStatePush) {
+          queueKaryStateApiPush();
+          karyStateLastApiHeartbeatAt = now;
+        }
       } else {
         ensureKaryStateShape();
       }
@@ -9295,84 +9406,6 @@
           return;
         }
 
-        const panelPermissionBtn = event.target.closest("[data-account-permission-admin]");
-        if (panelPermissionBtn) {
-          const accountId = String(panelPermissionBtn.dataset.accountPermissionAdmin || "");
-          const account = adminAccounts.find((item) => item.id === accountId);
-          if (!account || account.isRoot) {
-            return;
-          }
-
-          account.canAccessAdmin = !account.canAccessAdmin;
-          saveAdminAccounts();
-          renderAdminAccountsTable();
-          setPanelStatus(
-            adminAccountStatusEl,
-            account.canAccessAdmin ? "Nadano permisję do Panelu Admina." : "Odebrano permisję do Panelu Admina.",
-            "success"
-          );
-          sendAdminWebhookEvent("account_access_admin_change", account.login, {
-            login: account.login,
-            discordUserId: normalizeDiscordUserId(account.discordUserId),
-            canAccessAdmin: account.canAccessAdmin,
-            canAccessStreamObs: account.canAccessStreamObs,
-            canAccessBindings: account.canAccessBindings
-          });
-          return;
-        }
-
-        const streamObsPermissionBtn = event.target.closest("[data-account-permission-streamobs]");
-        if (streamObsPermissionBtn) {
-          const accountId = String(streamObsPermissionBtn.dataset.accountPermissionStreamobs || "");
-          const account = adminAccounts.find((item) => item.id === accountId);
-          if (!account || account.isRoot) {
-            return;
-          }
-
-          account.canAccessStreamObs = !account.canAccessStreamObs;
-          saveAdminAccounts();
-          renderAdminAccountsTable();
-          setPanelStatus(
-            adminAccountStatusEl,
-            account.canAccessStreamObs ? "Nadano permisję do StreamOBS." : "Odebrano permisję do StreamOBS.",
-            "success"
-          );
-          sendAdminWebhookEvent("account_access_streamobs_change", account.login, {
-            login: account.login,
-            discordUserId: normalizeDiscordUserId(account.discordUserId),
-            canAccessAdmin: account.canAccessAdmin,
-            canAccessStreamObs: account.canAccessStreamObs,
-            canAccessBindings: account.canAccessBindings
-          });
-          return;
-        }
-
-        const bindingsPermissionBtn = event.target.closest("[data-account-permission-bindings]");
-        if (bindingsPermissionBtn) {
-          const accountId = String(bindingsPermissionBtn.dataset.accountPermissionBindings || "");
-          const account = adminAccounts.find((item) => item.id === accountId);
-          if (!account || account.isRoot) {
-            return;
-          }
-
-          account.canAccessBindings = !account.canAccessBindings;
-          saveAdminAccounts();
-          renderAdminAccountsTable();
-          setPanelStatus(
-            adminAccountStatusEl,
-            account.canAccessBindings ? "Nadano permisję do Powiązań." : "Odebrano permisję do Powiązań.",
-            "success"
-          );
-          sendAdminWebhookEvent("account_access_bindings_change", account.login, {
-            login: account.login,
-            discordUserId: normalizeDiscordUserId(account.discordUserId),
-            canAccessAdmin: account.canAccessAdmin,
-            canAccessStreamObs: account.canAccessStreamObs,
-            canAccessBindings: account.canAccessBindings
-          });
-          return;
-        }
-
         const removeBtn = event.target.closest("[data-account-remove]");
         if (!removeBtn) {
           return;
@@ -9407,6 +9440,61 @@
         ) {
           logoutAdmin();
         }
+      });
+
+      adminAccountsTableBodyEl.addEventListener("change", (event) => {
+        const permissionCheckbox = event.target.closest("[data-account-permission-checkbox]");
+        if (!permissionCheckbox) {
+          return;
+        }
+
+        if (!hasOwnerAdminAccess()) {
+          renderAdminAccountsTable();
+          setPanelStatus(adminAccountStatusEl, "Brak permisji do zakładki Panel Admina.", "error");
+          return;
+        }
+
+        const accountId = String(permissionCheckbox.dataset.accountId || "");
+        const permissionKey = String(permissionCheckbox.dataset.accountPermissionCheckbox || "").trim().toLowerCase();
+        const account = adminAccounts.find((item) => item.id === accountId);
+        if (!account || account.isRoot) {
+          renderAdminAccountsTable();
+          return;
+        }
+
+        const permissionFieldByKey = {
+          admin: "canAccessAdmin",
+          streamobs: "canAccessStreamObs",
+          bindings: "canAccessBindings"
+        };
+        const successMessageByKey = {
+          admin: permissionCheckbox.checked ? "Nadano permisję do Panelu Admina." : "Odebrano permisję do Panelu Admina.",
+          streamobs: permissionCheckbox.checked ? "Nadano permisję do StreamOBS." : "Odebrano permisję do StreamOBS.",
+          bindings: permissionCheckbox.checked ? "Nadano permisję do Powiązań." : "Odebrano permisję do Powiązań."
+        };
+        const webhookActionByKey = {
+          admin: "account_access_admin_change",
+          streamobs: "account_access_streamobs_change",
+          bindings: "account_access_bindings_change"
+        };
+
+        const permissionField = permissionFieldByKey[permissionKey];
+        if (!permissionField) {
+          renderAdminAccountsTable();
+          return;
+        }
+
+        account[permissionField] = Boolean(permissionCheckbox.checked);
+        saveAdminAccounts();
+        renderAdminAccountsTable();
+        setPanelStatus(adminAccountStatusEl, successMessageByKey[permissionKey], "success");
+        sendAdminWebhookEvent(webhookActionByKey[permissionKey], account.login, {
+          login: account.login,
+          discordUserId: normalizeDiscordUserId(account.discordUserId),
+          canAccessAdmin: account.canAccessAdmin,
+          canAccessStreamObs: account.canAccessStreamObs,
+          canAccessBindings: account.canAccessBindings
+        });
       });
     }
 
