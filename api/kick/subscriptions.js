@@ -12,7 +12,7 @@ const {
   saveKickLink
 } = require("../_lib/kick-oauth.js");
 
-async function fetchPublicTotalSubscribersCount(requestUrl, channelSlug) {
+async function fetchPublicTotalSubscribersCount(requestUrl, channelSlug, accessToken = "") {
   const slug = String(channelSlug || "").trim();
   if (!slug) {
     return null;
@@ -25,7 +25,10 @@ async function fetchPublicTotalSubscribersCount(requestUrl, channelSlug) {
     const response = await fetch(endpoint.toString(), {
       method: "GET",
       headers: {
-        Accept: "application/json"
+        Accept: "application/json",
+        ...(String(accessToken || "").trim()
+          ? { "x-kick-auth-bearer": String(accessToken || "").trim() }
+          : {})
       },
       cache: "no-store"
     });
@@ -132,7 +135,8 @@ module.exports = async function handler(req, res) {
         link = patchKickLinkWithChannel(link, channel, channelsResponse.source);
         const totalSubscribers = await fetchPublicTotalSubscribersCount(
           requestUrl,
-          link.channelSlug || config.channelSlug
+          link.channelSlug || config.channelSlug,
+          link.accessToken
         );
         if (Number.isFinite(totalSubscribers)) {
           link = {
