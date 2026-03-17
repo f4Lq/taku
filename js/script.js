@@ -9,7 +9,7 @@
     const LOCAL_KICK_OAUTH_STATUS_ENDPOINT = "/api/kick/oauth/status";
     const LOCAL_KICK_OAUTH_UNLINK_ENDPOINT = "/api/kick/oauth/unlink";
     const KICK_SUBS_LAST_COUNT_STORAGE_KEY = `takuu:kick:last-subs-goal:${CHANNEL_SLUG}`;
-    const CLIPS_MAX_ITEMS = 150; // liczba ładowania klipów w /klipy
+    const CLIPS_MAX_ITEMS = 200; // liczba ładowania klipów w /klipy
     const CHANNEL_AVATAR_FALLBACK = "https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp";
     const KICK_ICON_URL = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp";
     const clipsEl = document.getElementById("clips");

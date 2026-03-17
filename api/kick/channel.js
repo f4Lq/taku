@@ -37,14 +37,23 @@ async function loadSubscribersGoalCountFromRedis(channelSlug) {
       return null;
     }
 
-    const directCount = parseCountValue(text);
-    if (Number.isFinite(directCount)) {
-      return directCount;
+    let parsedSuccessfully = false;
+    try {
+      const parsed = JSON.parse(text);
+      parsedSuccessfully = true;
+      const payloadCount = parseCountValue(parsed?.count);
+      if (Number.isFinite(payloadCount)) {
+        return payloadCount;
+      }
+    } catch (_error) {
+      // Stored value may be plain numeric text from previous versions.
+    }
+    if (parsedSuccessfully) {
+      return null;
     }
 
-    const parsed = JSON.parse(text);
-    const payloadCount = parseCountValue(parsed?.count);
-    return Number.isFinite(payloadCount) ? payloadCount : null;
+    const directCount = parseCountValue(text);
+    return Number.isFinite(directCount) ? directCount : null;
   } catch (_error) {
     return null;
   }
