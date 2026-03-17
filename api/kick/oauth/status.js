@@ -2,6 +2,7 @@ const { createRedisClient } = require("../../_lib/redis.js");
 const { getRequestUrl, sendJson, sendOptions } = require("../../_lib/http.js");
 const {
   ensureKickLinkHasFreshAccessToken,
+  extractKickSubscribersCount,
   fetchKickChannelsByAccessToken,
   getKickOAuthConfig,
   loadKickLink,
@@ -10,6 +11,39 @@ const {
   resolveKickOAuthRedirectUri,
   saveKickLink
 } = require("../../_lib/kick-oauth.js");
+
+async function fetchPublicTotalSubscribersCount(requestUrl, channelSlug) {
+  const slug = String(channelSlug || "").trim();
+  if (!slug) {
+    return null;
+  }
+
+  try {
+    const endpoint = new URL("/api/kick/channel", String(requestUrl?.origin || "https://taku-live.pl"));
+    endpoint.searchParams.set("slug", slug);
+    endpoint.searchParams.set("_", String(Date.now()));
+    const response = await fetch(endpoint.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    if (!payload || payload.ok !== true || !payload.channel || typeof payload.channel !== "object") {
+      return null;
+    }
+
+    const count = extractKickSubscribersCount(payload.channel);
+    return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null;
+  } catch (_error) {
+    return null;
+  }
+}
 
 function toPublicLinkState(link, extra = {}) {
   const safe = link && typeof link === "object" ? link : {};
@@ -99,6 +133,17 @@ module.exports = async function handler(req, res) {
         const channel = pickKickChannel(channelsResponse.channels, link.channelSlug || config.channelSlug);
         if (channel) {
           link = patchKickLinkWithChannel(link, channel, channelsResponse.source);
+          const totalSubscribers = await fetchPublicTotalSubscribersCount(
+            url,
+            link.channelSlug || config.channelSlug
+          );
+          if (Number.isFinite(totalSubscribers)) {
+            link = {
+              ...link,
+              activeSubscribersCount: Math.max(0, Math.floor(totalSubscribers)),
+              updatedAt: Date.now()
+            };
+          }
           await saveKickLink(redis, link);
         }
       } catch (_error) {
