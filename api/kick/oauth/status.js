@@ -76,11 +76,16 @@ module.exports = async function handler(req, res) {
     const forceChannelSync = String(url.searchParams.get("force") || "") === "1";
     const now = Date.now();
 
-    const freshness = await ensureKickLinkHasFreshAccessToken(redis, link, {
-      redirectUri: resolveKickOAuthRedirectUri(url),
-      minTtlMs: 60 * 1000
-    });
-    link = freshness.link;
+    let freshness = { link, refreshed: false };
+    try {
+      freshness = await ensureKickLinkHasFreshAccessToken(redis, link, {
+        redirectUri: resolveKickOAuthRedirectUri(url),
+        minTtlMs: 60 * 1000
+      });
+      link = freshness.link;
+    } catch (_error) {
+      // Keep previous link state when token refresh fails temporarily.
+    }
 
     if (!link) {
       sendJson(res, { ok: true, linked: false });

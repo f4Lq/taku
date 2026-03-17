@@ -80,11 +80,16 @@ module.exports = async function handler(req, res) {
 
     const requestUrl = getRequestUrl(req);
     const config = getKickOAuthConfig();
-    const freshness = await ensureKickLinkHasFreshAccessToken(redis, link, {
-      redirectUri: resolveKickOAuthRedirectUri(requestUrl),
-      minTtlMs: 70 * 1000
-    });
-    link = freshness.link;
+    let freshness = { link, refreshed: false };
+    try {
+      freshness = await ensureKickLinkHasFreshAccessToken(redis, link, {
+        redirectUri: resolveKickOAuthRedirectUri(requestUrl),
+        minTtlMs: 70 * 1000
+      });
+      link = freshness.link;
+    } catch (_error) {
+      // Keep previous link state when token refresh fails temporarily.
+    }
 
     try {
       const channelsResponse = await fetchKickChannelsByAccessToken(link.accessToken, link.channelSlug || config.channelSlug);
