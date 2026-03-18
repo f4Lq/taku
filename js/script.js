@@ -131,11 +131,20 @@
     const adminNavEl = document.querySelector(".stream-log");
     const ctaKaryLinkEl = document.querySelector(".stream-cta-btn-kary");
     const ctaClipsLinkEl = document.querySelector(".stream-cta-btn-clips");
+    const CLIP_RENDER_BATCH_SIZE = 24;
+    const CLIP_POSTER_EAGER_COUNT = 18;
+    const CLIPS_FAST_LOAD_ITEMS = 60;
+    const CLIP_SOURCE_TIMEOUT_MS = 2600;
+    const CLIP_VIEWER_AUTO_HIDE_DELAY_MS = 2000;
     const downloadInProgress = new Set();
     const ROUTE_BODY_CLASSES = ["route-home", "route-kary", "route-timery", "route-liczniki", "route-clips", "route-soon", "route-stats", "route-login", "route-admin"];
     let menuOutsideCloserBound = false;
     let clipViewerState = null;
     let clipViewerOpenSeq = 0;
+    let clipPosterObserver = null;
+    let clipRenderFrameId = 0;
+    let clipRenderToken = 0;
+    let clipsLoadSeq = 0;
     let clipsLoadedOnce = false;
     let introTypingPlayed = false;
     let introTypingTickId = null;
@@ -7248,6 +7257,30 @@
       return clean;
     }
 
+    function formatClipCreatedDate(createdAtValue) {
+      const clean = String(createdAtValue ?? "").trim();
+      if (!clean) {
+        return "";
+      }
+
+      const parsed = Date.parse(clean);
+      if (Number.isNaN(parsed)) {
+        return "";
+      }
+
+      try {
+        return new Intl.DateTimeFormat("pl-PL", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        }).format(new Date(parsed));
+      } catch (_error) {
+        return "";
+      }
+    }
+
     function formatDuration(seconds) {
       const totalSeconds = Number(seconds);
       if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
@@ -7410,37 +7443,90 @@
       return parsed;
     }
 
+    async function withClipFetchTimeout(taskFactory, timeoutMs, timeoutLabel) {
+      let timeoutId = null;
+      try {
+        return await Promise.race([
+          taskFactory(),
+          new Promise((_, reject) => {
+            timeoutId = window.setTimeout(() => {
+              reject(new Error(`${timeoutLabel}_${timeoutMs}`));
+            }, timeoutMs);
+          })
+        ]);
+      } finally {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+      }
+    }
+
     async function fetchClipsPageJson(sourceUrl, cursor = "") {
       const errors = [];
 
       try {
-        return await fetchLocalKickJson(cursor);
+        return await withClipFetchTimeout(
+          () => fetchLocalKickJson(cursor),
+          CLIP_SOURCE_TIMEOUT_MS,
+          "local_clips_timeout"
+        );
       } catch (localError) {
         errors.push(`local:${localError?.message || "fail"}`);
       }
 
-      try {
-        return await fetchDirectKickJson(sourceUrl);
-      } catch (directError) {
-        errors.push(`direct:${directError?.message || "fail"}`);
-      }
+      const remoteAttempts = [
+        {
+          label: "direct",
+          task: () => fetchDirectKickJson(sourceUrl)
+        },
+        {
+          label: "allorigins",
+          task: () => fetchViaProxyJson(sourceUrl, ALL_ORIGINS_RAW_PREFIX)
+        },
+        {
+          label: "corsproxy",
+          task: () => fetchViaProxyJson(sourceUrl, CORS_PROXY_PREFIX)
+        },
+        {
+          label: "jina",
+          task: () => fetchJinaJson(sourceUrl)
+        }
+      ];
 
-      try {
-        return await fetchViaProxyJson(sourceUrl, ALL_ORIGINS_RAW_PREFIX);
-      } catch (proxyError) {
-        errors.push(`allorigins:${proxyError?.message || "fail"}`);
-      }
-
-      try {
-        return await fetchViaProxyJson(sourceUrl, CORS_PROXY_PREFIX);
-      } catch (proxyError) {
-        errors.push(`corsproxy:${proxyError?.message || "fail"}`);
-      }
-
-      try {
-        return await fetchJinaJson(sourceUrl);
-      } catch (jinaError) {
-        errors.push(`jina:${jinaError?.message || "fail"}`);
+      if (typeof Promise.any === "function") {
+        try {
+          const winner = await Promise.any(
+            remoteAttempts.map((attempt) =>
+              withClipFetchTimeout(
+                () => attempt.task(),
+                CLIP_SOURCE_TIMEOUT_MS,
+                `${attempt.label}_clips_timeout`
+              )
+                .then((payload) => ({ label: attempt.label, payload }))
+                .catch((error) => Promise.reject({ label: attempt.label, error }))
+            )
+          );
+          return winner.payload;
+        } catch (aggregateError) {
+          const reasons = Array.isArray(aggregateError?.errors) ? aggregateError.errors : [];
+          reasons.forEach((reason) => {
+            const label = String(reason?.label || "remote").trim();
+            const message = String(reason?.error?.message || reason?.message || "fail").trim() || "fail";
+            errors.push(`${label}:${message}`);
+          });
+        }
+      } else {
+        for (const attempt of remoteAttempts) {
+          try {
+            return await withClipFetchTimeout(
+              () => attempt.task(),
+              CLIP_SOURCE_TIMEOUT_MS,
+              `${attempt.label}_clips_timeout`
+            );
+          } catch (error) {
+            errors.push(`${attempt.label}:${error?.message || "fail"}`);
+          }
+        }
       }
 
       throw new Error(errors.join(" | "));
@@ -7737,7 +7823,7 @@
         }
         cursor = nextCursor;
 
-        await new Promise((resolve) => setTimeout(resolve, 120));
+        await new Promise((resolve) => setTimeout(resolve, 20));
       }
 
       return { clips: allClips, partial: true, reachedLimit: false };
@@ -7971,8 +8057,11 @@
             const hls = new window.Hls({
               enableWorker: true,
               lowLatencyMode: false,
-              maxBufferLength: 30,
-              backBufferLength: 90
+              startLevel: 0,
+              testBandwidth: false,
+              capLevelToPlayerSize: true,
+              maxBufferLength: 14,
+              backBufferLength: 35
             });
 
             const onManifest = () => {
@@ -8025,6 +8114,87 @@
       return `${minutes}:${String(secs).padStart(2, "0")}`;
     }
 
+    const CLIP_VIEWER_BUTTON_ICONS = Object.freeze({
+      play:
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 5v14l11-7z"></path></svg>',
+      pause:
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 5h4v14H7zM13 5h4v14h-4z"></path></svg>',
+      volume:
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 10v4h4l5 4V6l-5 4H3z"></path><path fill="currentColor" d="M14.4 4.2v2.1A7 7 0 0 1 19 12a7 7 0 0 1-4.6 5.7v2.1A9.3 9.3 0 0 0 21.2 12a9.3 9.3 0 0 0-6.8-7.8z"></path></svg>',
+      muted:
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 10v4h4l5 4V6l-5 4H3z"></path><path d="M16 9l5 5M21 9l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>',
+      fullscreen:
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 10V4h6v2H6v4H4zm10-6h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 4v-4h2v6h-6v-2h4z"></path></svg>'
+    });
+
+    function setClipViewerButtonIcon(buttonEl, iconName) {
+      if (!buttonEl) {
+        return;
+      }
+      const iconMarkup = CLIP_VIEWER_BUTTON_ICONS[iconName] || "";
+      buttonEl.innerHTML = iconMarkup;
+    }
+
+    function clearClipViewerAutoHideTimer(state) {
+      if (!state || !state.autoHideTimerId) {
+        return;
+      }
+      window.clearTimeout(state.autoHideTimerId);
+      state.autoHideTimerId = 0;
+    }
+
+    function setClipViewerUiHidden(state, hidden) {
+      if (!state || !state.root) {
+        return;
+      }
+      state.root.classList.toggle("is-ui-hidden", Boolean(hidden));
+    }
+
+    function shouldAutoHideClipViewerUi(state) {
+      if (!state || !state.video || !state.root || state.root.hidden) {
+        return false;
+      }
+      if (state.root.getAttribute("aria-hidden") === "true") {
+        return false;
+      }
+      if (state.video.paused || state.video.ended) {
+        return false;
+      }
+      if (state.controls && typeof state.controls.matches === "function" && state.controls.matches(":hover")) {
+        return false;
+      }
+      if (state.controls && state.controls.contains(document.activeElement)) {
+        return false;
+      }
+      return true;
+    }
+
+    function scheduleClipViewerAutoHide(state) {
+      clearClipViewerAutoHideTimer(state);
+      if (!shouldAutoHideClipViewerUi(state)) {
+        setClipViewerUiHidden(state, false);
+        return;
+      }
+
+      state.autoHideTimerId = window.setTimeout(() => {
+        if (!shouldAutoHideClipViewerUi(state)) {
+          setClipViewerUiHidden(state, false);
+          return;
+        }
+        setClipViewerUiHidden(state, true);
+      }, CLIP_VIEWER_AUTO_HIDE_DELAY_MS);
+    }
+
+    function revealClipViewerUi(state, shouldReschedule = true) {
+      if (!state) {
+        return;
+      }
+      setClipViewerUiHidden(state, false);
+      if (shouldReschedule) {
+        scheduleClipViewerAutoHide(state);
+      }
+    }
+
     function resetClipViewerVideo(videoEl) {
       if (!videoEl) {
         return;
@@ -8061,10 +8231,14 @@
       if (state.toggleBtn) {
         state.toggleBtn.dataset.state = isPlaying ? "pause" : "play";
         state.toggleBtn.setAttribute("aria-label", isPlaying ? "Pauza" : "Start");
-        const icon = state.toggleBtn.querySelector("i");
-        if (icon) {
-          icon.className = isPlaying ? "fas fa-pause" : "fas fa-play";
-        }
+        setClipViewerButtonIcon(state.toggleBtn, isPlaying ? "pause" : "play");
+      }
+
+      if (isPlaying) {
+        scheduleClipViewerAutoHide(state);
+      } else {
+        clearClipViewerAutoHideTimer(state);
+        setClipViewerUiHidden(state, false);
       }
     }
 
@@ -8079,10 +8253,7 @@
       if (state.muteBtn) {
         state.muteBtn.dataset.state = isMuted ? "muted" : "volume";
         state.muteBtn.setAttribute("aria-label", isMuted ? "Wlacz dzwiek" : "Wycisz");
-        const icon = state.muteBtn.querySelector("i");
-        if (icon) {
-          icon.className = isMuted ? "fas fa-volume-mute" : "fas fa-volume-up";
-        }
+        setClipViewerButtonIcon(state.muteBtn, isMuted ? "muted" : "volume");
       }
 
       if (state.volumeSliderEl) {
@@ -8213,7 +8384,6 @@
             </div>
             <div class="clip-viewer-controls" aria-label="Sterowanie podgladu klipu">
               <button class="clip-viewer-control-btn clip-viewer-control-toggle" type="button" data-state="play" aria-label="Start">
-                <i class="fas fa-play" aria-hidden="true"></i>
               </button>
               <span class="clip-viewer-control-time">
                 <span class="clip-viewer-time-current">0:00</span>
@@ -8221,12 +8391,12 @@
                 <span class="clip-viewer-time-total">0:00</span>
               </span>
               <input class="clip-viewer-control-progress" type="range" min="0" max="1000" step="1" value="0" aria-label="Postep klipu">
-              <button class="clip-viewer-control-btn clip-viewer-control-volume" type="button" data-state="volume" aria-label="Wycisz">
-                <i class="fas fa-volume-up" aria-hidden="true"></i>
-              </button>
-              <input class="clip-viewer-control-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="Glosnosc 0 do 100">
+              <div class="clip-viewer-volume-wrap">
+                <button class="clip-viewer-control-btn clip-viewer-control-volume" type="button" data-state="volume" aria-label="Wycisz">
+                </button>
+                <input class="clip-viewer-control-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="Glosnosc 0 do 100">
+              </div>
               <button class="clip-viewer-control-btn clip-viewer-control-fullscreen" type="button" aria-label="Caly ekran">
-                <i class="fas fa-expand" aria-hidden="true"></i>
               </button>
             </div>
           </div>
@@ -8235,8 +8405,18 @@
               <img class="clip-viewer-avatar" src="" alt="">
               <div class="clip-viewer-author-copy">
                 <p class="clip-viewer-name"></p>
-                <p class="clip-viewer-title"></p>
+                <a class="clip-viewer-title clip-viewer-author-link" href="#" target="_blank" rel="noopener noreferrer"></a>
               </div>
+            </div>
+            <div class="clip-viewer-meta" aria-label="Informacje o klipie">
+              <p class="clip-viewer-meta-item">
+                <span class="clip-viewer-meta-label">Utworzono:</span>
+                <span class="clip-viewer-meta-value clip-viewer-meta-created"></span>
+              </p>
+              <p class="clip-viewer-meta-item">
+                <span class="clip-viewer-meta-label">Gra/Kategoria:</span>
+                <span class="clip-viewer-meta-value clip-viewer-meta-category"></span>
+              </p>
             </div>
             <a class="clip-viewer-open-kick" href="#" target="_blank" rel="noopener noreferrer">
               Zobacz caly film
@@ -8249,6 +8429,7 @@
 
       const state = {
         root,
+        main: root.querySelector(".clip-viewer-main"),
         video: root.querySelector(".clip-viewer-video"),
         topMeta: root.querySelector(".clip-viewer-top-meta"),
         controls: root.querySelector(".clip-viewer-controls"),
@@ -8261,8 +8442,11 @@
         timeTotalEl: root.querySelector(".clip-viewer-time-total"),
         avatar: root.querySelector(".clip-viewer-avatar"),
         name: root.querySelector(".clip-viewer-name"),
-        title: root.querySelector(".clip-viewer-title"),
-        openKickLink: root.querySelector(".clip-viewer-open-kick")
+        title: root.querySelector(".clip-viewer-author-link"),
+        metaCreatedEl: root.querySelector(".clip-viewer-meta-created"),
+        metaCategoryEl: root.querySelector(".clip-viewer-meta-category"),
+        openKickLink: root.querySelector(".clip-viewer-open-kick"),
+        autoHideTimerId: 0
       };
 
       root.addEventListener("click", (event) => {
@@ -8273,9 +8457,14 @@
       });
 
       document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && !state.root.hidden) {
-          closeClipViewer();
+        if (state.root.hidden) {
+          return;
         }
+        if (event.key === "Escape") {
+          closeClipViewer();
+          return;
+        }
+        revealClipViewerUi(state);
       });
 
       if (state.toggleBtn) {
@@ -8320,6 +8509,7 @@
       }
 
       if (state.fullBtn) {
+        setClipViewerButtonIcon(state.fullBtn, "fullscreen");
         state.fullBtn.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -8336,9 +8526,38 @@
         });
       }
 
+      const handleViewerActivity = () => {
+        revealClipViewerUi(state);
+      };
+
+      if (state.main) {
+        state.main.addEventListener("pointermove", handleViewerActivity, { passive: true });
+        state.main.addEventListener("pointerdown", handleViewerActivity);
+        state.main.addEventListener("touchstart", handleViewerActivity, { passive: true });
+        state.main.addEventListener("mouseenter", handleViewerActivity, { passive: true });
+      }
+
+      if (state.controls) {
+        state.controls.addEventListener("pointerenter", () => {
+          revealClipViewerUi(state, false);
+        });
+        state.controls.addEventListener("pointerleave", () => {
+          scheduleClipViewerAutoHide(state);
+        });
+        state.controls.addEventListener("focusin", () => {
+          revealClipViewerUi(state, false);
+        });
+        state.controls.addEventListener("focusout", () => {
+          window.setTimeout(() => {
+            scheduleClipViewerAutoHide(state);
+          }, 0);
+        });
+      }
+
       state.video.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
+        revealClipViewerUi(state);
         void toggleClipViewerPlayback(state);
       });
       state.video.addEventListener("play", () => {
@@ -8364,6 +8583,7 @@
       });
 
       syncClipViewerControls(state);
+      revealClipViewerUi(state, false);
 
       clipViewerState = state;
       return state;
@@ -8376,6 +8596,8 @@
 
       clipViewerOpenSeq += 1;
       const state = clipViewerState;
+      clearClipViewerAutoHideTimer(state);
+      setClipViewerUiHidden(state, false);
       state.root.classList.remove("is-open");
       state.root.setAttribute("aria-hidden", "true");
       if (document.body) {
@@ -8406,9 +8628,26 @@
 
       const topMetaText = String(card.querySelector(".clip-top-meta")?.textContent || "").trim();
       const authorName = String(card.querySelector(".clip-author")?.textContent || CHANNEL_SLUG).trim();
+      const authorProfileUrl = String(card.querySelector(".clip-author")?.getAttribute("href") || "").trim() ||
+        buildKickProfileUrl([authorName, CHANNEL_SLUG]) ||
+        `https://kick.com/${encodeURIComponent(CHANNEL_SLUG)}`;
       const clipTitle = String(card.querySelector(".clip-title")?.textContent || "").trim();
       const avatarSrc = String(card.querySelector(".clip-avatar")?.getAttribute("src") || CHANNEL_AVATAR_FALLBACK).trim();
       const clipPageUrl = String(cardVideo?.dataset.clip || card.querySelector(".clip-title")?.getAttribute("href") || "#").trim() || "#";
+      const categoryLabel = String(
+        cardVideo?.dataset.categoryLabel ||
+        card.querySelector(".clip-meta-category")?.textContent ||
+        "Klip"
+      ).trim() || "Klip";
+      const createdRelative = String(
+        cardVideo?.dataset.createdRelative ||
+        card.querySelector(".clip-meta-time")?.textContent ||
+        ""
+      ).trim();
+      const createdAbsolute = formatClipCreatedDate(cardVideo?.dataset.createdAt || "");
+      const createdLabel = createdRelative && createdAbsolute
+        ? `${createdRelative} (${createdAbsolute})`
+        : createdRelative || createdAbsolute || "Brak danych";
 
       if (clipsEl) {
         const allCardVideos = clipsEl.querySelectorAll(".clip-player");
@@ -8427,7 +8666,7 @@
       const currentOpenSeq = clipViewerOpenSeq;
 
       resetClipViewerVideo(viewer.video);
-      viewer.video.poster = String(cardVideo?.getAttribute("poster") || "").trim();
+      viewer.video.poster = String(cardVideo?.getAttribute("poster") || cardVideo?.dataset.poster || "").trim();
       viewer.video.dataset.src = source;
       viewer.video.dataset.clip = clipPageUrl;
       viewer.video.dataset.durationLabel = String(cardVideo?.dataset.durationLabel || "0:00");
@@ -8445,10 +8684,21 @@
       viewer.topMeta.textContent = topMetaText;
       viewer.avatar.src = avatarSrc;
       viewer.avatar.alt = authorName;
-      viewer.name.textContent = authorName;
-      viewer.title.textContent = clipTitle || topMetaText || "Klip";
+      viewer.name.textContent = clipTitle || topMetaText || "Klip";
+      if (viewer.title) {
+        viewer.title.textContent = authorName || CHANNEL_SLUG;
+        viewer.title.href = authorProfileUrl;
+      }
+      if (viewer.metaCreatedEl) {
+        viewer.metaCreatedEl.textContent = createdLabel;
+      }
+      if (viewer.metaCategoryEl) {
+        viewer.metaCategoryEl.textContent = categoryLabel;
+      }
       viewer.openKickLink.href = clipPageUrl;
       syncClipViewerControls(viewer);
+      clearClipViewerAutoHideTimer(viewer);
+      setClipViewerUiHidden(viewer, false);
 
       viewer.root.hidden = false;
       viewer.root.setAttribute("aria-hidden", "false");
@@ -8458,6 +8708,7 @@
       window.requestAnimationFrame(() => {
         viewer.root.classList.add("is-open");
       });
+      revealClipViewerUi(viewer, false);
 
       try {
         const ready = await attachStream(viewer.video);
@@ -8493,6 +8744,11 @@
 
       const cards = clipsEl.querySelectorAll(".clip-card");
       cards.forEach((card) => {
+        if (card.dataset.playerBound === "1") {
+          return;
+        }
+        card.dataset.playerBound = "1";
+
         const video = card.querySelector(".clip-player");
         const btn = card.querySelector(".clip-play");
         const toggleBtn = card.querySelector(".clip-control-toggle");
@@ -8506,6 +8762,13 @@
         if (!video || !btn) {
           return;
         }
+
+        card.addEventListener("pointerenter", () => {
+          applyClipPoster(video);
+        }, { passive: true });
+        card.addEventListener("focusin", () => {
+          applyClipPoster(video);
+        });
 
         const fallbackDuration = String(video.dataset.durationLabel || "0:00").trim() || "0:00";
         video.controls = false;
@@ -8687,118 +8950,308 @@
       });
     }
 
-    function renderClips(clips) {
-      clipsEl.innerHTML = "";
+    function stopClipPosterObserver() {
+      if (clipPosterObserver && typeof clipPosterObserver.disconnect === "function") {
+        clipPosterObserver.disconnect();
+      }
+      clipPosterObserver = null;
+    }
 
-      clips.forEach((clip, index) => {
-        const card = document.createElement("article");
-        card.className = "clip-card";
-        card.style.animationDelay = `${Math.min(index, 12) * 45}ms`;
+    function applyClipPoster(videoEl) {
+      if (!videoEl || videoEl.dataset.posterReady === "1") {
+        return;
+      }
 
-        const localizedViews = formatViews(clip.views);
-        const localizedTime = formatRelativeTime(clip.createdAt);
-        const categoryLabel = shortenCategory(clip.category) || "Klip";
-        const metaTimeLabel = localizedTime || "";
-        const authorName = clip.authorName || CHANNEL_SLUG;
-        const authorUrl = clip.authorUrl || "";
-        const authorAvatar = clip.authorAvatar || CHANNEL_AVATAR_FALLBACK;
-        const duration = clip.duration || "00:00";
-        const clipPageUrl = clip.pageUrl || `https://kick.com/${CHANNEL_SLUG}`;
-        const playlistUrl = clip.playlistUrl || "";
+      const posterUrl = String(videoEl.dataset.poster || "").trim();
+      if (!posterUrl) {
+        return;
+      }
 
-        card.innerHTML = `
-          <div class="clip-media">
-            <video
-              class="clip-player"
-              preload="none"
-              playsinline
-              poster="${escapeHtml(clip.thumbnail)}"
-              data-src="${escapeHtml(clip.playlistUrl)}"
-              data-clip="${escapeHtml(clipPageUrl)}"
-              data-duration-label="${escapeHtml(duration)}"
-            ></video>
-            <button class="clip-play" type="button" aria-label="Odtworz klip"></button>
-            <span class="clip-badge clip-duration">${escapeHtml(duration)}</span>
-            <span class="clip-badge clip-views">${escapeHtml(localizedViews)}</span>
-            <div class="clip-controls" aria-label="Sterowanie klipem">
-              <button class="clip-control-btn clip-control-toggle" type="button" data-state="play" aria-label="Odtworz">
-                <i class="fas fa-play" aria-hidden="true"></i>
-              </button>
-              <span class="clip-control-time">
-                <span class="clip-time-current">0:00</span>
-                <span class="clip-time-sep">/</span>
-                <span class="clip-time-total">${escapeHtml(duration)}</span>
-              </span>
-              <input class="clip-control-progress" type="range" min="0" max="1000" step="1" value="0" aria-label="Postep klipu">
-              <button class="clip-control-btn clip-control-mute" type="button" data-state="volume" aria-label="Wycisz">
-                <i class="fas fa-volume-up" aria-hidden="true"></i>
-              </button>
-              <button class="clip-control-btn clip-control-full" type="button" aria-label="Pelny ekran">
-                <i class="fas fa-expand" aria-hidden="true"></i>
-              </button>
-            </div>
-          </div>
-          <div class="clip-row">
-            <img class="clip-avatar" src="${escapeHtml(authorAvatar)}" alt="${escapeHtml(authorName)}">
-            <div class="clip-copy">
-              <a class="clip-title" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clip.title)}</a>
-              <p class="clip-meta">
-                <span class="clip-meta-category">${escapeHtml(categoryLabel)}</span>
-                ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">·</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
-              </p>
-              ${authorUrl
-                ? `<a class="clip-author" href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(authorName)}</a>`
-                : `<p class="clip-author">${escapeHtml(authorName)}</p>`}
-            </div>
-            <details class="clip-actions">
-              <summary class="clip-menu" aria-label="Opcje klipu"><i class="fas fa-ellipsis-v" aria-hidden="true"></i></summary>
-              <div class="clip-actions-menu">
-                <a class="clip-action-link" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">Otworz na Kick</a>
-                <button
-                  class="clip-action-download"
-                  type="button"
-                  data-id="${escapeHtml(clip.id)}"
-                  data-title="${escapeHtml(clip.title)}"
-                  data-playlist="${escapeHtml(playlistUrl)}"
-                >Pobierz</button>
-              </div>
-            </details>
-          </div>
-        `;
+      videoEl.setAttribute("poster", posterUrl);
+      videoEl.dataset.posterReady = "1";
+    }
 
-        clipsEl.appendChild(card);
+    function setupClipPosterLoading() {
+      stopClipPosterObserver();
+      if (!clipsEl) {
+        return;
+      }
+
+      const videos = Array.from(clipsEl.querySelectorAll(".clip-player"));
+      if (!videos.length) {
+        return;
+      }
+
+      videos.forEach((videoEl, index) => {
+        if (index < CLIP_POSTER_EAGER_COUNT) {
+          applyClipPoster(videoEl);
+        }
       });
 
-      if (!clips.length) {
+      if (typeof window.IntersectionObserver !== "function") {
+        videos.forEach((videoEl) => {
+          applyClipPoster(videoEl);
+        });
+        return;
+      }
+
+      clipPosterObserver = new window.IntersectionObserver(
+        (entries, observer) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting && entry.intersectionRatio <= 0) {
+              return;
+            }
+            applyClipPoster(entry.target);
+            observer.unobserve(entry.target);
+          });
+        },
+        {
+          root: null,
+          rootMargin: "280px 0px",
+          threshold: 0.01
+        }
+      );
+
+      videos.forEach((videoEl, index) => {
+        if (index >= CLIP_POSTER_EAGER_COUNT && videoEl.dataset.posterReady !== "1") {
+          clipPosterObserver.observe(videoEl);
+        }
+      });
+    }
+
+    function buildClipCardElement(clip, index) {
+      const card = document.createElement("article");
+      card.className = "clip-card";
+      card.style.animationDelay = `${Math.min(index, 12) * 45}ms`;
+
+      const localizedViews = formatViews(clip.views);
+      const localizedTime = formatRelativeTime(clip.createdAt);
+      const categoryLabel = shortenCategory(clip.category) || "Klip";
+      const metaTimeLabel = localizedTime || "";
+      const authorName = clip.authorName || CHANNEL_SLUG;
+      const authorUrl = clip.authorUrl || "";
+      const authorAvatar = clip.authorAvatar || CHANNEL_AVATAR_FALLBACK;
+      const duration = clip.duration || "00:00";
+      const clipPageUrl = clip.pageUrl || `https://kick.com/${CHANNEL_SLUG}`;
+      const playlistUrl = clip.playlistUrl || "";
+
+      card.innerHTML = `
+        <div class="clip-media">
+          <video
+            class="clip-player"
+            preload="none"
+            playsinline
+            data-poster="${escapeHtml(clip.thumbnail)}"
+            data-src="${escapeHtml(clip.playlistUrl)}"
+            data-clip="${escapeHtml(clipPageUrl)}"
+            data-duration-label="${escapeHtml(duration)}"
+            data-created-at="${escapeHtml(clip.createdAt || "")}"
+            data-created-relative="${escapeHtml(metaTimeLabel)}"
+            data-category-label="${escapeHtml(categoryLabel)}"
+          ></video>
+          <button class="clip-play" type="button" aria-label="Odtworz klip"></button>
+          <span class="clip-badge clip-duration">${escapeHtml(duration)}</span>
+          <span class="clip-badge clip-views">${escapeHtml(localizedViews)}</span>
+          <div class="clip-controls" aria-label="Sterowanie klipem">
+            <button class="clip-control-btn clip-control-toggle" type="button" data-state="play" aria-label="Odtworz">
+              <i class="fas fa-play" aria-hidden="true"></i>
+            </button>
+            <span class="clip-control-time">
+              <span class="clip-time-current">0:00</span>
+              <span class="clip-time-sep">/</span>
+              <span class="clip-time-total">${escapeHtml(duration)}</span>
+            </span>
+            <input class="clip-control-progress" type="range" min="0" max="1000" step="1" value="0" aria-label="Postep klipu">
+            <button class="clip-control-btn clip-control-mute" type="button" data-state="volume" aria-label="Wycisz">
+              <i class="fas fa-volume-up" aria-hidden="true"></i>
+            </button>
+            <button class="clip-control-btn clip-control-full" type="button" aria-label="Pelny ekran">
+              <i class="fas fa-expand" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+        <div class="clip-row">
+          <img class="clip-avatar" src="${escapeHtml(authorAvatar)}" alt="${escapeHtml(authorName)}">
+          <div class="clip-copy">
+            <a class="clip-title" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clip.title)}</a>
+            <p class="clip-meta">
+              <span class="clip-meta-category">${escapeHtml(categoryLabel)}</span>
+              ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">·</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
+            </p>
+            ${authorUrl
+              ? `<a class="clip-author" href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(authorName)}</a>`
+              : `<p class="clip-author">${escapeHtml(authorName)}</p>`}
+          </div>
+          <details class="clip-actions">
+            <summary class="clip-menu" aria-label="Opcje klipu"><i class="fas fa-ellipsis-v" aria-hidden="true"></i></summary>
+            <div class="clip-actions-menu">
+              <a class="clip-action-link" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">Otworz na Kick</a>
+              <button
+                class="clip-action-download"
+                type="button"
+                data-id="${escapeHtml(clip.id)}"
+                data-title="${escapeHtml(clip.title)}"
+                data-playlist="${escapeHtml(playlistUrl)}"
+              >Pobierz</button>
+            </div>
+          </details>
+        </div>
+      `;
+
+      return card;
+    }
+
+    async function appendClipCards(clips, startIndex = 0, renderToken = clipRenderToken) {
+      if (!Array.isArray(clips) || !clips.length) {
+        return;
+      }
+
+      let localIndex = 0;
+      await new Promise((resolve) => {
+        const renderBatch = () => {
+          if (renderToken !== clipRenderToken) {
+            resolve();
+            return;
+          }
+
+          const fragment = document.createDocumentFragment();
+          const stopAt = Math.min(clips.length, localIndex + CLIP_RENDER_BATCH_SIZE);
+          for (; localIndex < stopAt; localIndex += 1) {
+            fragment.appendChild(buildClipCardElement(clips[localIndex], startIndex + localIndex));
+          }
+          clipsEl.appendChild(fragment);
+
+          if (localIndex < clips.length) {
+            clipRenderFrameId = window.requestAnimationFrame(renderBatch);
+            return;
+          }
+
+          clipRenderFrameId = 0;
+          resolve();
+        };
+
+        renderBatch();
+      });
+    }
+
+    async function renderClips(clips) {
+      clipRenderToken += 1;
+      const renderToken = clipRenderToken;
+      if (clipRenderFrameId) {
+        window.cancelAnimationFrame(clipRenderFrameId);
+        clipRenderFrameId = 0;
+      }
+      stopClipPosterObserver();
+      clipsEl.innerHTML = "";
+
+      if (!Array.isArray(clips) || !clips.length) {
         setStatus("Brak klipów w odczytanych danych.", true);
         return;
       }
 
-      setStatus(`Załadowano ${clips.length} klipów.`);
+      await appendClipCards(clips, 0, renderToken);
+      if (renderToken !== clipRenderToken) {
+        return;
+      }
+
+      setupClipPosterLoading();
       bindPlayers();
+      setStatus(`Załadowano ${clips.length} klipów.`);
     }
 
     async function loadClips() {
+      clipsLoadSeq += 1;
+      const loadSeq = clipsLoadSeq;
+      let releaseRefreshInFinally = true;
+
       refreshBtn.disabled = true;
       setStatus(`Pobieram klipy z Kick (max ${CLIPS_MAX_ITEMS})...`);
+      if (clipRenderFrameId) {
+        window.cancelAnimationFrame(clipRenderFrameId);
+        clipRenderFrameId = 0;
+      }
+      stopClipPosterObserver();
       clipsEl.innerHTML = "";
 
       try {
-        const result = await fetchAllClips(40, CLIPS_MAX_ITEMS);
-        const clips = result.clips;
-        renderClips(clips);
+        const quickLimit = Math.max(1, Math.min(CLIPS_MAX_ITEMS, CLIPS_FAST_LOAD_ITEMS));
+        const quickResult = await fetchAllClips(40, quickLimit);
+        if (loadSeq !== clipsLoadSeq) {
+          return;
+        }
 
-        if (result.reachedLimit) {
-          setStatus(`Załadowano ${clips.length} klipów (limit ${CLIPS_MAX_ITEMS}).`);
-        } else if (result.partial) {
-          setStatus(`Załadowano ${clips.length} klipów.`);  //(limit zapytan proxy)
+        const quickClips = Array.isArray(quickResult?.clips) ? quickResult.clips : [];
+        await renderClips(quickClips);
+        if (loadSeq !== clipsLoadSeq) {
+          return;
+        }
+
+        if (!quickClips.length) {
+          return;
+        }
+
+        refreshBtn.disabled = false;
+        releaseRefreshInFinally = false;
+
+        const shouldLoadRest = Boolean(quickResult.reachedLimit && quickLimit < CLIPS_MAX_ITEMS);
+        if (!shouldLoadRest) {
+          if (quickResult.reachedLimit) {
+            setStatus(`Załadowano ${quickClips.length} klipów (limit ${CLIPS_MAX_ITEMS}).`);
+          } else if (quickResult.partial) {
+            setStatus(`Załadowano ${quickClips.length} klipów.`);
+          } else {
+            setStatus(`Załadowano ${quickClips.length} klipów.`);
+          }
+          return;
+        }
+
+        setStatus(`Załadowano ${quickClips.length} klipów. Doczytuję resztę...`);
+
+        const fullResult = await fetchAllClips(40, CLIPS_MAX_ITEMS);
+        if (loadSeq !== clipsLoadSeq) {
+          return;
+        }
+
+        const existingIds = new Set(quickClips.map((clip) => String(clip?.id || "").trim()).filter(Boolean));
+        const allFullClips = Array.isArray(fullResult?.clips) ? fullResult.clips : [];
+        const extraClips = allFullClips.filter((clip) => {
+          const clipId = String(clip?.id || "").trim();
+          if (!clipId || existingIds.has(clipId)) {
+            return false;
+          }
+          existingIds.add(clipId);
+          return true;
+        });
+
+        if (extraClips.length) {
+          const activeRenderToken = clipRenderToken;
+          await appendClipCards(extraClips, quickClips.length, activeRenderToken);
+          if (loadSeq !== clipsLoadSeq || activeRenderToken !== clipRenderToken) {
+            return;
+          }
+          setupClipPosterLoading();
+          bindPlayers();
+        }
+
+        const totalLoaded = quickClips.length + extraClips.length;
+        if (fullResult.reachedLimit) {
+          setStatus(`Załadowano ${totalLoaded} klipów (limit ${CLIPS_MAX_ITEMS}).`);
+        } else if (fullResult.partial) {
+          setStatus(`Załadowano ${totalLoaded} klipów.`);
+        } else {
+          setStatus(`Załadowano ${totalLoaded} klipów.`);
         }
       } catch (error) {
+        if (loadSeq !== clipsLoadSeq) {
+          return;
+        }
         const reason = String(error?.message || "").trim();
         const suffix = reason ? ` (${reason})` : "";
         setStatus(`Nie udało się pobrać wszystkich klipów.${suffix}`, true);
       } finally {
-        refreshBtn.disabled = false;
+        if (releaseRefreshInFinally && loadSeq === clipsLoadSeq) {
+          refreshBtn.disabled = false;
+        }
       }
     }
 
