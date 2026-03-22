@@ -69,7 +69,7 @@
     }
 
     if (isRuntimeLocalHostName(host)) {
-      return isLocalApiOverrideEnabled() ? "" : CANONICAL_WHEEL_ORIGIN;
+      return "";
     }
 
     if (protocol === "file:") {
@@ -169,7 +169,7 @@
   ========================= */
 
   const baseItems = [
-    { name: "Brak Piwka", chance: 5, timer: "brak-piwka", minutes: 30, color: "#ff6b6b" },
+    { name: "Zakaz DC & Tel", chance: 5, timer: "zakaz-dc-tel", minutes: 30, color: "#ff6b6b" },
     { name: "Pusto", chance: 20, timer: null, minutes: 0, color: "#444444" },
     { name: "Krzesło", chance: 5, timer: "krzeslo", minutes: 30, color: "#ffd93d" },
     { name: "Pusto", chance: 20, timer: null, minutes: 0, color: "#444444" },
@@ -2951,7 +2951,7 @@
     const names = new Set(
       itemsCandidate.map((item) => normalizeTimerLookupToken(item && item.name ? item.name : ""))
     );
-    return names.has("pusto") && names.has("brak-piwka");
+    return names.has("pusto") && (names.has("brak-piwka") || names.has("zakaz-dc-tel"));
   }
 
   function resolveObsWheelItemsForOverlay(itemsCandidate) {

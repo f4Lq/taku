@@ -1,4 +1,26 @@
-﻿const CHANNEL_SLUG = "takuu";
+﻿(function initializeTakuuRuntimeOrigins() {
+  const CANONICAL_ORIGIN = "https://www.taku-live.pl";
+  const host = String(window.location.hostname || "").trim().toLowerCase();
+  const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+
+  if (isLocalHost) {
+    window.TAKUU_USE_LOCAL_API = true;
+    window.TAKUU_API_ORIGIN = "";
+    window.TAKUU_REDIS_API_ORIGIN = "";
+    try {
+      window.TAKUU_OBS_BASE_ORIGIN = `${window.location.protocol}//${window.location.host}`;
+    } catch (_error) {
+      window.TAKUU_OBS_BASE_ORIGIN = "";
+    }
+    return;
+  }
+
+  window.TAKUU_USE_LOCAL_API = false;
+  window.TAKUU_API_ORIGIN = CANONICAL_ORIGIN;
+  window.TAKUU_REDIS_API_ORIGIN = CANONICAL_ORIGIN;
+  window.TAKUU_OBS_BASE_ORIGIN = CANONICAL_ORIGIN;
+})();
+const CHANNEL_SLUG = "takuu";
     const JINA_PREFIX = "https://r.jina.ai/";
     const ALL_ORIGINS_RAW_PREFIX = "https://api.allorigins.win/raw?url=";
     const CORS_PROXY_PREFIX = "https://corsproxy.io/?";
@@ -413,7 +435,7 @@
       }
 
       if (isRuntimeLocalHostName(host)) {
-        return isLocalApiOverrideEnabled() ? "" : CANONICAL_REDIS_API_ORIGIN;
+        return "";
       }
 
       if (protocol === "file:") {
@@ -446,10 +468,7 @@
       const host = getRuntimeHostName();
       const isFileProtocol = protocol === "file:";
       if (isRuntimeLocalHostName(host)) {
-        if (isLocalApiOverrideEnabled()) {
-          return resolveCurrentOrigin() || "";
-        }
-        return CANONICAL_REDIS_API_ORIGIN;
+        return resolveCurrentOrigin() || "";
       }
 
       const explicitOrigin = normalizeApiOrigin(
@@ -629,6 +648,12 @@
       }, []);
     }
 
+    const REMOVED_KARY_TIMER_KEYS = new Set(["brak-picia", "brak-piwka"]);
+    const REQUIRED_KARY_COUNTER_DEFINITIONS = [
+      { key: "przysiady", label: "Przysiady" },
+      { key: "pajacyki", label: "Pajacyki" }
+    ];
+
     function normalizeKaryTimerDefinition(item, index = 0) {
       const source = item && typeof item === "object" ? item : {};
       const label = String(source.label || source.name || "").trim();
@@ -668,7 +693,7 @@
       input.forEach((item, index) => {
         const next = normalizeKaryTimerDefinition(item, index);
         const key = String(next.key || "").trim();
-        if (!key || seen.has(key)) {
+        if (!key || seen.has(key) || REMOVED_KARY_TIMER_KEYS.has(key)) {
           return;
         }
         seen.add(key);
@@ -688,6 +713,16 @@
 
       input.forEach((item, index) => {
         const next = normalizeKaryCounterDefinition(item, index);
+        const key = String(next.key || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        normalized.push(next);
+      });
+
+      REQUIRED_KARY_COUNTER_DEFINITIONS.forEach((item, index) => {
+        const next = normalizeKaryCounterDefinition(item, normalized.length + index);
         const key = String(next.key || "").trim();
         if (!key || seen.has(key)) {
           return;
@@ -4618,6 +4653,73 @@
       return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
     }
 
+    const REQUIRED_KARY_CENNIK_ITEMS = [
+      {
+        id: "default-hard-pajacyki",
+        section: "hard",
+        name: "Pajacyki",
+        description: 'W treści donate wpisz "Pajacyki"',
+        baseMinutes: 0,
+        pricePln: 20,
+        priceSuby: 0,
+        priceKicksy: 0
+      },
+      {
+        id: "default-hard-przysiady",
+        section: "hard",
+        name: "Przysiady",
+        description: 'W treści donate wpisz "Przysiady"',
+        baseMinutes: 0,
+        pricePln: 50,
+        priceSuby: 0,
+        priceKicksy: 0
+      }
+    ];
+
+    function ensureRequiredKaryCennikItems(itemsCandidate) {
+      const source = Array.isArray(itemsCandidate) ? itemsCandidate : [];
+      const normalized = source
+        .map((item, index) => normalizeKaryCennikItem(item, index))
+        .filter(Boolean);
+
+      const namesBySection = new Set(
+        normalized.map((item) => `${normalizeKarySection(item.section)}:${normalizeTimerLookupToken(item.name)}`)
+      );
+
+      const getNextSortOrderForSection = (section) => {
+        const list = normalized
+          .filter((item) => normalizeKarySection(item.section) === section)
+          .map((item) => Number(item.sortOrder) || 0);
+        return list.length ? Math.max(...list) + 1 : 0;
+      };
+
+      REQUIRED_KARY_CENNIK_ITEMS.forEach((required, index) => {
+        const section = normalizeKarySection(required.section);
+        const token = normalizeTimerLookupToken(required.name);
+        const mapKey = `${section}:${token}`;
+        if (!token || namesBySection.has(mapKey)) {
+          return;
+        }
+
+        const next = normalizeKaryCennikItem(
+          {
+            ...required,
+            id: String(required.id || `default-${section}-${token}-${index + 1}`),
+            section,
+            sortOrder: getNextSortOrderForSection(section)
+          },
+          normalized.length + index
+        );
+        if (!next) {
+          return;
+        }
+        normalized.push(next);
+        namesBySection.add(mapKey);
+      });
+
+      return normalized;
+    }
+
     function extractDefaultKaryCennikItems() {
       const result = [];
       const readColumn = (listEl, section) => {
@@ -4705,13 +4807,11 @@
       const fallback = extractDefaultKaryCennikItems();
       const raw = readStorageJson(KARY_CENNIK_KEY, null);
       if (!Array.isArray(raw)) {
-        karyCennikItems = fallback;
+        karyCennikItems = ensureRequiredKaryCennikItems(fallback);
         return;
       }
 
-      karyCennikItems = raw
-        .map((item, index) => normalizeKaryCennikItem(item, index))
-        .filter(Boolean);
+      karyCennikItems = ensureRequiredKaryCennikItems(raw);
     }
 
     function migrateDuplicatedKicksyPrices() {
@@ -13159,6 +13259,7 @@
       });
     })();
   
+
 
 
 

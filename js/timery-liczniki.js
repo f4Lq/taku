@@ -67,7 +67,7 @@
     }
 
     if (isRuntimeLocalHostName(host)) {
-      return isLocalApiOverrideEnabled() ? "" : CANONICAL_REDIS_API_ORIGIN;
+      return "";
     }
 
     if (protocol === "file:") {
@@ -156,7 +156,10 @@
     } catch (_error) {
       // Ignore URLSearchParams parse failures.
     }
-    if (IS_FILE_PROTOCOL || IS_LOCALHOST_RUNTIME) {
+    if (IS_LOCALHOST_RUNTIME) {
+      return true;
+    }
+    if (IS_FILE_PROTOCOL) {
       return isLocalApiOverrideEnabled();
     }
     return false;
@@ -773,7 +776,8 @@
           value,
           isActive: value > 0
         };
-      });
+      })
+      .filter((counter) => counter.isActive);
   }
 
   function getActiveOverlayItems() {
@@ -817,7 +821,11 @@
   function renderOverlay() {
     refreshOverlayDefinitionsFromSources();
     const activeItems = getActiveOverlayItems();
-    if (!activeItems.length) {
+    const visibleItems =
+      overlayKind === "liczniki"
+        ? activeItems.filter((item) => Math.max(0, Math.floor(Number(item.value) || 0)) > 0)
+        : activeItems;
+    if (!visibleItems.length) {
       overlayEl.hidden = true;
       if (lastRenderedSignature !== "__empty__") {
         listEl.innerHTML = "";
@@ -829,14 +837,14 @@
     overlayEl.hidden = false;
     const signature =
       overlayKind === "liczniki"
-        ? activeItems.map((item) => `${item.key}:${item.label}:${item.value}:${item.isActive ? 1 : 0}`).join("|")
-        : activeItems.map((item) => `${item.key}:${item.label}:${item.remaining}:${item.total}`).join("|");
+        ? visibleItems.map((item) => `${item.key}:${item.label}:${item.value}:${item.isActive ? 1 : 0}`).join("|")
+        : visibleItems.map((item) => `${item.key}:${item.label}:${item.remaining}:${item.total}`).join("|");
     if (signature === lastRenderedSignature) {
       return;
     }
 
     if (overlayKind === "liczniki") {
-      listEl.innerHTML = activeItems
+      listEl.innerHTML = visibleItems
         .map(
           (item) => `
             <article class="timery-obs-card ${item.isActive ? "is-active" : "is-idle"}" data-timery-obs-key="${escapeHtml(item.key)}">
@@ -847,7 +855,7 @@
         )
         .join("");
     } else {
-      listEl.innerHTML = activeItems
+      listEl.innerHTML = visibleItems
         .map(
           (item) => `
             <article class="timery-obs-card" data-timery-obs-key="${escapeHtml(item.key)}">
