@@ -69,6 +69,15 @@ function parseStoredState(rawValue) {
   }
 }
 
+function hasOwnStateField(source, fieldName) {
+  return (
+    source &&
+    typeof source === 'object' &&
+    !Array.isArray(source) &&
+    Object.prototype.hasOwnProperty.call(source, fieldName)
+  );
+}
+
 module.exports = async function handler(req, res) {
   const method = String(req.method || 'GET').toUpperCase();
   if (method === 'OPTIONS') {
@@ -137,13 +146,50 @@ module.exports = async function handler(req, res) {
     }
 
     const action = String(payload.action || 'set').trim().toLowerCase();
-    if (action !== 'set' && action !== 'replace') {
+    if (action !== 'set' && action !== 'replace' && action !== 'merge') {
       sendJson(res, { ok: false, error: 'INVALID_ACTION' }, 400);
       return;
     }
 
-    const now = Date.now();
-    const nextState = normalizeKaryState(payload.state, now);
+    const incomingRawState = payload.state;
+    if (!incomingRawState || typeof incomingRawState !== 'object' || Array.isArray(incomingRawState)) {
+      sendJson(res, { ok: false, error: 'INVALID_STATE' }, 400);
+      return;
+    }
+
+    let previousState = null;
+    let previousUpdatedAt = 0;
+
+    if (action === 'merge') {
+      const [rawPreviousState, rawPreviousUpdatedAt] = await redis.pipeline([
+        ['GET', KARY_STATE_DATA_KEY],
+        ['GET', KARY_STATE_UPDATED_AT_KEY],
+      ]);
+      previousState = parseStoredState(rawPreviousState);
+      previousUpdatedAt = Math.max(0, getSafeInt(rawPreviousUpdatedAt, 0));
+    } else {
+      const rawPreviousUpdatedAt = await redis.command('GET', KARY_STATE_UPDATED_AT_KEY);
+      previousUpdatedAt = Math.max(0, getSafeInt(rawPreviousUpdatedAt, 0));
+    }
+
+    const now = Math.max(Date.now(), previousUpdatedAt + 1);
+    const incomingState = normalizeKaryState(incomingRawState, now);
+    let nextState = incomingState;
+
+    if (action === 'merge') {
+      const baseState = previousState || normalizeKaryState({}, now);
+      nextState = normalizeKaryState(
+        {
+          timers: hasOwnStateField(incomingRawState, 'timers') ? incomingState.timers : baseState.timers,
+          timerTotals: hasOwnStateField(incomingRawState, 'timerTotals')
+            ? incomingState.timerTotals
+            : baseState.timerTotals,
+          counters: hasOwnStateField(incomingRawState, 'counters') ? incomingState.counters : baseState.counters,
+          lastTickAt: hasOwnStateField(incomingRawState, 'lastTickAt') ? incomingState.lastTickAt : baseState.lastTickAt,
+        },
+        now
+      );
+    }
 
     await redis.pipeline([
       ['SET', KARY_STATE_DATA_KEY, JSON.stringify(nextState)],

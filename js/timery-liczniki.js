@@ -1,17 +1,102 @@
 (function () {
   "use strict";
 
-  const ADMIN_STATE_API_ENDPOINT = "/api/admin/state";
-  const KARY_STATE_API_ENDPOINT = "/api/kary/state";
+  const CANONICAL_REDIS_API_DOMAIN = "www.taku-live.pl";
+  const LEGACY_REDIS_API_DOMAIN = "taku-live.pl";
+  const CANONICAL_REDIS_API_ORIGIN = `https://${CANONICAL_REDIS_API_DOMAIN}`;
   const KARY_STATE_STORAGE_KEY = "takuu_kary_live_state";
+  const KARY_STATE_SYNC_CHANNEL_NAME = "takuu-kary-state-sync";
+  const KARY_TIMER_DEFINITIONS_KEY = "takuu_kary_timer_definitions";
+  const KARY_COUNTER_DEFINITIONS_KEY = "takuu_kary_counter_definitions";
   const OBS_TIMERY_CONFIG_KEY = "takuu_streamobs_timery_config";
   const OBS_LICZNIKI_CONFIG_KEY = "takuu_streamobs_liczniki_config";
   const IS_FILE_PROTOCOL = window.location.protocol === "file:";
-  const PREFER_API_CONFIG_SYNC = !IS_FILE_PROTOCOL && typeof fetch === "function";
-  const POLL_INTERVAL_MS = 1000;
+  const IS_LOCALHOST_RUNTIME = isRuntimeLocalHostName(window.location.hostname);
+  const PREFER_API_CONFIG_SYNC = typeof fetch === "function";
+  const POLL_INTERVAL_MS = 250;
   const RENDER_INTERVAL_MS = 250;
   const CONFIG_SYNC_INTERVAL_MS = 600;
   const ADMIN_CONFIG_SYNC_INTERVAL_MS = 1000;
+  const REMOTE_STATE_STALE_RESET_MS = 4500;
+
+  function normalizeApiOrigin(rawValue) {
+    const candidate = String(rawValue || "").trim();
+    if (!candidate) {
+      return "";
+    }
+    try {
+      const url = new URL(candidate);
+      return `${url.protocol}//${url.host}`;
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function getRuntimeHostName() {
+    return String(window.location.hostname || "").trim().toLowerCase();
+  }
+
+  function isRuntimeLocalHostName(hostname) {
+    const host = String(hostname || "").trim().toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  }
+
+  function isLocalApiOverrideEnabled() {
+    if (window.TAKUU_USE_LOCAL_API === true) {
+      return true;
+    }
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const hasFlag = (name) => {
+        const value = String(params.get(name) || "").trim().toLowerCase();
+        return value === "1" || value === "true" || value === "yes" || value === "on";
+      };
+      return hasFlag("localApi") || hasFlag("useLocalApi") || hasFlag("localhostApi");
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function resolveRedisApiOrigin() {
+    const protocol = String(window.location.protocol || "").toLowerCase();
+    const host = getRuntimeHostName();
+
+    const explicitOrigin = normalizeApiOrigin(window.TAKUU_REDIS_API_ORIGIN || window.TAKUU_API_ORIGIN || "");
+    if (explicitOrigin) {
+      return explicitOrigin;
+    }
+
+    if (isRuntimeLocalHostName(host)) {
+      return isLocalApiOverrideEnabled() ? "" : CANONICAL_REDIS_API_ORIGIN;
+    }
+
+    if (protocol === "file:") {
+      return CANONICAL_REDIS_API_ORIGIN;
+    }
+    if (host === CANONICAL_REDIS_API_DOMAIN) {
+      return "";
+    }
+    if (host === LEGACY_REDIS_API_DOMAIN) {
+      return CANONICAL_REDIS_API_ORIGIN;
+    }
+    return CANONICAL_REDIS_API_ORIGIN;
+  }
+
+  function buildRedisApiEndpoint(pathname) {
+    const path = String(pathname || "").trim() || "/";
+    const origin = resolveRedisApiOrigin();
+    if (!origin) {
+      return path.startsWith("/") ? path : `/${path}`;
+    }
+    try {
+      return new URL(path.startsWith("/") ? path : `/${path}`, origin).toString();
+    } catch (_error) {
+      return `${CANONICAL_REDIS_API_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
+    }
+  }
+
+  const ADMIN_STATE_API_ENDPOINT = buildRedisApiEndpoint("/api/admin/state");
+  const KARY_STATE_API_ENDPOINT = buildRedisApiEndpoint("/api/kary/state");
 
   function isTruthyFlag(value) {
     const normalized = String(value || "").trim().toLowerCase();
@@ -55,6 +140,26 @@
     }
 
     return null;
+  }
+
+  function shouldEnableLocalStateFallback() {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const explicitFallback = (
+        isTruthyFlag(params.get("localStateFallback")) ||
+        isTruthyFlag(params.get("allowLocalFallback")) ||
+        isTruthyFlag(params.get("fallbackLocalState"))
+      );
+      if (explicitFallback) {
+        return true;
+      }
+    } catch (_error) {
+      // Ignore URLSearchParams parse failures.
+    }
+    if (IS_FILE_PROTOCOL || IS_LOCALHOST_RUNTIME) {
+      return isLocalApiOverrideEnabled();
+    }
+    return false;
   }
 
   function normalizeLayout(value, fallback = "vertical") {
@@ -235,16 +340,56 @@
     }
   }
 
+  function parseKaryStateFromRaw(rawValue) {
+    const raw = String(rawValue || "").trim();
+    if (!raw) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return normalizeKaryState(parsed);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function parseKaryStateFromMessage(rawMessage) {
+    const source =
+      rawMessage && typeof rawMessage === "object" && !Array.isArray(rawMessage)
+        ? rawMessage
+        : null;
+    if (!source) {
+      return null;
+    }
+    const type = String(source.type || "").trim().toLowerCase();
+    const candidate =
+      type === "kary_state" &&
+      source.state &&
+      typeof source.state === "object" &&
+      !Array.isArray(source.state)
+        ? source.state
+        : source;
+    const hasStateFields =
+      candidate &&
+      typeof candidate === "object" &&
+      !Array.isArray(candidate) &&
+      (
+        Object.prototype.hasOwnProperty.call(candidate, "timers") ||
+        Object.prototype.hasOwnProperty.call(candidate, "timerTotals") ||
+        Object.prototype.hasOwnProperty.call(candidate, "counters")
+      );
+    if (!hasStateFields) {
+      return null;
+    }
+    return normalizeKaryState(candidate);
+  }
+
   function formatClock(totalSeconds) {
     const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-    }
-    return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    return [hours, minutes, secs].map((part) => String(part).padStart(2, "0")).join(":");
   }
 
   function clampPercent(value) {
@@ -257,11 +402,11 @@
 
   function escapeHtml(value) {
     return String(value || "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function getOverlayDefinitions(overlayKind) {
@@ -286,10 +431,126 @@
     return Array.from(map.entries()).map(([key, label]) => ({ key, label }));
   }
 
+  function readOverlayDefinitionsFromStorage(overlayKind) {
+    const storageKey = overlayKind === "liczniki" ? KARY_COUNTER_DEFINITIONS_KEY : KARY_TIMER_DEFINITIONS_KEY;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      const entries = [];
+      const seen = new Set();
+      parsed.forEach((entry, index) => {
+        const source = entry && typeof entry === "object" ? entry : {};
+        const key = String(source.key || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        const label = String(source.label || source.name || key || `${overlayKind}-${index + 1}`).trim() || key;
+        entries.push({ key, label });
+      });
+      return entries;
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function collectDefinitionKeysFromState(overlayKind, state) {
+    const source = state && typeof state === "object" ? state : {};
+    const mapSource =
+      overlayKind === "liczniki"
+        ? source.counters && typeof source.counters === "object"
+          ? source.counters
+          : {}
+        : source.timers && typeof source.timers === "object"
+          ? source.timers
+          : {};
+    return Object.keys(mapSource)
+      .map((rawKey) => String(rawKey || "").trim())
+      .filter(Boolean);
+  }
+
+  function buildOverlayDefinitions(overlayKind, state) {
+    const fromStorage = readOverlayDefinitionsFromStorage(overlayKind);
+    const fromDom = getOverlayDefinitions(overlayKind);
+    const fromStateKeys = collectDefinitionKeysFromState(overlayKind, state).map((key) => ({ key, label: key }));
+
+    const merged = [];
+    const seen = new Set();
+    [fromStorage, fromDom, fromStateKeys].forEach((list) => {
+      list.forEach((entry) => {
+        const key = String(entry && entry.key ? entry.key : "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        const label = String(entry && entry.label ? entry.label : key).trim() || key;
+        merged.push({ key, label });
+      });
+    });
+    return merged;
+  }
+
+  function normalizeOverlayDefinitionEntry(rawEntry, overlayKind, index = 0) {
+    const source = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+    const key = String(source.key || "").trim();
+    if (!key) {
+      return null;
+    }
+    const defaultLabel = overlayKind === "liczniki" ? `Licznik ${index + 1}` : `Timer ${index + 1}`;
+    const label = String(source.label || source.name || defaultLabel || key).trim() || key;
+    return { key, label };
+  }
+
+  function normalizeOverlayDefinitions(rawEntries, overlayKind) {
+    if (!Array.isArray(rawEntries)) {
+      return [];
+    }
+    const normalized = [];
+    const seen = new Set();
+    rawEntries.forEach((entry, index) => {
+      const next = normalizeOverlayDefinitionEntry(entry, overlayKind, index);
+      if (!next || seen.has(next.key)) {
+        return;
+      }
+      seen.add(next.key);
+      normalized.push(next);
+    });
+    return normalized;
+  }
+
+  function getOverlayDefinitionsFromAdminState(rawState, overlayKind) {
+    const source = rawState && typeof rawState === "object" && !Array.isArray(rawState) ? rawState : {};
+    const rawDefinitions =
+      overlayKind === "liczniki"
+        ? source.karyCounterDefinitions
+        : source.karyTimerDefinitions;
+    return normalizeOverlayDefinitions(rawDefinitions, overlayKind);
+  }
+
+  function getOverlayDefinitionsStorageKey(overlayKind) {
+    return overlayKind === "liczniki" ? KARY_COUNTER_DEFINITIONS_KEY : KARY_TIMER_DEFINITIONS_KEY;
+  }
+
+  function getOverlayDefinitionsSignature(definitions) {
+    if (!Array.isArray(definitions) || !definitions.length) {
+      return "";
+    }
+    return definitions
+      .map((item) => `${String(item.key || "").trim()}:${String(item.label || "").trim()}`)
+      .join("|");
+  }
+
   const overlayKind = detectObsOverlayKind();
   if (!overlayKind) {
     return;
   }
+  const ALLOW_LOCAL_STATE_FALLBACK = shouldEnableLocalStateFallback();
 
   const configFromStorage = readObsTimeryConfigFromStorage(overlayKind);
   const configFromQuery = readObsTimeryConfigFromQuery(overlayKind);
@@ -299,19 +560,26 @@
   );
   const overlayConfigStorageKey = getObsOverlayConfigStorageKey(overlayKind);
 
-  const overlayDefinitions = getOverlayDefinitions(overlayKind);
-  let sourceState = normalizeKaryState(readLocalKaryState());
+  let sourceState = normalizeKaryState({});
+  let overlayDefinitions = buildOverlayDefinitions(overlayKind, sourceState);
+  let overlayDefinitionsSignature = getOverlayDefinitionsSignature(overlayDefinitions);
   let lastRemoteUpdatedAt = 0;
+  let lastRemoteStateAppliedAt = 0;
+  let remoteStateHealthy = false;
+  let remoteStateHasSnapshot = false;
+  let karyStateChannel = null;
   let lastAdminConfigUpdatedAt = 0;
   let adminConfigApiDisabled = false;
   let lastRenderedSignature = "";
 
   const overlayEl = document.createElement("section");
   overlayEl.id = "timeryObsOverlay";
+  overlayEl.classList.add(overlayKind === "liczniki" ? "is-liczniki" : "is-timery");
   overlayEl.setAttribute("aria-label", overlayKind === "liczniki" ? "Aktywne liczniki OBS" : "Aktywne timery OBS");
 
   const listEl = document.createElement("div");
   listEl.className = "timery-obs-list";
+  listEl.classList.add(overlayKind === "liczniki" ? "is-liczniki" : "is-timery");
   overlayEl.appendChild(listEl);
 
   document.body.appendChild(overlayEl);
@@ -327,6 +595,27 @@
     overlayEl.style.setProperty("--timery-obs-progress-fill-shadow", hexToRgba(obsConfig.progressColor, 0.48));
     listEl.classList.toggle("is-horizontal", obsConfig.layout === "horizontal");
     listEl.classList.toggle("is-vertical", obsConfig.layout !== "horizontal");
+  }
+
+  function setOverlayDefinitions(nextDefinitions) {
+    const normalized = normalizeOverlayDefinitions(nextDefinitions, overlayKind);
+    if (!normalized.length) {
+      return false;
+    }
+
+    const nextSignature = getOverlayDefinitionsSignature(normalized);
+    if (nextSignature === overlayDefinitionsSignature) {
+      return false;
+    }
+
+    overlayDefinitions = normalized;
+    overlayDefinitionsSignature = nextSignature;
+    return true;
+  }
+
+  function refreshOverlayDefinitionsFromSources() {
+    const merged = buildOverlayDefinitions(overlayKind, sourceState);
+    return setOverlayDefinitions(merged);
   }
 
   function syncObsConfigFromStorage() {
@@ -358,7 +647,7 @@
   }
 
   async function pollAdminConfigFromApiOnce(options = {}) {
-    if (adminConfigApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+    if (adminConfigApiDisabled || typeof fetch !== "function") {
       return false;
     }
 
@@ -385,24 +674,74 @@
         lastAdminConfigUpdatedAt = Math.max(lastAdminConfigUpdatedAt, updatedAt);
       }
 
-      if (!payload.changed || !payload.state) {
+      const state = payload.state && typeof payload.state === "object" && !Array.isArray(payload.state)
+        ? payload.state
+        : null;
+      if (!state) {
         return false;
       }
 
-      const nextConfig = getObsConfigFromAdminState(payload.state);
-      if (!nextConfig || areObsConfigsEqual(nextConfig, obsConfig)) {
-        return false;
+      let changed = false;
+
+      const adminDefinitions = getOverlayDefinitionsFromAdminState(state, overlayKind);
+      if (adminDefinitions.length) {
+        const definitionsChanged = setOverlayDefinitions(adminDefinitions);
+        if (definitionsChanged) {
+          const definitionsStorageKey = getOverlayDefinitionsStorageKey(overlayKind);
+          try {
+            window.localStorage.setItem(definitionsStorageKey, JSON.stringify(adminDefinitions));
+          } catch (_error) {
+            // Ignore storage write failures.
+          }
+          changed = true;
+        }
       }
 
-      applyObsVisualConfig(nextConfig);
-      persistObsConfigToStorage(overlayKind, nextConfig);
-      return true;
+      const nextConfig = getObsConfigFromAdminState(state);
+      if (nextConfig && !areObsConfigsEqual(nextConfig, obsConfig)) {
+        applyObsVisualConfig(nextConfig);
+        persistObsConfigToStorage(overlayKind, nextConfig);
+        changed = true;
+      }
+
+      return changed;
     } catch (_error) {
       return false;
     }
   }
 
   applyObsVisualConfig(obsConfig);
+
+  function bindKaryStateChannel() {
+    if (!("BroadcastChannel" in window)) {
+      return;
+    }
+    try {
+      karyStateChannel = new BroadcastChannel(KARY_STATE_SYNC_CHANNEL_NAME);
+      karyStateChannel.addEventListener("message", (event) => {
+        const nextState = parseKaryStateFromMessage(event?.data);
+        if (!nextState) {
+          return;
+        }
+        remoteStateHasSnapshot = true;
+        applyIncomingState(nextState, { source: "channel" });
+      });
+    } catch (_error) {
+      karyStateChannel = null;
+    }
+  }
+
+  function closeKaryStateChannel() {
+    if (!karyStateChannel) {
+      return;
+    }
+    try {
+      karyStateChannel.close();
+    } catch (_error) {
+      // Ignore channel close failures.
+    }
+    karyStateChannel = null;
+  }
 
   function getActiveTimers() {
     const elapsed = Math.max(0, Math.floor((Date.now() - sourceState.lastTickAt) / 1000));
@@ -424,24 +763,59 @@
       .filter((timer) => timer.remaining > 0);
   }
 
-  function getActiveCounters() {
+  function getCounterItems() {
     return overlayDefinitions
       .map((counter) => {
         const value = Math.max(0, Math.floor(Number(sourceState.counters[counter.key] || 0)));
         return {
           key: counter.key,
           label: counter.label,
-          value
+          value,
+          isActive: value > 0
         };
-      })
-      .filter((counter) => counter.value > 0);
+      });
   }
 
   function getActiveOverlayItems() {
-    return overlayKind === "liczniki" ? getActiveCounters() : getActiveTimers();
+    if (overlayKind === "liczniki") {
+      return getCounterItems();
+    }
+    return getActiveTimers();
+  }
+
+  function getActiveItemsCountFromState(state) {
+    const source = normalizeKaryState(state);
+    if (overlayKind === "liczniki") {
+      return Object.values(source.counters).reduce((count, value) => {
+        return count + (Math.max(0, Math.floor(Number(value) || 0)) > 0 ? 1 : 0);
+      }, 0);
+    }
+    return Object.values(source.timers).reduce((count, value) => {
+      return count + (Math.max(0, Math.floor(Number(value) || 0)) > 0 ? 1 : 0);
+    }, 0);
+  }
+
+  function shouldPreferLocalStateOverRemote(localState, remoteState) {
+    if (!ALLOW_LOCAL_STATE_FALLBACK) {
+      return false;
+    }
+    if (!IS_LOCALHOST_RUNTIME) {
+      return false;
+    }
+    const local = normalizeKaryState(localState);
+    const remote = normalizeKaryState(remoteState);
+    const localActive = getActiveItemsCountFromState(local);
+    const remoteActive = getActiveItemsCountFromState(remote);
+    if (localActive <= remoteActive) {
+      return false;
+    }
+    const localTick = Math.max(0, Math.floor(Number(local.lastTickAt || 0)));
+    const remoteTick = Math.max(0, Math.floor(Number(remote.lastTickAt || 0)));
+    return localTick >= Math.max(0, remoteTick - 1500);
   }
 
   function renderOverlay() {
+    refreshOverlayDefinitionsFromSources();
     const activeItems = getActiveOverlayItems();
     if (!activeItems.length) {
       overlayEl.hidden = true;
@@ -455,8 +829,8 @@
     overlayEl.hidden = false;
     const signature =
       overlayKind === "liczniki"
-        ? activeItems.map((item) => `${item.key}:${item.value}`).join("|")
-        : activeItems.map((item) => `${item.key}:${item.remaining}:${item.total}`).join("|");
+        ? activeItems.map((item) => `${item.key}:${item.label}:${item.value}:${item.isActive ? 1 : 0}`).join("|")
+        : activeItems.map((item) => `${item.key}:${item.label}:${item.remaining}:${item.total}`).join("|");
     if (signature === lastRenderedSignature) {
       return;
     }
@@ -465,7 +839,7 @@
       listEl.innerHTML = activeItems
         .map(
           (item) => `
-            <article class="timery-obs-card" data-timery-obs-key="${escapeHtml(item.key)}">
+            <article class="timery-obs-card ${item.isActive ? "is-active" : "is-idle"}" data-timery-obs-key="${escapeHtml(item.key)}">
               <p class="timery-obs-name">${escapeHtml(item.label)}</p>
               <p class="timery-obs-time">${escapeHtml(String(item.value))}</p>
             </article>
@@ -490,24 +864,70 @@
     lastRenderedSignature = signature;
   }
 
-  function applyIncomingState(nextState) {
+  function applyIncomingState(nextState, options = {}) {
     sourceState = normalizeKaryState(nextState);
+    const source = String(options && options.source ? options.source : "").trim().toLowerCase();
+    if (source === "remote" || source === "channel" || source === "storage") {
+      lastRemoteStateAppliedAt = Date.now();
+    }
+    refreshOverlayDefinitionsFromSources();
     renderOverlay();
+  }
+
+  function applyLocalStateFallback() {
+    if (!ALLOW_LOCAL_STATE_FALLBACK) {
+      return false;
+    }
+    const local = readLocalKaryState();
+    if (!local) {
+      return false;
+    }
+    applyIncomingState(local, { source: "local-fallback" });
+    return true;
+  }
+
+  function clearStaleStateWhenRemoteUnavailable() {
+    if (ALLOW_LOCAL_STATE_FALLBACK) {
+      return false;
+    }
+    if (overlayKind !== "liczniki") {
+      return false;
+    }
+    if (!remoteStateHasSnapshot || lastRemoteStateAppliedAt <= 0) {
+      return false;
+    }
+
+    const staleForMs = Date.now() - lastRemoteStateAppliedAt;
+    if (staleForMs < REMOTE_STATE_STALE_RESET_MS) {
+      return false;
+    }
+
+    const activeItems = getActiveItemsCountFromState(sourceState);
+    if (activeItems <= 0) {
+      return false;
+    }
+
+    sourceState = normalizeKaryState({});
+    remoteStateHasSnapshot = false;
+    lastRemoteUpdatedAt = 0;
+    lastRemoteStateAppliedAt = 0;
+    refreshOverlayDefinitionsFromSources();
+    return true;
   }
 
   async function pollRemoteState() {
     if (typeof fetch !== "function") {
-      const local = readLocalKaryState();
-      if (local) {
-        applyIncomingState(local);
+      remoteStateHealthy = false;
+      if (!applyLocalStateFallback()) {
+        renderOverlay();
       }
       return;
     }
 
-    const endpoint =
-      lastRemoteUpdatedAt > 0
-        ? `${KARY_STATE_API_ENDPOINT}?after=${encodeURIComponent(String(lastRemoteUpdatedAt))}`
-        : KARY_STATE_API_ENDPOINT;
+    const hasRemoteCursor = lastRemoteUpdatedAt > 0;
+    const endpoint = hasRemoteCursor
+      ? `${KARY_STATE_API_ENDPOINT}?after=${encodeURIComponent(String(lastRemoteUpdatedAt))}`
+      : KARY_STATE_API_ENDPOINT;
 
     try {
       const response = await fetch(endpoint, {
@@ -522,34 +942,83 @@
       if (!payload || payload.ok !== true) {
         throw new Error("INVALID_PAYLOAD");
       }
+      remoteStateHealthy = true;
 
-      if (Number.isFinite(Number(payload.updatedAt)) && Number(payload.updatedAt) > 0) {
-        lastRemoteUpdatedAt = Math.max(lastRemoteUpdatedAt, Math.floor(Number(payload.updatedAt)));
+      const payloadUpdatedAt = Math.max(0, Math.floor(Number(payload.updatedAt || 0)));
+      if (payloadUpdatedAt > 0 && payloadUpdatedAt < lastRemoteUpdatedAt) {
+        return;
+      }
+      if (payloadUpdatedAt > 0) {
+        lastRemoteUpdatedAt = Math.max(lastRemoteUpdatedAt, payloadUpdatedAt);
       }
 
-      if (payload.changed && payload.state) {
-        applyIncomingState(payload.state);
+      const hasStatePayload = payload.state && typeof payload.state === "object" && !Array.isArray(payload.state);
+      if (hasStatePayload) {
+        remoteStateHasSnapshot = true;
+        const remoteState = normalizeKaryState(payload.state);
+        if (ALLOW_LOCAL_STATE_FALLBACK) {
+          const localState = readLocalKaryState();
+          if (localState && shouldPreferLocalStateOverRemote(localState, remoteState)) {
+            applyIncomingState(localState);
+            return;
+          }
+        }
+        applyIncomingState(remoteState, { source: "remote" });
         return;
       }
 
+      const changed = payload.changed === true;
+      if (!hasRemoteCursor && !remoteStateHasSnapshot && !changed) {
+        remoteStateHasSnapshot = true;
+        applyIncomingState({
+          timers: {},
+          timerTotals: {},
+          counters: {},
+          lastTickAt: Date.now()
+        }, { source: "remote" });
+        return;
+      }
+
+      if (!remoteStateHasSnapshot && applyLocalStateFallback()) {
+        return;
+      }
       renderOverlay();
     } catch (_error) {
-      const local = readLocalKaryState();
-      if (local) {
-        applyIncomingState(local);
-      } else {
-        renderOverlay();
+      remoteStateHealthy = false;
+      if (!remoteStateHasSnapshot && applyLocalStateFallback()) {
+        return;
       }
+      if (clearStaleStateWhenRemoteUnavailable()) {
+        renderOverlay();
+        return;
+      }
+      renderOverlay();
     }
   }
 
   window.addEventListener("storage", (event) => {
     const key = String(event.key || "");
     if (key === KARY_STATE_STORAGE_KEY) {
-      const local = readLocalKaryState();
-      if (local) {
-        applyIncomingState(local);
+      const directState = parseKaryStateFromRaw(event.newValue);
+      if (directState) {
+        remoteStateHasSnapshot = true;
+        applyIncomingState(directState, { source: "storage" });
+        return;
       }
+      if (!ALLOW_LOCAL_STATE_FALLBACK) {
+        return;
+      }
+      if (!remoteStateHealthy || !remoteStateHasSnapshot) {
+        applyLocalStateFallback();
+      }
+      return;
+    }
+    if (
+      (overlayKind === "timery" && key === KARY_TIMER_DEFINITIONS_KEY) ||
+      (overlayKind === "liczniki" && key === KARY_COUNTER_DEFINITIONS_KEY)
+    ) {
+      overlayDefinitions = buildOverlayDefinitions(overlayKind, sourceState);
+      renderOverlay();
       return;
     }
     if (key === overlayConfigStorageKey && (!PREFER_API_CONFIG_SYNC || adminConfigApiDisabled)) {
@@ -559,6 +1028,11 @@
     }
   });
 
+  window.addEventListener("pagehide", () => {
+    closeKaryStateChannel();
+  });
+
+  bindKaryStateChannel();
   void pollAdminConfigFromApiOnce({ force: true }).then((changed) => {
     if (changed) {
       renderOverlay();
@@ -566,13 +1040,15 @@
   });
   pollRemoteState();
   renderOverlay();
-  if (!PREFER_API_CONFIG_SYNC) {
-    window.setInterval(() => {
-      if (syncObsConfigFromStorage()) {
-        renderOverlay();
-      }
-    }, CONFIG_SYNC_INTERVAL_MS);
-  }
+  window.setInterval(() => {
+    let changed = refreshOverlayDefinitionsFromSources();
+    if (!PREFER_API_CONFIG_SYNC || adminConfigApiDisabled) {
+      changed = syncObsConfigFromStorage() || changed;
+    }
+    if (changed) {
+      renderOverlay();
+    }
+  }, CONFIG_SYNC_INTERVAL_MS);
   window.setInterval(() => {
     void pollAdminConfigFromApiOnce().then((changed) => {
       if (changed) {

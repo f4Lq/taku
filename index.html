@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
-  <link rel="stylesheet" href="styles/styles.css?v=20260318-clip-viewer-ui-6">
+  <link rel="stylesheet" href="styles/styles.css?v=20260322-obs-timer-visibility-1">
   <link rel="shortcut icon" type="x-icon" href="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" />
 </head>
 <body>
@@ -16,7 +16,7 @@
   <section class="stream-shell" aria-label="Live stream i czat">
     <header class="stream-topbar">
       <p class="stream-brand">
-        <span class="stream-brand-main">TAKUU</span>
+        <span class="stream-brand-main glitch" data-text="TAKUU">TAKUU</span>
       </p>
 
       <nav class="stream-nav" aria-label="Nawigacja panelu">
@@ -122,7 +122,7 @@
 
       <section class="kary-block" aria-labelledby="karyTimersTitle">
         <h2 id="karyTimersTitle" class="kary-section-title">Timery</h2>
-        <div class="kary-timers-grid">
+        <div id="karyTimersGrid" class="kary-timers-grid">
           <article class="kary-timer-card" data-kary-timer="zakaz-dc-tel">
             <p class="kary-card-state" data-kary-timer-state>IDLE</p>
             <div class="kary-card-head">
@@ -192,7 +192,7 @@
 
       <section class="kary-block" aria-labelledby="karyCountersTitle">
         <h2 id="karyCountersTitle" class="kary-section-title">Liczniki</h2>
-        <div class="kary-counters-grid">
+        <div id="karyCountersGrid" class="kary-counters-grid">
           <article class="kary-counter-card" data-kary-counter="shoty">
             <p class="kary-card-state">COUNTER</p>
             <div class="kary-card-head">
@@ -301,7 +301,7 @@
         </div>
       </section>
 
-      <div class="timery-list">
+      <div id="timeryList" class="timery-list">
         <article class="kary-timer-card timery-card" data-kary-timer="zakaz-dc-tel">
           <div class="timery-left">
             <p class="kary-card-state" data-kary-timer-state>IDLE</p>
@@ -400,7 +400,7 @@
         </div>
       </section>
 
-      <div class="liczniki-grid">
+      <div id="licznikiGrid" class="liczniki-grid">
         <article class="kary-counter-card liczniki-card" data-kary-counter="shoty">
           <p class="kary-card-state">COUNTER</p>
           <h3>Shoty do wypicia</h3>
@@ -477,6 +477,7 @@
         <nav class="admin-tabs" aria-label="Zakładki panelu">
           <button class="admin-tab-btn is-active" type="button" data-tab="members">Członkowie CCI</button>
           <button class="admin-tab-btn" type="button" data-tab="kary">Kary</button>
+          <button class="admin-tab-btn" type="button" data-tab="cennik">Cennik</button>
           <button class="admin-tab-btn" type="button" data-tab="streamobs">StreamOBS</button>
           <button class="admin-tab-btn" type="button" data-tab="accounts">Panel Admina</button>
           <button class="admin-tab-btn" type="button" data-tab="bindings">Powiązania</button>
@@ -566,7 +567,75 @@
           </div>
 
           <section class="admin-kary-cennik">
-            <h4 class="admin-kary-title">Cennik</h4>
+            <h4 class="admin-kary-title">Zarządzanie timerami i licznikami</h4>
+            <div class="admin-kary-grid">
+              <form id="adminTimerDefForm" class="admin-form admin-kary-form" novalidate>
+                <input type="hidden" name="timerDefKey">
+                <h5 class="admin-kary-title">Nowy / Edytuj timer</h5>
+                <label class="admin-field">
+                  <span class="admin-field-label">Nazwa timera</span>
+                  <input class="admin-input" type="text" name="timerDefLabel" placeholder="Np. Zakaz telefonu" required>
+                </label>
+                <label class="admin-field">
+                  <span class="admin-field-label">Szybki krok (+/- min)</span>
+                  <input class="admin-input" type="number" name="timerDefBaseMinutes" min="1" step="1" placeholder="Czas przycisków +/-" required>
+                </label>
+                <div class="admin-kary-actions">
+                  <button class="admin-kary-btn" type="submit">Dodaj / Aktualizuj</button>
+                  <button id="adminTimerDefCancelBtn" class="admin-kary-btn admin-kary-btn-danger" type="button">Wyczyść</button>
+                </div>
+              </form>
+
+              <form id="adminCounterDefForm" class="admin-form admin-kary-form" novalidate>
+                <input type="hidden" name="counterDefKey">
+                <h5 class="admin-kary-title">Nowy / Edytuj licznik</h5>
+                <label class="admin-field">
+                  <span class="admin-field-label">Nazwa licznika</span>
+                  <input class="admin-input" type="text" name="counterDefLabel" placeholder="Np. Przysiady" required>
+                </label>
+                <div class="admin-kary-actions">
+                  <button class="admin-kary-btn" type="submit">Dodaj / Aktualizuj</button>
+                  <button id="adminCounterDefCancelBtn" class="admin-kary-btn admin-kary-btn-danger" type="button">Wyczyść</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="admin-kary-grid">
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Kolejność</th>
+                      <th>Timer</th>
+                      <th>Przyciski +/-</th>
+                      <th>Akcje</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminTimerDefTableBody"></tbody>
+                </table>
+              </div>
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Kolejność</th>
+                      <th>Licznik</th>
+                      <th>Akcje</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminCounterDefTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <p id="adminKaryDefsStatus" class="admin-panel-status" aria-live="polite"></p>
+          </section>
+
+          <p id="adminKaryStatus" class="admin-panel-status" aria-live="polite"></p>
+        </section>
+
+        <section id="adminCennikTab" class="admin-tab-panel" hidden>
+          <h3 class="admin-section-title">Cennik</h3>
+          <section class="admin-kary-cennik">
             <form id="adminCennikForm" class="admin-form admin-kary-form" novalidate>
               <input type="hidden" name="cennikId">
               <label class="admin-field">
@@ -625,124 +694,172 @@
             </div>
             <p id="adminCennikStatus" class="admin-panel-status" aria-live="polite"></p>
           </section>
-          <p id="adminKaryStatus" class="admin-panel-status" aria-live="polite"></p>
         </section>
 
         <section id="adminStreamObsTab" class="admin-tab-panel" hidden>
           <h3 class="admin-section-title">StreamOBS</h3>
 
-          <section class="streamobs-links-wrap" aria-labelledby="streamObsLinksTitle">
-            <h4 id="streamObsLinksTitle" class="admin-kary-title">Linki do OBS i StreamDeck</h4>
-            <p class="streamobs-help">
-              Poniżej masz gotowe linki z opisem. Każdy przycisk <strong>Kopiuj</strong> kopiuje tylko swój URL.
-            </p>
-            <div id="streamObsLinks" class="streamobs-links-grid" aria-live="polite"></div>
-            <p id="streamObsLinksStatus" class="admin-panel-status" aria-live="polite"></p>
-          </section>
-
-          <section class="streamobs-timery-wrap" aria-label="Timery OBS">
-            <div class="streamobs-config-head">
-              <button id="streamObsTimeryConfigToggle" class="admin-kary-btn streamobs-config-toggle" type="button" aria-expanded="false">
-                Konfiguracja timerów OBS
-              </button>
-            </div>
-            <div id="streamObsTimeryConfigBody" hidden>
-              <p class="streamobs-help">Ustaw wygląd timerów do Browser Source w OBS. Zmiana od razu aktualizuje link.</p>
-              <div class="streamobs-timery-config-grid">
-                <label class="streamobs-timery-field" for="streamObsTimeryLayoutSelect">
-                  <span>Układ</span>
-                  <select id="streamObsTimeryLayoutSelect" class="streamobs-timery-input">
-                    <option value="vertical">Pionowy</option>
-                    <option value="horizontal">Poziomy</option>
-                  </select>
-                </label>
-                <label class="streamobs-timery-field" for="streamObsTimeryColorInput">
-                  <span>Kolor timerów</span>
-                  <input id="streamObsTimeryColorInput" class="streamobs-timery-input streamobs-timery-color" type="color" value="#1a1e26">
-                </label>
-                <label class="streamobs-timery-field" for="streamObsTimeryProgressColorInput">
-                  <span>Kolor paska postępu</span>
-                  <input id="streamObsTimeryProgressColorInput" class="streamobs-timery-input streamobs-timery-color" type="color" value="#6bffc1">
-                </label>
-              </div>
-            </div>
-          </section>
-
-          <section class="streamobs-timery-wrap streamobs-liczniki-wrap" aria-label="Liczniki OBS">
-            <div class="streamobs-config-head">
-              <button id="streamObsLicznikiConfigToggle" class="admin-kary-btn streamobs-config-toggle" type="button" aria-expanded="false">
-                Konfiguracja liczników OBS
-              </button>
-            </div>
-            <div id="streamObsLicznikiConfigBody" hidden>
-              <p class="streamobs-help">Ustaw wygląd liczników do Browser Source w OBS. Zmiana od razu aktualizuje link.</p>
-              <div class="streamobs-timery-config-grid">
-                <label class="streamobs-timery-field" for="streamObsLicznikiLayoutSelect">
-                  <span>Układ</span>
-                  <select id="streamObsLicznikiLayoutSelect" class="streamobs-timery-input">
-                    <option value="vertical">Pionowy</option>
-                    <option value="horizontal">Poziomy</option>
-                  </select>
-                </label>
-                <label class="streamobs-timery-field" for="streamObsLicznikiColorInput">
-                  <span>Kolor liczników</span>
-                  <input id="streamObsLicznikiColorInput" class="streamobs-timery-input streamobs-timery-color" type="color" value="#1a1e26">
-                </label>
-              </div>
-            </div>
-          </section>
-
-          <div class="streamobs-layout">
-            <article class="streamobs-wheel-wrap">
-              <canvas id="obsWheelCanvas" width="900" height="900" aria-label="Koło StreamOBS"></canvas>
-              <p id="obsWheelResult" class="streamobs-result">WYGRANA: -</p>
-              <div class="streamobs-actions">
-                <button id="wheelSpinNow" class="admin-kary-btn" type="button">Kręć teraz</button>
-                <button id="wheelSpin3" class="admin-kary-btn" type="button">Kręć x3</button>
-                <button id="wheelSpinPause" class="admin-kary-btn" type="button" disabled>Zatrzymaj</button>
-                <div class="streamobs-series-wrap">
-                  <input
-                    id="wheelSpinSeriesCount"
-                    class="streamobs-series-input"
-                    type="number"
-                    min="1"
-                    max="1000"
-                    step="1"
-                    value=""
-                    placeholder="0"
-                    aria-label="Liczba kręceń w serii"
-                  >
-                  <button id="wheelSpinSeries" class="admin-kary-btn" type="button">Kręć serię</button>
-                </div>
-              </div>
-            </article>
-
-            <article class="streamobs-config">
-              <div class="streamobs-config-head">
-                <button id="wheelConfigToggle" class="admin-kary-btn streamobs-config-toggle" type="button" aria-expanded="false">
-                  Konfiguracje koła
-                </button>
-              </div>
-              <div id="wheelConfigBody" hidden>
-                <p class="streamobs-help">Edytuj nazwy, szansę, minuty i kolor. Kolejność segmentów zmienisz przez drag&amp;drop (uchwyt po lewej). Możesz też dodawać i usuwać segmenty. Suma szans musi wynosić dokładnie <strong>100%</strong>.</p>
-                <div class="streamobs-speed">
-                  <label class="streamobs-speed-label" for="wheelSpinSpeedRange">Szybkość kręcenia</label>
-                  <div class="streamobs-speed-row">
-                    <input id="wheelSpinSpeedRange" class="streamobs-speed-range" type="range" min="50" max="400" step="5" value="100">
-                    <span id="wheelSpinSpeedValue" class="streamobs-speed-value">100%</span>
-                  </div>
-                  <p class="streamobs-speed-note">100% to tempo domyślne. Wyżej = szybciej, niżej = wolniej.</p>
-                </div>
-                <div id="wheelConfig" class="streamobs-config-list"></div>
-                <div class="streamobs-config-actions">
-                  <button id="wheelAddSegment" class="admin-kary-btn streamobs-add-segment-btn" type="button">Dodaj segment</button>
-                  <button id="wheelSave" class="admin-submit" type="button">Zapisz konfigurację</button>
-                </div>
-                <p id="wheelChanceStatus" class="admin-panel-status" aria-live="polite"></p>
-              </div>
-            </article>
+          <div id="streamObsSubtabs" class="streamobs-subtabs" role="tablist" aria-label="Podzakładki StreamOBS">
+            <button
+              class="admin-tab-btn streamobs-subtab-btn is-active"
+              type="button"
+              data-streamobs-subtab="links"
+              role="tab"
+              aria-selected="true"
+            >
+              Link
+            </button>
+            <button
+              class="admin-tab-btn streamobs-subtab-btn"
+              type="button"
+              data-streamobs-subtab="wheel"
+              role="tab"
+              aria-selected="false"
+            >
+              Koło i konfiguracja koła
+            </button>
+            <button
+              class="admin-tab-btn streamobs-subtab-btn"
+              type="button"
+              data-streamobs-subtab="timery"
+              role="tab"
+              aria-selected="false"
+            >
+              Konfiguracja timerów OBS
+            </button>
+            <button
+              class="admin-tab-btn streamobs-subtab-btn"
+              type="button"
+              data-streamobs-subtab="liczniki"
+              role="tab"
+              aria-selected="false"
+            >
+              Konfiguracja liczników OBS
+            </button>
           </div>
-          <p class="streamobs-note">Po zapisaniu konfiguracja zapisuje się lokalnie w przeglądarce.</p>
+
+          <section class="streamobs-subtab-panel" data-streamobs-subtab-panel="links">
+            <section id="streamObsLinksWrap" class="streamobs-links-wrap" aria-labelledby="streamObsLinksTitle">
+              <h4 id="streamObsLinksTitle" class="admin-kary-title">Linki do OBS i StreamDeck</h4>
+              <p class="streamobs-help">
+                Poniżej masz gotowe linki z opisem. Każdy przycisk <strong>Kopiuj</strong> kopiuje tylko swój URL.
+              </p>
+              <div id="streamObsLinks" class="streamobs-links-grid" aria-live="polite"></div>
+              <p id="streamObsLinksStatus" class="admin-panel-status" aria-live="polite"></p>
+            </section>
+          </section>
+
+          <section class="streamobs-subtab-panel" data-streamobs-subtab-panel="wheel" hidden>
+            <div class="streamobs-layout">
+              <article class="streamobs-wheel-wrap">
+                <canvas id="obsWheelCanvas" width="900" height="900" aria-label="Koło StreamOBS"></canvas>
+                <p id="obsWheelResult" class="streamobs-result">WYGRANA: -</p>
+                <div class="streamobs-actions">
+                  <button id="wheelSpinNow" class="admin-kary-btn" type="button">Kręć teraz</button>
+                  <button id="wheelSpin3" class="admin-kary-btn" type="button">Kręć x3</button>
+                  <button id="wheelSpinPause" class="admin-kary-btn" type="button" disabled>Zatrzymaj</button>
+                  <div class="streamobs-series-wrap">
+                    <input
+                      id="wheelSpinSeriesCount"
+                      class="streamobs-series-input"
+                      type="number"
+                      min="1"
+                      max="1000"
+                      step="1"
+                      value=""
+                      placeholder="0"
+                      aria-label="Liczba kręceń w serii"
+                    >
+                    <button id="wheelSpinSeries" class="admin-kary-btn" type="button">Kręć serię</button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="streamobs-config">
+                <div class="streamobs-config-head">
+                  <h4 class="admin-kary-title">Konfiguracja koła</h4>
+                </div>
+                <div>
+                  <p class="streamobs-help">Edytuj nazwy, szansę, minuty i kolor. Kolejność segmentów zmienisz przez drag&amp;drop (uchwyt po lewej). Możesz też dodawać i usuwać segmenty. Suma szans musi wynosić dokładnie <strong>100%</strong>.</p>
+                  <div class="streamobs-speed">
+                    <label class="streamobs-speed-label" for="wheelSpinSpeedRange">Szybkość kręcenia</label>
+                    <div class="streamobs-speed-row">
+                      <input id="wheelSpinSpeedRange" class="streamobs-speed-range" type="range" min="50" max="400" step="5" value="100">
+                      <span id="wheelSpinSpeedValue" class="streamobs-speed-value">100%</span>
+                    </div>
+                    <p class="streamobs-speed-note">100% to tempo domyślne. Wyżej = szybciej, niżej = wolniej.</p>
+                  </div>
+                  <div id="wheelConfig" class="streamobs-config-list"></div>
+                  <div class="streamobs-config-actions">
+                    <button id="wheelAddSegment" class="admin-kary-btn streamobs-add-segment-btn" type="button">Dodaj segment</button>
+                    <button id="wheelSave" class="admin-submit" type="button">Zapisz konfigurację</button>
+                  </div>
+                  <p id="wheelChanceStatus" class="admin-panel-status" aria-live="polite"></p>
+                </div>
+              </article>
+            </div>
+            <p class="streamobs-note">Po zapisaniu konfiguracja zapisuje się lokalnie w przeglądarce.</p>
+          </section>
+
+          <section class="streamobs-subtab-panel" data-streamobs-subtab-panel="timery" hidden>
+            <section class="streamobs-timery-wrap" aria-label="Timery OBS">
+              <div class="streamobs-config-head">
+                <h4 class="admin-kary-title">Konfiguracja timerów OBS</h4>
+              </div>
+              <div>
+                <p class="streamobs-help">Ustaw wygląd timerów do Browser Source w OBS. Zmiana od razu aktualizuje link.</p>
+                <div class="streamobs-timery-config-grid">
+                  <label class="streamobs-timery-field" for="streamObsTimeryLayoutSelect">
+                    <span>Układ</span>
+                    <select id="streamObsTimeryLayoutSelect" class="streamobs-timery-input">
+                      <option value="vertical">Pionowy</option>
+                      <option value="horizontal">Poziomy</option>
+                    </select>
+                  </label>
+                  <label class="streamobs-timery-field" for="streamObsTimeryColorInput">
+                    <span>Kolor timerów</span>
+                    <input id="streamObsTimeryColorInput" class="streamobs-timery-input streamobs-timery-color" type="color" value="#1a1e26">
+                  </label>
+                  <label class="streamobs-timery-field" for="streamObsTimeryProgressColorInput">
+                    <span>Kolor paska postępu</span>
+                    <input id="streamObsTimeryProgressColorInput" class="streamobs-timery-input streamobs-timery-color" type="color" value="#6bffc1">
+                  </label>
+                </div>
+                <div class="streamobs-preview-wrap">
+                  <p class="streamobs-preview-title">Podgląd widgetu timerów</p>
+                  <div id="streamObsTimeryPreview" class="streamobs-widget-preview" aria-live="polite"></div>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section class="streamobs-subtab-panel" data-streamobs-subtab-panel="liczniki" hidden>
+            <section class="streamobs-timery-wrap streamobs-liczniki-wrap" aria-label="Liczniki OBS">
+              <div class="streamobs-config-head">
+                <h4 class="admin-kary-title">Konfiguracja liczników OBS</h4>
+              </div>
+              <div>
+                <p class="streamobs-help">Ustaw wygląd liczników do Browser Source w OBS. Zmiana od razu aktualizuje link.</p>
+                <div class="streamobs-timery-config-grid">
+                  <label class="streamobs-timery-field" for="streamObsLicznikiLayoutSelect">
+                    <span>Układ</span>
+                    <select id="streamObsLicznikiLayoutSelect" class="streamobs-timery-input">
+                      <option value="vertical">Pionowy</option>
+                      <option value="horizontal">Poziomy</option>
+                    </select>
+                  </label>
+                  <label class="streamobs-timery-field" for="streamObsLicznikiColorInput">
+                    <span>Kolor liczników</span>
+                    <input id="streamObsLicznikiColorInput" class="streamobs-timery-input streamobs-timery-color" type="color" value="#1a1e26">
+                  </label>
+                </div>
+                <div class="streamobs-preview-wrap">
+                  <p class="streamobs-preview-title">Podgląd widgetu liczników</p>
+                  <div id="streamObsLicznikiPreview" class="streamobs-widget-preview" aria-live="polite"></div>
+                </div>
+              </div>
+            </section>
+          </section>
         </section>
 
         <section id="adminBindingsTab" class="admin-tab-panel" hidden>
@@ -1039,9 +1156,31 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="js/webhook.js?v=20260316-bindings-permission-1"></script>
-  <script src="js/wheel.js?v=20260310-livefix7"></script>
-  <script src="js/script.js?v=20260318-clip-viewer-ui-4"></script>
-  <script src="js/timery-liczniki.js?v=20260315-obs-timery-9"></script>
+  <script>
+    (function () {
+      const CANONICAL_ORIGIN = "https://www.taku-live.pl";
+      const host = String(window.location.hostname || "").trim().toLowerCase();
+      const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+
+      if (isLocalHost) {
+        window.TAKUU_API_ORIGIN = "";
+        window.TAKUU_REDIS_API_ORIGIN = "";
+        try {
+          window.TAKUU_OBS_BASE_ORIGIN = `${window.location.protocol}//${window.location.host}`;
+        } catch (_error) {
+          window.TAKUU_OBS_BASE_ORIGIN = "";
+        }
+        return;
+      }
+
+      window.TAKUU_API_ORIGIN = CANONICAL_ORIGIN;
+      window.TAKUU_REDIS_API_ORIGIN = CANONICAL_ORIGIN;
+      window.TAKUU_OBS_BASE_ORIGIN = CANONICAL_ORIGIN;
+    })();
+  </script>
+  <script src="js/webhook.js?v=20260320-kary-def-dnd-1"></script>
+  <script src="js/wheel.js?v=20260322-localhost-api-sync-fix-1"></script>
+  <script src="js/script.js?v=20260322-localhost-api-sync-fix-1"></script>
+  <script src="js/timery-liczniki.js?v=20260322-domain-obs-stale-counter-fix-1"></script>
 </body>
 </html>

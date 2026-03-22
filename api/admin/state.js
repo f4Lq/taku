@@ -34,6 +34,8 @@ function normalizeAdminState(rawState) {
     baseMemberOverrides: toSafeJsonValue(source.baseMemberOverrides, {}),
     customMembers: Array.isArray(source.customMembers) ? toSafeJsonValue(source.customMembers, []) : [],
     membersOrder: normalizeStringList(source.membersOrder),
+    karyTimerDefinitions: Array.isArray(source.karyTimerDefinitions) ? toSafeJsonValue(source.karyTimerDefinitions, []) : [],
+    karyCounterDefinitions: Array.isArray(source.karyCounterDefinitions) ? toSafeJsonValue(source.karyCounterDefinitions, []) : [],
     karyCennikItems: Array.isArray(source.karyCennikItems) ? toSafeJsonValue(source.karyCennikItems, []) : [],
     timeryConfig: toSafeJsonValue(source.timeryConfig, {}),
     licznikiConfig: toSafeJsonValue(source.licznikiConfig, {}),

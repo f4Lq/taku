@@ -722,11 +722,19 @@
     timer_reset: "Timery - Reset timera",
     timer_add_quick: "Timery - Szybkie dodanie czasu",
     timer_remove_quick: "Timery - Szybkie odjecie czasu",
+    timer_definition_add: "Timery - Dodano timer",
+    timer_definition_update: "Timery - Zaktualizowano timer",
+    timer_definition_remove: "Timery - Usunieto timer",
+    timer_definition_reorder: "Timery - Zmieniono kolejnosc timerow",
     counter_add: "Liczniki - Dodano wartosc",
     counter_set: "Liczniki - Ustawiono wartosc",
     counter_reset: "Liczniki - Reset licznika",
     counter_plus_one: "Liczniki - Dodano +1",
     counter_minus_one: "Liczniki - Odjeto -1",
+    counter_definition_add: "Liczniki - Dodano licznik",
+    counter_definition_update: "Liczniki - Zaktualizowano licznik",
+    counter_definition_remove: "Liczniki - Usunieto licznik",
+    counter_definition_reorder: "Liczniki - Zmieniono kolejnosc licznikow",
     member_add: "CCI - Dodano czlonka",
     member_edit: "CCI - Edytowano czlonka",
     member_remove: "CCI - Usunieto czlonka",
@@ -743,6 +751,7 @@
     wheel_config_reorder: "Kolo fortuny - Zmieniono kolejnosc segmentow",
     wheel_config_save: "Kolo fortuny - Zapisano konfiguracje",
     wheel_config_set_items: "Kolo fortuny - Ustawiono segmenty",
+    wheel_spin_result: "Kolo fortuny - Wynik losowania",
     streamobs_timer_config_toggle: "StreamOBS Timery - Pokazano lub ukryto konfiguracje",
     streamobs_timer_layout_change: "StreamOBS Timery - Zmieniono uklad",
     streamobs_timer_color_change: "StreamOBS Timery - Zmieniono kolor kart",
@@ -937,10 +946,54 @@
     return sendAdminAudit(payload);
   }
 
+  function sanitizeWheelSpinDetails(details) {
+    const raw = details && typeof details === "object" ? details : {};
+    const copy = { ...raw };
+
+    copy.source = toSafeString(copy.source || copy.spinSource || "manual");
+    copy.winnerName = toSafeString(copy.winnerName || copy.winner || "-");
+    copy.timerKey = toSafeString(copy.timerKey || "");
+    copy.timerLabel = toSafeString(copy.timerLabel || "");
+    copy.timerResult = toSafeString(copy.timerResult || "");
+    copy.eventId = toSafeString(copy.eventId || "");
+
+    copy.spinCountByActor = Math.max(0, Math.floor(Number(copy.spinCountByActor) || 0));
+    copy.totalSpins = Math.max(0, Math.floor(Number(copy.totalSpins) || 0));
+    copy.minutesAdded = Math.max(0, Math.floor(Number(copy.minutesAdded) || 0));
+
+    if (!copy.timerResult) {
+      copy.timerResult = copy.minutesAdded > 0 && copy.timerLabel
+        ? `${copy.timerLabel} (+${copy.minutesAdded} min)`
+        : "Brak timera";
+    }
+
+    return copy;
+  }
+
+  async function sendWheelSpinAudit(details = {}, options = {}) {
+    const normalizedOptions = options && typeof options === "object" ? options : {};
+    const normalizedAction = toSafeString(normalizedOptions.action || "wheel_spin_result") || "wheel_spin_result";
+    const actor =
+      normalizedOptions.actor && typeof normalizedOptions.actor === "object"
+        ? normalizedOptions.actor
+        : getActorIdentity("wheel-spin");
+
+    const payload = {
+      action: normalizedAction.startsWith("wheel_") ? normalizedAction : `wheel_${normalizedAction}`,
+      target: toSafeString(normalizedOptions.target || "Kolo fortuny") || "Kolo fortuny",
+      details: sanitizeWheelSpinDetails(details),
+      actor,
+      route: window.location.href
+    };
+
+    return sendAdminAudit(payload);
+  }
+
   window.TakuuWebhook = {
     config: CONFIG,
     sendAdminAudit,
     sendWheelConfigAudit,
+    sendWheelSpinAudit,
     getActorIdentity,
     normalizeDiscordUserId,
     isDiscordOwnerSession,

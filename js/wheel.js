@@ -9,6 +9,94 @@
      CONFIG STORAGE
   ========================= */
 
+  const CANONICAL_WHEEL_DOMAIN = "www.taku-live.pl";
+  const LEGACY_WHEEL_DOMAIN = "taku-live.pl";
+  const CANONICAL_WHEEL_ORIGIN = `https://${CANONICAL_WHEEL_DOMAIN}`;
+
+  function normalizeWheelApiOrigin(rawValue) {
+    const candidate = String(rawValue || "").trim();
+    if (!candidate) {
+      return "";
+    }
+    try {
+      const parsed = new URL(candidate);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function getRuntimeHostName() {
+    return String(window.location.hostname || "").trim().toLowerCase();
+  }
+
+  function isRuntimeLocalHostName(hostname) {
+    const host = String(hostname || "").trim().toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  }
+
+  function resolveCurrentOrigin() {
+    try {
+      return `${window.location.protocol}//${window.location.host}`;
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function isLocalApiOverrideEnabled() {
+    if (window.TAKUU_USE_LOCAL_API === true) {
+      return true;
+    }
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const hasFlag = (name) => {
+        const value = String(params.get(name) || "").trim().toLowerCase();
+        return value === "1" || value === "true" || value === "yes" || value === "on";
+      };
+      return hasFlag("localApi") || hasFlag("useLocalApi") || hasFlag("localhostApi");
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function resolveWheelApiOrigin() {
+    const protocol = String(window.location.protocol || "").toLowerCase();
+    const host = getRuntimeHostName();
+
+    const explicitOrigin = normalizeWheelApiOrigin(window.TAKUU_REDIS_API_ORIGIN || window.TAKUU_API_ORIGIN || "");
+    if (explicitOrigin) {
+      return explicitOrigin;
+    }
+
+    if (isRuntimeLocalHostName(host)) {
+      return isLocalApiOverrideEnabled() ? "" : CANONICAL_WHEEL_ORIGIN;
+    }
+
+    if (protocol === "file:") {
+      return CANONICAL_WHEEL_ORIGIN;
+    }
+    if (host === CANONICAL_WHEEL_DOMAIN) {
+      return "";
+    }
+    if (host === LEGACY_WHEEL_DOMAIN) {
+      return CANONICAL_WHEEL_ORIGIN;
+    }
+    return CANONICAL_WHEEL_ORIGIN;
+  }
+
+  function buildWheelApiEndpoint(pathname) {
+    const path = String(pathname || "").trim() || "/";
+    const origin = resolveWheelApiOrigin();
+    if (!origin) {
+      return path.startsWith("/") ? path : `/${path}`;
+    }
+    try {
+      return new URL(path.startsWith("/") ? path : `/${path}`, origin).toString();
+    } catch (_error) {
+      return `${CANONICAL_WHEEL_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
+    }
+  }
+
   function resolveWheelWebSocketUrl() {
     const explicit = String(window.TAKUU_WHEEL_WS_URL || "").trim();
     if (!explicit) {
@@ -31,8 +119,13 @@
   const SPIN_SPEED_KEY = "takuu_wheel_spin_speed";
   const WHEEL_SYNC_STORAGE_KEY = "takuu_wheel_sync_event";
   const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
-  const WHEEL_SYNC_API_ENDPOINT = "/api/wheel/sync";
-  const WHEEL_STATS_API_ENDPOINT = "/api/wheel/stats";
+  const WHEEL_SYNC_API_ENDPOINT = buildWheelApiEndpoint("/api/wheel/sync");
+  const WHEEL_SYNC_API_POLL_MS = 220;
+  const WHEEL_STATS_API_ENDPOINT = buildWheelApiEndpoint("/api/wheel/stats");
+  const WHEEL_CONFIG_API_ENDPOINT = buildWheelApiEndpoint("/api/wheel/config");
+  const WHEEL_CONFIG_SYNC_POLL_MS = 2200;
+  const SPIN_AUDIT_COUNTS_KEY = "takuu_wheel_spin_audit_counts";
+  const KARY_TIMER_DEFINITIONS_KEY = "takuu_kary_timer_definitions";
   const WHEEL_WS_URL = resolveWheelWebSocketUrl();
   const WHEEL_WS_ENABLED = Boolean(WHEEL_WS_URL);
   const MAX_PROCESSED_SYNC_EVENTS = 400;
@@ -100,6 +193,112 @@
       .replace(/^-+|-+$/g, "");
   }
 
+  function normalizeTimerDefinitionEntry(entry, index = 0) {
+    const source = entry && typeof entry === "object" ? entry : {};
+    const key = String(source.key || "").trim();
+    const label = String(source.label || source.name || "").trim();
+    const fallbackLabel = label || `Timer ${index + 1}`;
+    return {
+      key,
+      label: fallbackLabel
+    };
+  }
+
+  function readWheelTimerDefinitionsFromStorage() {
+    try {
+      const raw = localStorage.getItem(KARY_TIMER_DEFINITIONS_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      const unique = [];
+      const seen = new Set();
+      parsed.forEach((entry, index) => {
+        const normalized = normalizeTimerDefinitionEntry(entry, index);
+        const key = String(normalized.key || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        unique.push(normalized);
+      });
+      return unique;
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function collectWheelTimerDefinitionsFromDom() {
+    const timerCards = Array.from(document.querySelectorAll("[data-kary-timer]"));
+    const unique = [];
+    const seen = new Set();
+    timerCards.forEach((card, index) => {
+      const key = String(card.getAttribute("data-kary-timer") || "").trim();
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      unique.push({
+        key,
+        label: String(card.querySelector("h3")?.textContent || "").trim() || `Timer ${index + 1}`
+      });
+    });
+    return unique;
+  }
+
+  function collectWheelTimerDefinitionsFromBaseItems() {
+    const unique = [];
+    const seen = new Set();
+    baseItems.forEach((item, index) => {
+      const timerKey = String(item && item.timer ? item.timer : "").trim();
+      if (!timerKey || seen.has(timerKey)) {
+        return;
+      }
+      seen.add(timerKey);
+      unique.push({
+        key: timerKey,
+        label: String(item && item.name ? item.name : "").trim() || `Timer ${index + 1}`
+      });
+    });
+    return unique;
+  }
+
+  function buildWheelTimerDefinitions() {
+    const storageDefs = readWheelTimerDefinitionsFromStorage();
+    const domDefs = collectWheelTimerDefinitionsFromDom();
+    const baseDefs = collectWheelTimerDefinitionsFromBaseItems();
+    const merged = [];
+    const seen = new Set();
+    [storageDefs, domDefs].forEach((list) => {
+      list.forEach((entry, index) => {
+        const normalized = normalizeTimerDefinitionEntry(entry, index);
+        const key = String(normalized.key || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        merged.push(normalized);
+      });
+    });
+
+    if (!merged.length) {
+      baseDefs.forEach((entry, index) => {
+        const normalized = normalizeTimerDefinitionEntry(entry, index);
+        const key = String(normalized.key || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        merged.push(normalized);
+      });
+    }
+
+    return merged;
+  }
+
   function buildWheelTimerLookupMap() {
     const tokenToTimerKey = new Map();
     const register = (candidate, timerKey) => {
@@ -114,61 +313,111 @@
       tokenToTimerKey.set(token, normalizedTimerKey);
     };
 
-    baseItems.forEach((item) => {
-      const timerKey = String(item && item.timer ? item.timer : "").trim();
-      if (!timerKey) {
+    wheelTimerDefinitions.forEach((timer) => {
+      const key = String(timer.key || "").trim();
+      const label = String(timer.label || "").trim();
+      if (!key) {
         return;
       }
-      const name = String(item && item.name ? item.name : "").trim();
-      register(timerKey, timerKey);
-      register(timerKey.replace(/-/g, " "), timerKey);
-      register(timerKey.replace(/-/g, ""), timerKey);
-      register(name, timerKey);
-    });
-
-    const timerCards = Array.from(document.querySelectorAll("[data-kary-timer]"));
-    timerCards.forEach((card) => {
-      const timerKey = String(card.getAttribute("data-kary-timer") || "").trim();
-      if (!timerKey) {
-        return;
-      }
-      const label = String(card.querySelector("h3")?.textContent || "").trim();
-      register(timerKey, timerKey);
-      register(timerKey.replace(/-/g, " "), timerKey);
-      register(timerKey.replace(/-/g, ""), timerKey);
-      register(label, timerKey);
+      register(key, key);
+      register(key.replace(/-/g, " "), key);
+      register(key.replace(/-/g, ""), key);
+      register(label, key);
     });
 
     return tokenToTimerKey;
   }
 
-  const wheelTimerLookupByToken = buildWheelTimerLookupMap();
+  let wheelTimerDefinitions = buildWheelTimerDefinitions();
+  let wheelTimerLookupByToken = buildWheelTimerLookupMap();
+
+  function refreshWheelTimerLookupMap() {
+    wheelTimerDefinitions = buildWheelTimerDefinitions();
+    wheelTimerLookupByToken = buildWheelTimerLookupMap();
+  }
+
+  function resolveWheelTimerKeyFromCandidate(timerCandidate) {
+    const directTimer = String(timerCandidate || "").trim();
+    if (!directTimer) {
+      return "";
+    }
+    const directToken = normalizeTimerLookupToken(directTimer);
+    if (directToken && wheelTimerLookupByToken.has(directToken)) {
+      return String(wheelTimerLookupByToken.get(directToken) || "").trim();
+    }
+    return directTimer;
+  }
+
+  function collectAssociatedWheelTimerKeysByName(nameCandidate) {
+    const winnerToken = normalizeTimerLookupToken(nameCandidate);
+    if (!winnerToken) {
+      return [];
+    }
+
+    const relatedKeys = [];
+    const seen = new Set();
+    const pushUnique = (candidate) => {
+      const key = String(candidate || "").trim();
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      relatedKeys.push(key);
+    };
+
+    wheelTimerDefinitions.forEach((timer) => {
+      const key = String(timer && timer.key ? timer.key : "").trim();
+      if (!key) {
+        return;
+      }
+      const keyToken = normalizeTimerLookupToken(key);
+      const labelToken = normalizeTimerLookupToken(timer && timer.label ? timer.label : "");
+      if (winnerToken === keyToken || winnerToken === labelToken) {
+        pushUnique(key);
+      }
+    });
+
+    if (wheelTimerLookupByToken.has(winnerToken)) {
+      pushUnique(wheelTimerLookupByToken.get(winnerToken));
+    }
+
+    return relatedKeys;
+  }
+
+  function resolveWheelTimerKeys(timerCandidate, nameCandidate = "", minutesCandidate = 0) {
+    const minutes = Math.max(0, Math.floor(safeNumber(minutesCandidate, 0)));
+    const timerWasProvided = timerCandidate !== undefined && timerCandidate !== null;
+    const sourceCandidates = Array.isArray(timerCandidate) ? timerCandidate : [timerCandidate];
+    const keys = [];
+    const seen = new Set();
+
+    const pushUnique = (candidate) => {
+      const key = String(candidate || "").trim();
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      keys.push(key);
+    };
+
+    if (timerWasProvided) {
+      sourceCandidates.forEach((candidate) => {
+        pushUnique(resolveWheelTimerKeyFromCandidate(candidate));
+      });
+    }
+
+    if (minutes > 0) {
+      collectAssociatedWheelTimerKeysByName(nameCandidate).forEach((key) => {
+        pushUnique(key);
+      });
+    }
+
+    return keys;
+  }
 
   function resolveWheelTimerKey(timerCandidate, nameCandidate = "", minutesCandidate = 0) {
-    const directTimer = String(timerCandidate || "").trim();
-    const minutes = Math.max(0, Math.floor(safeNumber(minutesCandidate, 0)));
-    const nameToken = normalizeTimerLookupToken(nameCandidate);
-
-    if (directTimer) {
-      const directToken = normalizeTimerLookupToken(directTimer);
-      if (directToken && wheelTimerLookupByToken.has(directToken)) {
-        return wheelTimerLookupByToken.get(directToken);
-      }
-      if (minutes > 0 && nameToken && wheelTimerLookupByToken.has(nameToken)) {
-        return wheelTimerLookupByToken.get(nameToken);
-      }
-      return directTimer;
-    }
-
-    if (minutes <= 0) {
-      return null;
-    }
-
-    if (nameToken && wheelTimerLookupByToken.has(nameToken)) {
-      return wheelTimerLookupByToken.get(nameToken);
-    }
-
-    return null;
+    const keys = resolveWheelTimerKeys(timerCandidate, nameCandidate, minutesCandidate);
+    return keys.length ? keys[0] : null;
   }
 
   function clampSpinSpeed(value) {
@@ -249,6 +498,7 @@
 
   let angle = 0;
   let spinning = false;
+  let spinStartPending = false;
   let spinPaused = false;
   let spinPauseStartedAt = 0;
   let spinAnimation = null;
@@ -257,13 +507,25 @@
   let spinSpeed = readSpinSpeed();
 
   const TICK_SOUND_SOURCES = ["/sounds/tick.mp3", "/sounds/tick.mp4", "sounds/tick.mp3", "sounds/tick.mp4"];
+  const SPIN_SOUND_SOURCES = ["/sounds/tick.mp3", "sounds/tick.mp3", "/sounds/tick.mp4", "sounds/tick.mp4"];
   const TICK_VOLUME = 0.95;
+  const SPIN_SOUND_VOLUME = 0.24;
   const TICK_BUFFER_GAIN = 1.05;
   const TICK_BUFFER_MAX_DURATION = 0.16;
   const TICK_MIN_INTERVAL_MS = 24;
+  const TICK_MIN_INTERVAL_OBS_MS = 30;
+  const SPIN_SOUND_FADE_IN_MS = 120;
+  const SPIN_SOUND_FADE_OUT_MS = 320;
+  const SPIN_SOUND_MIN_PLAY_MS = 420;
+  const SPIN_SOUND_RATE_MIN = 0.72;
+  const SPIN_SOUND_RATE_MAX = 2.05;
+  const SPIN_SOUND_RATE_SMOOTHING = 0.22;
+  const SPIN_SOUND_DURATION_NORMALIZER_MS = 4600;
+  const SPIN_SOUND_CURVE_POWER = 1.1;
   const TICK_ONSET_SCAN_SECONDS = 0.5;
   const TICK_ONSET_THRESHOLD = 0.012;
-  const TICK_POOL_SIZE = 6;
+  const TICK_POOL_SIZE = 10;
+  const TICK_POOL_MAX_SIZE = 36;
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   function isObsAudioModeHintEnabled() {
     try {
@@ -302,20 +564,359 @@
   let tickWarmupIntervalId = null;
   let tickWarmupAttempts = 0;
   let tickAutoplayBlockedLogged = false;
+  let spinAudio = null;
+  let spinAudioSourceIndex = 0;
+  let spinAudioFadeRaf = 0;
+  let spinAudioStartedAt = 0;
+  let spinAudioCurrentRate = 1;
+  let spinSoundFadeInMsCurrent = SPIN_SOUND_FADE_IN_MS;
+  let spinSoundFadeOutMsCurrent = SPIN_SOUND_FADE_OUT_MS;
+  let spinSoundMinPlayMsCurrent = SPIN_SOUND_MIN_PLAY_MS;
+
+  function createTickAudioElement(source) {
+    const audio = new Audio(source);
+    audio.preload = "auto";
+    audio.defaultMuted = false;
+    audio.muted = false;
+    audio.playsInline = true;
+    audio.volume = TICK_VOLUME;
+    return audio;
+  }
+
+  function createSpinAudioElement(sourcePath) {
+    const source = String(sourcePath || "").trim() || SPIN_SOUND_SOURCES[0];
+    const audio = new Audio(source);
+    audio.preload = "auto";
+    audio.defaultMuted = false;
+    audio.muted = false;
+    audio.playsInline = true;
+    audio.loop = true;
+    audio.volume = 0;
+    audio.playbackRate = 1;
+    // Allow pitch to follow playback speed while spinning.
+    try {
+      audio.preservesPitch = false;
+    } catch (_error) {
+      // Ignore unsupported property writes.
+    }
+    try {
+      audio.mozPreservesPitch = false;
+    } catch (_error) {
+      // Ignore unsupported property writes.
+    }
+    try {
+      audio.webkitPreservesPitch = false;
+    } catch (_error) {
+      // Ignore unsupported property writes.
+    }
+    return audio;
+  }
+
+  function ensureSpinAudioElement() {
+    if (!spinAudio) {
+      spinAudio = createSpinAudioElement(SPIN_SOUND_SOURCES[spinAudioSourceIndex]);
+    }
+    return spinAudio;
+  }
+
+  function clampUnit(value) {
+    return Math.max(0, Math.min(1, safeNumber(value, 0)));
+  }
+
+  function clampSpinSoundRate(value) {
+    return Math.max(SPIN_SOUND_RATE_MIN, Math.min(SPIN_SOUND_RATE_MAX, safeNumber(value, 1)));
+  }
+
+  function clampDurationMs(value, minValue, maxValue) {
+    return Math.max(minValue, Math.min(maxValue, Math.round(safeNumber(value, minValue))));
+  }
+
+  function setSpinAudioPlaybackRate(value) {
+    if (!spinAudio) {
+      return;
+    }
+    const nextRate = clampSpinSoundRate(value);
+    try {
+      spinAudio.playbackRate = nextRate;
+    } catch (_error) {
+      // Ignore unsupported playbackRate setters.
+    }
+    spinAudioCurrentRate = nextRate;
+  }
+
+  function getSpinAudioTargetRate(animation, progress) {
+    if (!animation || typeof animation !== "object") {
+      return 1;
+    }
+    const clampedProgress = Math.max(0, Math.min(1, safeNumber(progress, 0)));
+    const speedMultiplier = Math.max(0.5, Math.min(4, safeNumber(animation.speedMultiplier, 1)));
+    const durationMs = Math.max(1200, safeNumber(animation.duration, SPIN_SOUND_DURATION_NORMALIZER_MS));
+    const durationFactor = Math.max(0.55, Math.min(1.55, SPIN_SOUND_DURATION_NORMALIZER_MS / durationMs));
+    const startRate = clampSpinSoundRate(0.98 + speedMultiplier * 0.31 + (durationFactor - 1) * 0.2);
+    const endRate = clampSpinSoundRate(0.72 + Math.min(0.14, speedMultiplier * 0.03));
+    const curve = Math.pow(1 - clampedProgress, SPIN_SOUND_CURVE_POWER);
+    const rawRate = endRate + (startRate - endRate) * curve;
+    return clampSpinSoundRate(rawRate);
+  }
+
+  function updateSpinLoopSoundDynamics(progress) {
+    if (!spinning || spinPaused || !spinAudio || !spinAnimation) {
+      return;
+    }
+    const targetRate = getSpinAudioTargetRate(spinAnimation, progress);
+    const nextRate = spinAudioCurrentRate + (targetRate - spinAudioCurrentRate) * SPIN_SOUND_RATE_SMOOTHING;
+    setSpinAudioPlaybackRate(nextRate);
+  }
+
+  function cancelSpinAudioFade() {
+    if (!spinAudioFadeRaf) {
+      return;
+    }
+    window.cancelAnimationFrame(spinAudioFadeRaf);
+    spinAudioFadeRaf = 0;
+  }
+
+  function setSpinAudioVolume(value) {
+    if (!spinAudio) {
+      return;
+    }
+    spinAudio.volume = clampUnit(value);
+  }
+
+  function fadeSpinAudioTo(targetVolume, durationMs, onDone) {
+    if (!spinAudio) {
+      if (typeof onDone === "function") {
+        onDone();
+      }
+      return;
+    }
+
+    cancelSpinAudioFade();
+
+    const startVolume = clampUnit(spinAudio.volume);
+    const endVolume = clampUnit(targetVolume);
+    const duration = Math.max(0, Math.floor(safeNumber(durationMs, 0)));
+    if (duration <= 0 || Math.abs(endVolume - startVolume) < 0.001) {
+      setSpinAudioVolume(endVolume);
+      if (typeof onDone === "function") {
+        onDone();
+      }
+      return;
+    }
+
+    const startAt = performance.now();
+    const step = (now) => {
+      const progress = Math.max(0, Math.min(1, (now - startAt) / duration));
+      const currentVolume = startVolume + (endVolume - startVolume) * progress;
+      setSpinAudioVolume(currentVolume);
+      if (progress >= 1) {
+        spinAudioFadeRaf = 0;
+        if (typeof onDone === "function") {
+          onDone();
+        }
+        return;
+      }
+      spinAudioFadeRaf = window.requestAnimationFrame(step);
+    };
+    spinAudioFadeRaf = window.requestAnimationFrame(step);
+  }
+
+  function resetSpinAudioPlayback() {
+    if (!spinAudio) {
+      return;
+    }
+    cancelSpinAudioFade();
+    try {
+      spinAudio.pause();
+    } catch (_error) {
+      // Ignore pause failures.
+    }
+    try {
+      spinAudio.currentTime = 0;
+    } catch (_error) {
+      // Ignore seek failures.
+    }
+    setSpinAudioVolume(0);
+    setSpinAudioPlaybackRate(1);
+    spinAudioStartedAt = 0;
+  }
+
+  function trySwitchSpinAudioSource() {
+    if (spinAudioSourceIndex >= SPIN_SOUND_SOURCES.length - 1) {
+      return false;
+    }
+    spinAudioSourceIndex += 1;
+    resetSpinAudioPlayback();
+    spinAudio = createSpinAudioElement(SPIN_SOUND_SOURCES[spinAudioSourceIndex]);
+    return true;
+  }
+
+  function primeSpinAudioPlayback() {
+    if (spinning && spinAudio && !spinAudio.paused) {
+      return;
+    }
+    const audio = ensureSpinAudioElement();
+    if (!audio) {
+      return;
+    }
+    const originalMuted = audio.muted;
+    const originalVolume = audio.volume;
+    audio.muted = true;
+    audio.volume = 0;
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise
+        .then(() => {
+          resetSpinAudioPlayback();
+          audio.muted = originalMuted;
+          audio.volume = originalVolume;
+        })
+        .catch(() => {
+          audio.muted = originalMuted;
+          audio.volume = originalVolume;
+        });
+      return;
+    }
+    audio.muted = originalMuted;
+    audio.volume = originalVolume;
+  }
+
+  function startSpinLoopSound() {
+    const audio = ensureSpinAudioElement();
+    if (!audio) {
+      return;
+    }
+
+    const spinDurationMs = Math.max(1200, safeNumber(spinAnimation?.duration, SPIN_SOUND_DURATION_NORMALIZER_MS));
+    spinSoundFadeInMsCurrent = clampDurationMs(spinDurationMs * 0.045, 70, 220);
+    spinSoundFadeOutMsCurrent = clampDurationMs(spinDurationMs * 0.13, 260, 760);
+    spinSoundMinPlayMsCurrent = clampDurationMs(spinDurationMs * 0.28, 380, 1400);
+
+    cancelSpinAudioFade();
+    audio.loop = true;
+    audio.muted = false;
+    setSpinAudioVolume(0);
+    try {
+      audio.currentTime = 0;
+    } catch (_error) {
+      // Ignore seek failures.
+    }
+    setSpinAudioPlaybackRate(getSpinAudioTargetRate(spinAnimation, 0));
+
+    const onStarted = () => {
+      spinAudioStartedAt = performance.now();
+      fadeSpinAudioTo(SPIN_SOUND_VOLUME, spinSoundFadeInMsCurrent);
+    };
+
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise.then(onStarted).catch((error) => {
+        const descriptor = String(error && (error.name || error.message) || "").toLowerCase();
+        const shouldTryNextSource =
+          descriptor.includes("notfound") ||
+          descriptor.includes("notsupported") ||
+          descriptor.includes("decode") ||
+          descriptor.includes("network");
+        if (shouldTryNextSource && trySwitchSpinAudioSource()) {
+          startSpinLoopSound();
+        }
+      });
+      return;
+    }
+
+    onStarted();
+  }
+
+  function setSpinLoopPaused(paused) {
+    if (!spinAudio) {
+      return;
+    }
+    if (paused) {
+      cancelSpinAudioFade();
+      try {
+        spinAudio.pause();
+      } catch (_error) {
+        // Ignore pause failures.
+      }
+      return;
+    }
+    if (!spinning) {
+      return;
+    }
+    const playPromise = spinAudio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+    fadeSpinAudioTo(SPIN_SOUND_VOLUME, 90);
+  }
+
+  function stopSpinLoopSound(immediate = false) {
+    if (!spinAudio) {
+      return;
+    }
+
+    if (immediate) {
+      resetSpinAudioPlayback();
+      return;
+    }
+
+    const elapsed = spinAudioStartedAt > 0 ? performance.now() - spinAudioStartedAt : spinSoundMinPlayMsCurrent;
+    const minRemaining = Math.max(0, spinSoundMinPlayMsCurrent - elapsed);
+    const fadeOutMs = Math.max(spinSoundFadeOutMsCurrent, minRemaining);
+    fadeSpinAudioTo(0, fadeOutMs, () => {
+      resetSpinAudioPlayback();
+    });
+  }
 
   function buildTickPool(sourcePath) {
     const source = String(sourcePath || "").trim() || TICK_SOUND_SOURCES[0];
-    tickPool = Array.from({ length: TICK_POOL_SIZE }, () => {
-      const audio = new Audio(source);
-      audio.preload = "auto";
-      audio.defaultMuted = false;
-      audio.muted = false;
-      audio.playsInline = true;
-      audio.volume = TICK_VOLUME;
-      return audio;
-    });
+    tickPool = Array.from({ length: TICK_POOL_SIZE }, () => createTickAudioElement(source));
     tickPoolCursor = 0;
     preloadTickBuffer(source);
+  }
+
+  function isTickAudioIdle(audio) {
+    if (!audio) {
+      return false;
+    }
+    if (audio.paused) {
+      return true;
+    }
+    const duration = safeNumber(audio.duration, 0);
+    if (duration > 0 && safeNumber(audio.currentTime, 0) >= duration - 0.01) {
+      return true;
+    }
+    return false;
+  }
+
+  function getTickPlaybackAudioInstance() {
+    if (!tickPool.length) {
+      return null;
+    }
+
+    for (let offset = 0; offset < tickPool.length; offset += 1) {
+      const index = (tickPoolCursor + offset) % tickPool.length;
+      const candidate = tickPool[index];
+      if (!candidate) {
+        continue;
+      }
+      if (isTickAudioIdle(candidate)) {
+        tickPoolCursor = (index + 1) % tickPool.length;
+        return candidate;
+      }
+    }
+
+    if (tickPool.length < TICK_POOL_MAX_SIZE) {
+      const source = String(tickPool[0]?.src || TICK_SOUND_SOURCES[tickSourceIndex] || "").trim();
+      const audio = createTickAudioElement(source || TICK_SOUND_SOURCES[0]);
+      tickPool.push(audio);
+      tickPoolCursor = 0;
+      return audio;
+    }
+
+    const fallback = tickPool[tickPoolCursor % tickPool.length];
+    tickPoolCursor = (tickPoolCursor + 1) % tickPool.length;
+    return fallback || null;
   }
 
   function getTickAudioContext() {
@@ -324,9 +925,13 @@
     }
     if (!tickAudioContext) {
       try {
-        tickAudioContext = new AudioContextCtor();
+        tickAudioContext = new AudioContextCtor({ latencyHint: "interactive" });
       } catch (_error) {
-        tickAudioContext = null;
+        try {
+          tickAudioContext = new AudioContextCtor();
+        } catch (_nestedError) {
+          tickAudioContext = null;
+        }
       }
     }
     if (tickAudioContext && tickAudioContext.state === "suspended") {
@@ -412,7 +1017,7 @@
 
   function playTickFromBuffer() {
     const context = getTickAudioContext();
-    if (!context || !tickBuffer) {
+    if (!context || !tickBuffer || context.state !== "running") {
       return false;
     }
     try {
@@ -502,32 +1107,37 @@
       tickAutoplayBlockedLogged = true;
       console.warn("[TakuuWheel] Tick audio blocked by autoplay policy. In OBS enable Browser Source audio/mixer.");
     }
+    if (autoplayBlocked && OBS_AUDIO_MODE) {
+      primeTickAudioPlayback();
+    }
 
     if (shouldTryNextSource && trySwitchTickSource(true)) {
       return;
     }
-    if (OBS_AUDIO_MODE && playTickFromBuffer()) {
+    if (playTickFromBuffer()) {
       return;
     }
     playTickBeepFallback();
   }
 
   function playTickFromPool() {
-    if (!OBS_AUDIO_MODE && playTickFromBuffer()) {
+    if (playTickFromBuffer()) {
       return;
     }
 
     if (!tickPool.length) {
       buildTickPool(TICK_SOUND_SOURCES[tickSourceIndex]);
     }
-    const audio = tickPool[tickPoolCursor % tickPool.length];
-    tickPoolCursor += 1;
+    const audio = getTickPlaybackAudioInstance();
     if (!audio) {
       playTickBeepFallback();
       return;
     }
 
     try {
+      if (!audio.paused) {
+        audio.pause();
+      }
       const duration = safeNumber(audio.duration, 0);
       const preferredOffset = Math.max(0, safeNumber(tickBufferStartOffset, 0));
       const safeOffset =
@@ -544,6 +1154,7 @@
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.catch === "function") {
       playPromise.catch((error) => {
+        lastTickPlaybackAt = 0;
         handleTickPlayError(error);
       });
     }
@@ -554,7 +1165,9 @@
     if (!tickPool.length) {
       buildTickPool(TICK_SOUND_SOURCES[tickSourceIndex]);
     }
+    ensureSpinAudioElement();
     preloadTickBuffer(TICK_SOUND_SOURCES[tickSourceIndex]);
+    primeSpinAudioPlayback();
     if (!OBS_AUDIO_MODE) {
       return;
     }
@@ -621,8 +1234,17 @@
   const processedSyncEventIds = new Set();
   const processedSyncEventOrder = [];
   let wheelSyncChannel = null;
+  let wheelSyncApiDisabled = false;
+  let wheelSyncApiPollId = null;
+  let wheelSyncApiPollBusy = false;
+  let wheelSyncLastEventId = 0;
   let wheelSocket = null;
   let wheelStatsApiDisabled = false;
+  let wheelConfigApiDisabled = false;
+  let wheelConfigPollId = null;
+  let wheelConfigPushTimeoutId = null;
+  let wheelConfigFetchInFlight = false;
+  let lastAppliedWheelConfigUpdatedAt = 0;
 
   function emitWheelStatsEvent(type, detail = {}) {
     try {
@@ -631,6 +1253,230 @@
       // Ignore dispatch errors.
     }
   }
+
+  function readSpinAuditCounts() {
+    try {
+      const raw = localStorage.getItem(SPIN_AUDIT_COUNTS_KEY);
+      if (!raw) {
+        return {};
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return {};
+      }
+      return { ...parsed };
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function persistSpinAuditCounts() {
+    try {
+      localStorage.setItem(SPIN_AUDIT_COUNTS_KEY, JSON.stringify(spinAuditCounts));
+    } catch (_error) {
+      // Ignore storage write failures.
+    }
+  }
+
+  function normalizeSpinSource(value, fallback = "") {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (!normalized) {
+      return String(fallback || "").trim().toLowerCase() || "admin-panel";
+    }
+    if (
+      normalized === "streamdeck" ||
+      normalized === "stream_deck" ||
+      normalized === "stream-deck" ||
+      normalized.includes("deck")
+    ) {
+      return "streamdeck";
+    }
+    if (
+      normalized === "obs" ||
+      normalized === "overlay" ||
+      normalized === "browser-source" ||
+      normalized === "browser_source"
+    ) {
+      return "obs";
+    }
+    if (normalized === "api" || normalized === "socket" || normalized === "websocket") {
+      return "api";
+    }
+    if (
+      normalized === "manual" ||
+      normalized === "admin" ||
+      normalized === "admin-panel" ||
+      normalized === "panel" ||
+      normalized === "ui" ||
+      normalized === "click"
+    ) {
+      return "admin-panel";
+    }
+    return normalized;
+  }
+
+  function resolveDefaultSpinSource() {
+    return isObsOverlayMode ? "obs" : "admin-panel";
+  }
+
+  function resolveSpinSourceLabel(source) {
+    const normalizedSource = normalizeSpinSource(source, resolveDefaultSpinSource());
+    if (normalizedSource === "streamdeck") {
+      return "Kręcenie przez StreamDeck";
+    }
+    if (normalizedSource === "obs") {
+      return "Kręcenie przez OBS";
+    }
+    if (normalizedSource === "api") {
+      return "Kręcenie przez API";
+    }
+    return "Kręcenie ręczne";
+  }
+
+  function readStoredAdminLogin() {
+    try {
+      const fromSession = String(window.sessionStorage.getItem("takuu_admin_auth") || "").trim();
+      if (fromSession) {
+        return fromSession;
+      }
+    } catch (_error) {
+      // Ignore session storage read failures.
+    }
+    return "";
+  }
+
+  function resolveWebhookActorFromSource(source, fallbackLogin = "wheel-operator") {
+    const normalizedSource = normalizeSpinSource(source, resolveDefaultSpinSource());
+    if (normalizedSource === "streamdeck") {
+      return {
+        type: "streamdeck",
+        login: "streamdeck",
+        label: "Kręcenie przez StreamDeck"
+      };
+    }
+    if (normalizedSource === "obs") {
+      return {
+        type: "obs",
+        login: "obs-overlay",
+        label: "Kręcenie przez OBS"
+      };
+    }
+
+    if (window.TakuuWebhook && typeof window.TakuuWebhook.getActorIdentity === "function") {
+      const identity = window.TakuuWebhook.getActorIdentity(fallbackLogin);
+      if (identity && typeof identity === "object") {
+        return identity;
+      }
+    }
+
+    return {
+      type: "local",
+      login: String(fallbackLogin || "wheel-operator").trim() || "wheel-operator",
+      label: String(fallbackLogin || "wheel-operator").trim() || "wheel-operator"
+    };
+  }
+
+  function resolveSpinContext(options = {}) {
+    const source = normalizeSpinSource(options.source, resolveDefaultSpinSource());
+    const actorFromOptions = options.actor && typeof options.actor === "object" ? options.actor : null;
+    const fallbackLogin = String(options.actorLogin || readStoredAdminLogin() || "wheel-operator").trim() || "wheel-operator";
+    const actor =
+      actorFromOptions && (String(actorFromOptions.label || "").trim() || String(actorFromOptions.login || "").trim())
+        ? actorFromOptions
+        : resolveWebhookActorFromSource(source, fallbackLogin);
+    const actorLogin = String(actor && actor.login ? actor.login : actor && actor.label ? actor.label : source).trim() || source;
+    return {
+      source,
+      sourceLabel: resolveSpinSourceLabel(source),
+      actor,
+      actorKey: `${source}:${actorLogin.toLowerCase()}`
+    };
+  }
+
+  function createSpinQueueItem(options = {}) {
+    return {
+      source: normalizeSpinSource(options.source, resolveDefaultSpinSource()),
+      actor: options.actor && typeof options.actor === "object" ? { ...options.actor } : undefined,
+      actorLogin: String(options.actorLogin || readStoredAdminLogin() || "").trim()
+    };
+  }
+
+  function getNextActorSpinCount(actorKey) {
+    const key = String(actorKey || "").trim().toLowerCase() || "unknown";
+    const current = Math.max(0, Math.floor(safeNumber(spinAuditCounts[key], 0)));
+    const next = current + 1;
+    spinAuditCounts[key] = next;
+    persistSpinAuditCounts();
+    return next;
+  }
+
+  function getTimerLabelByKey(timerKey, fallbackLabel = "") {
+    const normalizedTimerKey = String(timerKey || "").trim();
+    const fallback = String(fallbackLabel || "").trim();
+    if (!normalizedTimerKey) {
+      return fallback;
+    }
+
+    const fromDefinitions = wheelTimerDefinitions.find((timer) => String(timer.key || "").trim() === normalizedTimerKey);
+    if (fromDefinitions && String(fromDefinitions.label || "").trim()) {
+      return String(fromDefinitions.label || "").trim();
+    }
+
+    const escapedTimerKey = normalizedTimerKey.replace(/"/g, '\\"');
+    const timerCard = document.querySelector(`[data-kary-timer="${escapedTimerKey}"]`);
+    const timerName = String(timerCard?.querySelector("h3")?.textContent || "").trim();
+    if (timerName) {
+      return timerName;
+    }
+    return fallback || normalizedTimerKey;
+  }
+
+  function emitWheelSpinWebhook(winnerOutcome, spinContext) {
+    if (!winnerOutcome || typeof winnerOutcome !== "object") {
+      return;
+    }
+    if (!window.TakuuWebhook || typeof window.TakuuWebhook.sendWheelSpinAudit !== "function") {
+      return;
+    }
+
+    const context = spinContext && typeof spinContext === "object"
+      ? spinContext
+      : resolveSpinContext({});
+    const winnerName = String(winnerOutcome.name || "").trim() || "-";
+    const minutesAdded = Math.max(0, Math.floor(safeNumber(winnerOutcome.minutes, 0)));
+    const timerKey = String(winnerOutcome.timer || "").trim();
+    const timerLabel = timerKey && minutesAdded > 0
+      ? getTimerLabelByKey(timerKey, winnerName)
+      : "";
+    const timerResult = timerKey && minutesAdded > 0
+      ? `${timerLabel} (+${minutesAdded} min)`
+      : "Brak timera";
+    const spinCountByActor = getNextActorSpinCount(context.actorKey);
+
+    const details = {
+      source: context.source,
+      sourceLabel: context.sourceLabel,
+      spinCountByActor,
+      totalSpins: Math.max(0, Math.floor(history.length)),
+      winnerName,
+      timerKey,
+      timerLabel,
+      minutesAdded,
+      timerResult,
+      eventId: String(winnerOutcome.id || winnerOutcome.eventId || "").trim()
+    };
+
+    Promise.resolve(
+      window.TakuuWebhook.sendWheelSpinAudit(details, {
+        actor: context.actor,
+        target: "Kolo fortuny"
+      })
+    ).catch(() => {
+      // Ignore webhook failures in UI flow.
+    });
+  }
+
+  let spinAuditCounts = readSpinAuditCounts();
 
   function markSyncEventProcessed(eventId) {
     const key = String(eventId || "").trim();
@@ -660,14 +1506,28 @@
     const idRaw = source.id != null ? source.id : source.eventId;
     const id = idRaw == null ? "" : String(idRaw).trim();
     const minutes = Math.max(0, Math.floor(safeNumber(source.minutes, 0)));
-    const timerRaw = source.timerKey != null ? source.timerKey : source.timer;
-    const timer = resolveWheelTimerKey(timerRaw, name, minutes);
+    const timerCandidates = [];
+    if (Array.isArray(source.timerKeys)) {
+      timerCandidates.push(...source.timerKeys);
+    }
+    if (source.timerKey != null) {
+      timerCandidates.push(source.timerKey);
+    } else if (source.timer != null) {
+      timerCandidates.push(source.timer);
+    }
+    const timerKeys = resolveWheelTimerKeys(
+      timerCandidates.length ? timerCandidates : null,
+      name,
+      minutes
+    );
+    const timer = timerKeys.length ? timerKeys[0] : null;
     const timestampRaw = Math.floor(safeNumber(source.timestamp ?? source.time, fallbackTime));
     const timestamp = timestampRaw > 0 ? timestampRaw : fallbackTime;
     return {
       id,
       name,
       timer,
+      timerKeys,
       minutes,
       timestamp
     };
@@ -805,7 +1665,15 @@
       renderWinnerResult(normalizedWinner.name, shouldAnimate);
     }
 
-    addTimer(normalizedWinner.timer, normalizedWinner.minutes);
+    const shouldApplyTimer = options.applyTimer !== false;
+    if (shouldApplyTimer) {
+      const timerKeys = Array.isArray(normalizedWinner.timerKeys)
+        ? normalizedWinner.timerKeys
+        : [];
+      timerKeys.forEach((timerKey) => {
+        addTimer(timerKey, normalizedWinner.minutes);
+      });
+    }
 
     const historyEntry = {
       name: normalizedWinner.name,
@@ -822,16 +1690,279 @@
     };
   }
 
+  function normalizeWheelConfigSyncSnapshot(rawPayload, fallbackTime = Date.now()) {
+    const source = rawPayload && typeof rawPayload === "object" ? rawPayload : {};
+    const rawItems = Array.isArray(source.items)
+      ? source.items
+      : (source.config && Array.isArray(source.config.items) ? source.config.items : []);
+    if (!rawItems.length) {
+      return null;
+    }
+
+    const updatedAtRaw = Math.floor(
+      safeNumber(source.updatedAt ?? source.timestamp ?? source.time, fallbackTime)
+    );
+    const updatedAt = updatedAtRaw > 0 ? updatedAtRaw : fallbackTime;
+    const rawSpeed = source.spinSpeed ?? source.speed;
+    const speedInput = safeNumber(rawSpeed, spinSpeed);
+    const speedNormalized = clampSpinSpeed(speedInput > MAX_SPIN_SPEED ? speedInput / 100 : speedInput);
+    const sourceId = String(source.sourceId || "").trim();
+
+    return {
+      items: normalizeItems(rawItems),
+      spinSpeed: speedNormalized,
+      updatedAt,
+      sourceId
+    };
+  }
+
+  function buildWheelConfigSyncSnapshot(updatedAt = Date.now()) {
+    const timestampRaw = Math.floor(safeNumber(updatedAt, Date.now()));
+    const timestamp = timestampRaw > 0 ? timestampRaw : Date.now();
+    return {
+      items: wheelItems.map((item) => ({
+        name: String(item && item.name ? item.name : "").trim(),
+        chance: Math.max(0, Math.floor(safeNumber(item && item.chance, 0))),
+        timer: item && item.timer != null ? String(item.timer).trim() : "",
+        minutes: Math.max(0, Math.floor(safeNumber(item && item.minutes, 0))),
+        color: normalizeColor(item && item.color, 0)
+      })),
+      spinSpeed: clampSpinSpeed(spinSpeed),
+      updatedAt: timestamp,
+      sourceId: wheelSyncSourceId
+    };
+  }
+
+  function buildConfigSyncPayload(updatedAt = Date.now()) {
+    const snapshot = buildWheelConfigSyncSnapshot(updatedAt);
+    if (!snapshot || !Array.isArray(snapshot.items) || !snapshot.items.length) {
+      return null;
+    }
+
+    const payload = {
+      type: "config",
+      eventId: `${snapshot.updatedAt}-${Math.random().toString(36).slice(2, 10)}`,
+      sourceId: wheelSyncSourceId,
+      items: snapshot.items,
+      spinSpeed: snapshot.spinSpeed,
+      updatedAt: snapshot.updatedAt,
+      timestamp: snapshot.updatedAt
+    };
+    markSyncEventProcessed(payload.eventId);
+    return payload;
+  }
+
+  function applyRemoteWheelConfigSnapshot(rawSnapshot, options = {}) {
+    const force = options.force === true;
+    const normalized = normalizeWheelConfigSyncSnapshot(rawSnapshot);
+    if (!normalized || !normalized.items.length) {
+      return false;
+    }
+    if (spinning && !force) {
+      return false;
+    }
+    if (!force && normalized.updatedAt > 0 && normalized.updatedAt <= lastAppliedWheelConfigUpdatedAt) {
+      return false;
+    }
+
+    const fromSource = String(normalized.sourceId || "").trim();
+    if (!force && fromSource && fromSource === wheelSyncSourceId) {
+      if (normalized.updatedAt > lastAppliedWheelConfigUpdatedAt) {
+        lastAppliedWheelConfigUpdatedAt = normalized.updatedAt;
+      }
+      return false;
+    }
+
+    wheelItems = normalizeItems(resolveObsWheelItemsForOverlay(normalized.items));
+    setWheelSpinSpeed(normalized.spinSpeed, { persist: true, syncApi: false });
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(wheelItems));
+    } catch (_error) {
+      // Ignore storage write failures.
+    }
+
+    if (normalized.updatedAt > lastAppliedWheelConfigUpdatedAt) {
+      lastAppliedWheelConfigUpdatedAt = normalized.updatedAt;
+    }
+
+    emitWheelStatsEvent("takuu:wheel-config-updated", {
+      items: wheelItems.map((item) => ({ ...item }))
+    });
+    renderStreamOBSPanel();
+    updateChanceValidation(wheelItems);
+    draw();
+    return true;
+  }
+
+  function scheduleWheelConfigApiPush(delayMs = 200) {
+    if (wheelConfigApiDisabled || typeof fetch !== "function") {
+      return;
+    }
+    if (wheelConfigPushTimeoutId) {
+      window.clearTimeout(wheelConfigPushTimeoutId);
+      wheelConfigPushTimeoutId = null;
+    }
+
+    const delay = Math.max(0, Math.floor(safeNumber(delayMs, 0)));
+    wheelConfigPushTimeoutId = window.setTimeout(() => {
+      wheelConfigPushTimeoutId = null;
+      const snapshot = buildWheelConfigSyncSnapshot(Date.now());
+
+      fetch(WHEEL_CONFIG_API_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshot),
+        keepalive: true
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            if (
+              response.status === 404 ||
+              response.status === 405 ||
+              response.status === 501
+            ) {
+              wheelConfigApiDisabled = true;
+            }
+            let details = "";
+            try {
+              details = await response.text();
+            } catch (_error) {
+              details = "";
+            }
+            console.warn("[TakuuWheel] POST /api/wheel/config failed", {
+              status: response.status,
+              details
+            });
+            return;
+          }
+
+          if (snapshot.updatedAt > lastAppliedWheelConfigUpdatedAt) {
+            lastAppliedWheelConfigUpdatedAt = snapshot.updatedAt;
+          }
+
+          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+          if (!contentType.includes("application/json")) {
+            return;
+          }
+
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch (_error) {
+            payload = null;
+          }
+          if (!payload || payload.ok !== true) {
+            console.warn("[TakuuWheel] POST /api/wheel/config returned unexpected payload", payload);
+          }
+        })
+        .catch((error) => {
+          console.warn("[TakuuWheel] POST /api/wheel/config request error", error);
+        });
+    }, delay);
+  }
+
+  function fetchWheelConfigFromApi(options = {}) {
+    if (wheelConfigApiDisabled || typeof fetch !== "function") {
+      return Promise.resolve(false);
+    }
+    if (wheelConfigFetchInFlight && options.force !== true) {
+      return Promise.resolve(false);
+    }
+    wheelConfigFetchInFlight = true;
+
+    return fetch(WHEEL_CONFIG_API_ENDPOINT, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          if (
+            response.status === 404 ||
+            response.status === 405 ||
+            response.status === 501
+          ) {
+            wheelConfigApiDisabled = true;
+          }
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuWheel] GET /api/wheel/config failed", {
+            status: response.status,
+            details
+          });
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuWheel] GET /api/wheel/config returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        if (!payload || payload.ok !== true) {
+          return false;
+        }
+
+        const snapshot = payload.config && typeof payload.config === "object" ? payload.config : null;
+        if (!snapshot) {
+          return false;
+        }
+        return applyRemoteWheelConfigSnapshot(snapshot, { force: options.force === true });
+      })
+      .catch((error) => {
+        console.warn("[TakuuWheel] GET /api/wheel/config request error", error);
+        return false;
+      })
+      .finally(() => {
+        wheelConfigFetchInFlight = false;
+      });
+  }
+
+  function startWheelConfigSyncPolling() {
+    if (wheelConfigPollId || wheelConfigApiDisabled || typeof fetch !== "function") {
+      return;
+    }
+    if (!isObsOverlayMode) {
+      return;
+    }
+
+    wheelConfigPollId = window.setInterval(() => {
+      fetchWheelConfigFromApi();
+    }, WHEEL_CONFIG_SYNC_POLL_MS);
+  }
+
   function buildWinnerSyncPayload(winnerOutcome) {
     if (!winnerOutcome || typeof winnerOutcome !== "object") {
       return null;
     }
+    const timerKeys = resolveWheelTimerKeys(
+      Array.isArray(winnerOutcome.timerKeys) ? winnerOutcome.timerKeys : winnerOutcome.timer,
+      winnerOutcome.name,
+      winnerOutcome.minutes
+    );
     const payload = {
       type: "winner",
       eventId: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       sourceId: wheelSyncSourceId,
       winnerName: String(winnerOutcome.name || "").trim(),
-      timerKey: winnerOutcome.timer == null ? "" : String(winnerOutcome.timer),
+      timerKey: timerKeys.length ? timerKeys[0] : "",
+      timerKeys,
       minutes: Math.max(0, Math.floor(safeNumber(winnerOutcome.minutes, 0))),
       timestamp: Math.max(1, Math.floor(safeNumber(winnerOutcome.timestamp, Date.now())))
     };
@@ -840,6 +1971,34 @@
     }
     markSyncEventProcessed(payload.eventId);
     return payload;
+  }
+
+  function handleIncomingConfigSync(rawPayload) {
+    const payload = rawPayload && typeof rawPayload === "object" ? rawPayload : {};
+    if (String(payload.type || "").trim().toLowerCase() !== "config") {
+      return false;
+    }
+
+    const fallbackTimestamp = Math.max(1, Math.floor(safeNumber(payload.updatedAt ?? payload.timestamp ?? payload.time, Date.now())));
+    let eventId = String(payload.eventId || payload.id || "").trim();
+    if (!eventId) {
+      eventId = `config-${fallbackTimestamp}`;
+    }
+    const sourceId = String(payload.sourceId || "").trim();
+    if (sourceId === wheelSyncSourceId || !markSyncEventProcessed(eventId)) {
+      return false;
+    }
+
+    return applyRemoteWheelConfigSnapshot(
+      {
+        ...payload,
+        sourceId,
+        updatedAt: fallbackTimestamp
+      },
+      {
+        force: false
+      }
+    );
   }
 
   function handleIncomingWinnerSync(rawPayload) {
@@ -868,20 +2027,193 @@
       {
         id: eventId,
         name: winnerName,
+        timerKeys: Array.isArray(payload.timerKeys) ? payload.timerKeys : [],
         timerKey: payload.timerKey != null ? payload.timerKey : payload.timer,
         minutes: payload.minutes,
         timestamp: fallbackTimestamp
       },
       {
         renderResult: true,
-        animateResult: false
+        animateResult: false,
+        applyTimer: false
       }
     );
 
     return Boolean(applied);
   }
 
-  function publishWinnerSync(payload) {
+  function handleIncomingWheelSyncPayload(rawPayload) {
+    const payload = rawPayload && typeof rawPayload === "object" ? rawPayload : {};
+    const type = String(payload.type || "").trim().toLowerCase();
+    if (type === "winner") {
+      return handleIncomingWinnerSync(payload);
+    }
+    if (type === "config") {
+      return handleIncomingConfigSync(payload);
+    }
+    return false;
+  }
+
+  function extractWheelSyncPayload(rawMessage) {
+    const message = rawMessage && typeof rawMessage === "object" ? rawMessage : null;
+    if (!message) {
+      return null;
+    }
+    if (message.payload && typeof message.payload === "object") {
+      return message.payload;
+    }
+    return message;
+  }
+
+  function applyLatestConfigFromSyncEvents(events) {
+    if (!Array.isArray(events) || !events.length) {
+      return false;
+    }
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const payload = extractWheelSyncPayload(events[i]);
+      if (!payload) {
+        continue;
+      }
+      if (String(payload.type || "").trim().toLowerCase() !== "config") {
+        continue;
+      }
+      return handleIncomingWheelSyncPayload(payload);
+    }
+    return false;
+  }
+
+  function stopWheelSyncApiPolling() {
+    if (!wheelSyncApiPollId) {
+      return;
+    }
+    window.clearInterval(wheelSyncApiPollId);
+    wheelSyncApiPollId = null;
+  }
+
+  function pollWheelSyncApiOnce(options = {}) {
+    if (wheelSyncApiDisabled || typeof fetch !== "function" || wheelSyncApiPollBusy) {
+      return Promise.resolve(false);
+    }
+
+    const force = options && options.force === true;
+    wheelSyncApiPollBusy = true;
+    const knownEventId = Math.max(0, Math.floor(safeNumber(wheelSyncLastEventId, 0)));
+    const query = !force && knownEventId > 0 ? `?after=${knownEventId}` : "";
+
+    return fetch(`${WHEEL_SYNC_API_ENDPOINT}${query}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            wheelSyncApiDisabled = true;
+            stopWheelSyncApiPolling();
+          }
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuWheel] GET /api/wheel/sync failed", {
+            status: response.status,
+            details
+          });
+          return false;
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuWheel] GET /api/wheel/sync returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return false;
+        }
+
+        let data = null;
+        try {
+          data = await response.json();
+        } catch (_error) {
+          data = null;
+        }
+        if (!data || typeof data !== "object") {
+          return false;
+        }
+
+        const events = Array.isArray(data.events) ? data.events : [];
+        const nextAfterFromResponse = Math.max(0, Math.floor(safeNumber(data.nextAfter, 0)));
+        const lastIdFromResponse = Math.max(0, Math.floor(safeNumber(data.lastId, 0)));
+        const latestConfig =
+          data.latestConfig && typeof data.latestConfig === "object" ? data.latestConfig : null;
+
+        if (knownEventId <= 0 && latestConfig) {
+          handleIncomingWheelSyncPayload(latestConfig);
+        }
+
+        // Avoid replaying old winners on first poll while still hydrating
+        // the latest known config from sync history.
+        if (knownEventId <= 0 && lastIdFromResponse > 0) {
+          applyLatestConfigFromSyncEvents(events);
+          wheelSyncLastEventId = lastIdFromResponse;
+          return false;
+        }
+
+        let maxProcessedEventId = knownEventId;
+        events.forEach((eventItem) => {
+          if (!eventItem || typeof eventItem !== "object") {
+            return;
+          }
+          const serverId = Math.max(0, Math.floor(safeNumber(eventItem.id, 0)));
+          if (serverId > maxProcessedEventId) {
+            maxProcessedEventId = serverId;
+          }
+          const payload = extractWheelSyncPayload(eventItem);
+          if (payload) {
+            handleIncomingWheelSyncPayload(payload);
+          }
+        });
+
+        if (nextAfterFromResponse > maxProcessedEventId) {
+          maxProcessedEventId = nextAfterFromResponse;
+        }
+        if (!events.length && lastIdFromResponse > maxProcessedEventId) {
+          maxProcessedEventId = lastIdFromResponse;
+        }
+        if (maxProcessedEventId > wheelSyncLastEventId) {
+          wheelSyncLastEventId = maxProcessedEventId;
+        }
+        return events.length > 0;
+      })
+      .catch((error) => {
+        console.warn("[TakuuWheel] GET /api/wheel/sync request error", error);
+        return false;
+      })
+      .finally(() => {
+        wheelSyncApiPollBusy = false;
+      });
+  }
+
+  function startWheelSyncApiPolling() {
+    if (wheelSyncApiPollId || wheelSyncApiDisabled || typeof fetch !== "function") {
+      return;
+    }
+    if (!isObsOverlayMode) {
+      return;
+    }
+
+    pollWheelSyncApiOnce({ force: true });
+    wheelSyncApiPollId = window.setInterval(() => {
+      pollWheelSyncApiOnce();
+    }, WHEEL_SYNC_API_POLL_MS);
+  }
+
+  function publishWheelSyncPayload(payload) {
     if (!payload || typeof payload !== "object") {
       return;
     }
@@ -956,13 +2288,25 @@
     }
   }
 
+  function publishWinnerSync(payload) {
+    publishWheelSyncPayload(payload);
+  }
+
+  function publishConfigSync(updatedAt = Date.now()) {
+    const payload = buildConfigSyncPayload(updatedAt);
+    if (!payload) {
+      return;
+    }
+    publishWheelSyncPayload(payload);
+  }
+
   function initWheelSyncBridge() {
     if ("BroadcastChannel" in window) {
       try {
         wheelSyncChannel = new BroadcastChannel(WHEEL_SYNC_CHANNEL_NAME);
         wheelSyncChannel.addEventListener("message", (event) => {
           const payload = event && event.data ? event.data : null;
-          handleIncomingWinnerSync(payload);
+          handleIncomingWheelSyncPayload(payload);
         });
       } catch (_error) {
         wheelSyncChannel = null;
@@ -975,7 +2319,7 @@
       }
       try {
         const payload = JSON.parse(event.newValue);
-        handleIncomingWinnerSync(payload);
+        handleIncomingWheelSyncPayload(payload);
       } catch (_error) {
         // Ignore malformed sync payload.
       }
@@ -1171,7 +2515,8 @@
     if (!spinning) return;
     const segment = getSegment();
     if (segment === lastTickSegment) return;
-    if (performance.now() - lastTickPlaybackAt < TICK_MIN_INTERVAL_MS) {
+    const minInterval = OBS_AUDIO_MODE ? TICK_MIN_INTERVAL_OBS_MS : TICK_MIN_INTERVAL_MS;
+    if (performance.now() - lastTickPlaybackAt < minInterval) {
       lastTickSegment = segment;
       return;
     }
@@ -1299,7 +2644,7 @@
      WIN
   ========================= */
 
-  function finishSpin(expectedIndex) {
+  function finishSpin(expectedIndex, spinContext = null) {
     const landedIndex = getSegment();
     if (Number.isInteger(expectedIndex) && expectedIndex !== landedIndex) {
       // Keep result consistent with the visual pointer segment.
@@ -1312,10 +2657,12 @@
     const winner = wheelItems[landedIndex] || wheelItems[0];
     const winnerName = String(winner?.name || "").trim();
     const winnerMinutes = Math.max(0, Math.floor(safeNumber(winner?.minutes, 0)));
-    const winnerTimer = resolveWheelTimerKey(winner?.timer, winnerName, winnerMinutes);
+    const winnerTimerKeys = resolveWheelTimerKeys(winner?.timer, winnerName, winnerMinutes);
+    const winnerTimer = winnerTimerKeys.length ? winnerTimerKeys[0] : null;
     const winnerBasePayload = {
       name: winnerName,
       timer: winnerTimer,
+      timerKeys: winnerTimerKeys,
       minutes: winnerMinutes,
       timestamp: Date.now()
     };
@@ -1334,9 +2681,13 @@
       publishWinnerSync(syncPayload);
     }
 
+    if (winnerOutcome) {
+      emitWheelSpinWebhook(winnerOutcome, spinContext);
+    }
+
     if (queue.length > 0) {
-      queue.shift();
-      spin();
+      const nextSpin = queue.shift();
+      spin(nextSpin && typeof nextSpin === "object" ? nextSpin : {});
     }
   }
 
@@ -1370,6 +2721,7 @@
     if (!spinning || !spinAnimation) {
       spinPaused = false;
       spinPauseStartedAt = 0;
+      stopSpinLoopSound(true);
       updateSpinPauseButton();
       return false;
     }
@@ -1384,6 +2736,7 @@
     if (spinPaused) {
       spinPauseStartedAt = performance.now();
     }
+    setSpinLoopPaused(spinPaused);
     updateSpinPauseButton();
     return spinPaused;
   }
@@ -1417,6 +2770,7 @@
     const progress = Math.min(1, elapsed / spinAnimation.duration);
     const eased = easeOutQuart(progress);
     angle = spinAnimation.from + (spinAnimation.to - spinAnimation.from) * eased;
+    updateSpinLoopSoundDynamics(progress);
 
     tickSound();
     draw();
@@ -1430,17 +2784,38 @@
     spinning = false;
     spinPaused = false;
     spinPauseStartedAt = 0;
+    stopSpinLoopSound(false);
     updateSpinPauseButton();
     const winnerIndex = spinAnimation.winnerIndex;
+    const spinContext = spinAnimation.spinContext && typeof spinAnimation.spinContext === "object"
+      ? spinAnimation.spinContext
+      : null;
     spinAnimation = null;
-    finishSpin(winnerIndex);
+    finishSpin(winnerIndex, spinContext);
   }
 
   /* =========================
      SPIN
   ========================= */
 
-  function spin() {
+  function spin(options = {}) {
+    const skipObsConfigRefresh = options.skipObsConfigRefresh === true;
+    const queueItem = createSpinQueueItem(options);
+    if (!skipObsConfigRefresh && spinStartPending) {
+      queue.push(queueItem);
+      return;
+    }
+    if (isObsOverlayMode && !skipObsConfigRefresh) {
+      spinStartPending = true;
+      fetchWheelConfigFromApi({ force: true })
+        .catch(() => false)
+        .finally(() => {
+          spinStartPending = false;
+          spin({ ...queueItem, skipObsConfigRefresh: true });
+        });
+      return;
+    }
+
     primeTickAudioPlayback();
     if (!wheelItems.length) return;
 
@@ -1456,7 +2831,7 @@
     }
 
     if (spinning) {
-      queue.push(true);
+      queue.push(queueItem);
       return;
     }
 
@@ -1467,6 +2842,7 @@
     const speedMultiplier = clampSpinSpeed(spinSpeed);
     const fullTurns = 6 + Math.random() * 2.5;
     const spinDuration = Math.max(1400, Math.round((4600 + Math.random() * 700) / speedMultiplier));
+    const spinContext = resolveSpinContext(queueItem);
 
     lastTickSegment = getSegment();
     spinning = true;
@@ -1475,10 +2851,13 @@
     spinAnimation = {
       start: performance.now(),
       duration: spinDuration,
+      speedMultiplier,
       from: angle,
       to: angle + fullTurns * TWO_PI + delta,
-      winnerIndex
+      winnerIndex,
+      spinContext
     };
+    startSpinLoopSound();
     updateSpinPauseButton();
 
     requestAnimationFrame(runSpinFrame);
@@ -1496,14 +2875,15 @@
     return Math.max(1, Math.min(MAX_SERIES_SPINS, parsed));
   }
 
-  function queueSpin(count = 1) {
+  function queueSpin(count = 1, options = {}) {
     const total = normalizeSeriesSpinCount(count, 1);
+    const queueItem = createSpinQueueItem(options);
     for (let i = 0; i < total; i += 1) {
-      queue.push(true);
+      queue.push({ ...queueItem });
     }
     if (!spinning) {
-      queue.shift();
-      spin();
+      const nextSpin = queue.shift();
+      spin(nextSpin && typeof nextSpin === "object" ? nextSpin : {});
     }
   }
 
@@ -1560,6 +2940,35 @@
 
   const isObsOverlayMode = detectObsOverlayMode();
 
+  function shouldRestoreObsDefaultPreset(itemsCandidate) {
+    if (!isObsOverlayMode) {
+      return false;
+    }
+    if (!Array.isArray(itemsCandidate) || itemsCandidate.length !== 2) {
+      return false;
+    }
+
+    const names = new Set(
+      itemsCandidate.map((item) => normalizeTimerLookupToken(item && item.name ? item.name : ""))
+    );
+    return names.has("pusto") && names.has("brak-piwka");
+  }
+
+  function resolveObsWheelItemsForOverlay(itemsCandidate) {
+    if (!shouldRestoreObsDefaultPreset(itemsCandidate)) {
+      return itemsCandidate;
+    }
+    return baseItems.map((item, index) => normalizeItem(item, index));
+  }
+
+  function restoreObsDefaultPresetIfNeeded() {
+    if (!shouldRestoreObsDefaultPreset(wheelItems)) {
+      return false;
+    }
+    wheelItems = normalizeItems(resolveObsWheelItemsForOverlay(wheelItems));
+    return true;
+  }
+
   function applyObsOverlayMode() {
     if (!isObsOverlayMode) return;
 
@@ -1569,7 +2978,7 @@
     const adminDashboard = document.getElementById("adminDashboard");
     const streamObsTab = document.getElementById("adminStreamObsTab");
     const tabButtons = document.querySelectorAll(".admin-tab-btn");
-    const tabsToHide = ["adminMembersTab", "adminKaryTab", "adminAccountsTab"];
+    const tabsToHide = ["adminMembersTab", "adminKaryTab", "adminCennikTab", "adminAccountsTab"];
 
     if (adminPanel) {
       adminPanel.hidden = true;
@@ -1595,33 +3004,68 @@
       const active = String(button.dataset.tab || "") === "streamobs";
       button.classList.toggle("is-active", active);
     });
+
+    const streamObsSubtabButtons = document.querySelectorAll("[data-streamobs-subtab]");
+    streamObsSubtabButtons.forEach((button) => {
+      const isWheelSubtab = String(button.getAttribute("data-streamobs-subtab") || "").trim().toLowerCase() === "wheel";
+      button.classList.toggle("is-active", isWheelSubtab);
+      button.setAttribute("aria-selected", isWheelSubtab ? "true" : "false");
+    });
+
+    const streamObsSubtabPanels = document.querySelectorAll("[data-streamobs-subtab-panel]");
+    streamObsSubtabPanels.forEach((panel) => {
+      const panelName = String(panel.getAttribute("data-streamobs-subtab-panel") || "").trim().toLowerCase();
+      const isWheelPanel = panelName === "wheel";
+      panel.hidden = !isWheelPanel;
+      panel.classList.toggle("is-active", isWheelPanel);
+    });
   }
 
-  const CANONICAL_WHEEL_DOMAIN = "taku-live.pl";
-  const CANONICAL_WHEEL_ORIGIN = `https://${CANONICAL_WHEEL_DOMAIN}`;
+  function normalizeOrigin(rawValue) {
+    const candidate = String(rawValue || "").trim();
+    if (!candidate) {
+      return "";
+    }
+    try {
+      const parsed = new URL(candidate);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function resolveObsLinksBaseOrigin() {
+    const protocol = String(window.location.protocol || "").toLowerCase();
+    const host = getRuntimeHostName();
+    const isFileProtocol = protocol === "file:";
+    if (isRuntimeLocalHostName(host)) {
+      return resolveCurrentOrigin() || "";
+    }
+
+    const explicit = normalizeOrigin(window.TAKUU_OBS_BASE_ORIGIN || window.TAKUU_OBS_BASE_URL || "");
+    if (explicit) {
+      return explicit;
+    }
+
+    if (isFileProtocol || host === CANONICAL_WHEEL_DOMAIN || host === LEGACY_WHEEL_DOMAIN) {
+      return CANONICAL_WHEEL_ORIGIN;
+    }
+
+    return resolveCurrentOrigin() || CANONICAL_WHEEL_ORIGIN;
+  }
 
   function buildBaseWheelUrl() {
     let url = null;
     try {
-      url = new URL(window.location.href);
+      url = new URL("/admin", resolveObsLinksBaseOrigin());
     } catch (_error) {
       url = new URL(`${CANONICAL_WHEEL_ORIGIN}/admin`);
     }
 
-    const protocol = String(url.protocol || "").toLowerCase();
     const host = String(url.hostname || "").toLowerCase();
-    const isCanonicalHost = host === CANONICAL_WHEEL_DOMAIN || host === `www.${CANONICAL_WHEEL_DOMAIN}`;
-    const isFileProtocol = protocol === "file:";
-
-    // Keep current origin for local/staging environments.
-    // Normalize only when we are already on canonical domain.
-    if (isFileProtocol) {
-      url = new URL("http://localhost:5500/admin");
-    } else if (isCanonicalHost) {
+    if (host === LEGACY_WHEEL_DOMAIN) {
       url.protocol = "https:";
-      if (host === `www.${CANONICAL_WHEEL_DOMAIN}`) {
-        url.hostname = CANONICAL_WHEEL_DOMAIN;
-      }
+      url.hostname = CANONICAL_WHEEL_DOMAIN;
     }
     if (!/(^|\/)admin(\/|$)/i.test(url.pathname)) {
       url.pathname = "/admin";
@@ -1653,13 +3097,13 @@
         id: "streamdeck_spin1",
         title: "StreamDeck - Spin x1",
         description: "Link do przycisku StreamDeck. Po otwarciu uruchamia jeden spin (test lub akcja live).",
-        url: buildWheelUrl({ obs: 1, spin: 1 })
+        url: buildWheelUrl({ obs: 1, spin: 1, spin_source: "streamdeck" })
       },
       {
         id: "streamdeck_spin3",
         title: "StreamDeck - Spin x3",
         description: "Link do przycisku StreamDeck. Po otwarciu uruchamia serie trzech spinow.",
-        url: buildWheelUrl({ obs: 1, spin: 3 })
+        url: buildWheelUrl({ obs: 1, spin: 3, spin_source: "streamdeck" })
       }
     ];
   }
@@ -1766,10 +3210,23 @@
     setStreamObsLinksStatus("", "info");
   }
 
+  function resolveUrlSpinSource() {
+    const candidate =
+      String(params.get("spin_source") || params.get("source") || params.get("from") || "").trim();
+    if (candidate) {
+      return normalizeSpinSource(candidate, resolveDefaultSpinSource());
+    }
+    if (params.has("spin")) {
+      return "streamdeck";
+    }
+    return resolveDefaultSpinSource();
+  }
+
   if (params.has("spin")) {
     const count = safeNumber(params.get("spin"), 1);
+    const source = resolveUrlSpinSource();
     setTimeout(() => {
-      queueSpin(count);
+      queueSpin(count, { source });
     }, 450);
   }
 
@@ -1784,10 +3241,18 @@
 
   function setWheelSpinSpeed(value, options = {}) {
     const persist = options.persist !== false;
+    const syncApi = options.syncApi !== false;
+    const syncPayload = options.syncPayload === true;
     spinSpeed = clampSpinSpeed(value);
     syncSpinSpeedUi();
     if (persist) {
       persistSpinSpeed(spinSpeed);
+      if (syncApi) {
+        scheduleWheelConfigApiPush(220);
+      }
+      if (syncPayload) {
+        publishConfigSync(Date.now());
+      }
     }
     return spinSpeed;
   }
@@ -1800,11 +3265,12 @@
 
     wheelSpinSpeedRangeEl.addEventListener("input", () => {
       const percent = safeNumber(wheelSpinSpeedRangeEl.value, 100);
-      setWheelSpinSpeed(percent / 100);
+      setWheelSpinSpeed(percent / 100, { syncPayload: false });
     });
 
     wheelSpinSpeedRangeEl.addEventListener("change", () => {
       const normalized = clampSpinSpeed(safeNumber(wheelSpinSpeedRangeEl.value, 100) / 100);
+      setWheelSpinSpeed(normalized, { syncPayload: true });
       emitWheelConfigWebhook("config_speed_change", {
         speedPercent: Math.round(normalized * 100),
         speedMultiplier: normalized
@@ -1819,16 +3285,17 @@
   let dragSourceIndex = -1;
   let dragOverRow = null;
   let wheelConfigEventsBound = false;
-  let wheelConfigPanelOpen = false;
+  let wheelConfigPanelOpen = true;
 
   function applyWheelConfigPanelVisibility() {
     const toggleBtn = document.getElementById("wheelConfigToggle");
     const body = document.getElementById("wheelConfigBody");
     if (!toggleBtn || !body) return;
 
-    body.hidden = !wheelConfigPanelOpen;
-    toggleBtn.setAttribute("aria-expanded", wheelConfigPanelOpen ? "true" : "false");
-    toggleBtn.textContent = wheelConfigPanelOpen ? "Ukryj konfiguracje koła" : "Konfiguracje koła";
+    wheelConfigPanelOpen = true;
+    body.hidden = false;
+    toggleBtn.setAttribute("aria-expanded", "true");
+    toggleBtn.textContent = "Konfiguracja koła";
   }
 
   function bindWheelConfigToggle() {
@@ -1836,11 +3303,11 @@
     const body = document.getElementById("wheelConfigBody");
     if (!toggleBtn || !body || toggleBtn.dataset.bound === "1") return;
 
-    wheelConfigPanelOpen = false;
+    wheelConfigPanelOpen = true;
     applyWheelConfigPanelVisibility();
 
     toggleBtn.addEventListener("click", () => {
-      wheelConfigPanelOpen = !wheelConfigPanelOpen;
+      wheelConfigPanelOpen = true;
       applyWheelConfigPanelVisibility();
     });
 
@@ -1917,6 +3384,36 @@
       .replace(/>/g, "&gt;");
   }
 
+  function buildWheelTimerOptionsMarkup(selectedTimerKey) {
+    const selectedKey = String(selectedTimerKey || "").trim();
+    const optionRows = [
+      `<option value=""${selectedKey ? "" : " selected"}>Brak timera</option>`
+    ];
+
+    wheelTimerDefinitions.forEach((timer) => {
+      const key = String(timer.key || "").trim();
+      if (!key) {
+        return;
+      }
+      const label = String(timer.label || key).trim() || key;
+      const selected = key === selectedKey ? " selected" : "";
+      optionRows.push(
+        `<option value="${escapeHtmlAttribute(key)}"${selected}>${escapeHtmlAttribute(label)}</option>`
+      );
+    });
+
+    if (
+      selectedKey &&
+      !wheelTimerDefinitions.some((timer) => String(timer.key || "").trim() === selectedKey)
+    ) {
+      optionRows.push(
+        `<option value="${escapeHtmlAttribute(selectedKey)}" selected>Nieznany timer (${escapeHtmlAttribute(selectedKey)})</option>`
+      );
+    }
+
+    return optionRows.join("");
+  }
+
   function createNewSegment(index) {
     return normalizeItem(
       {
@@ -1941,11 +3438,15 @@
       const nameInput = row.querySelector("[data-wheel-name]");
       const chanceInput = row.querySelector("[data-wheel-chance]");
       const minutesInput = row.querySelector("[data-wheel-minutes]");
+      const timerSelect = row.querySelector("[data-wheel-timer]");
       const colorInput = row.querySelector("[data-wheel-color]");
       const name = String(nameInput?.value || "").trim() || prev.name || `Pole ${index + 1}`;
       const chance = Math.max(0, Math.floor(safeNumber(chanceInput?.value, prev.chance || 0)));
       const minutes = Math.max(0, Math.floor(safeNumber(minutesInput?.value, prev.minutes || 0)));
-      const timer = resolveWheelTimerKey(prev.timer, name, minutes);
+      const timerCandidate = timerSelect
+        ? String(timerSelect.value ?? "").trim()
+        : String(prev.timer || "").trim();
+      const timer = resolveWheelTimerKey(timerCandidate, name, minutes);
 
       return {
         name,
@@ -2057,6 +3558,7 @@
         !target.matches("[data-wheel-name]") &&
         !target.matches("[data-wheel-chance]") &&
         !target.matches("[data-wheel-minutes]") &&
+        !target.matches("[data-wheel-timer]") &&
         !target.matches("[data-wheel-color]")
       ) {
         return;
@@ -2067,7 +3569,7 @@
     panel.addEventListener("change", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
-      if (!target.matches("[data-wheel-color]")) return;
+      if (!target.matches("[data-wheel-color]") && !target.matches("[data-wheel-timer]")) return;
       updateWheelPreviewFromPanel();
     });
 
@@ -2175,6 +3677,7 @@
     const panel = document.getElementById("wheelConfig");
     if (!panel) return;
 
+    refreshWheelTimerLookupMap();
     bindWheelConfigEvents();
 
     panel.innerHTML = wheelItems
@@ -2183,6 +3686,8 @@
         const nameValue = isNewSegment ? "" : String(item.name || "");
         const chanceValue = isNewSegment && safeNumber(item.chance, 0) === 0 ? "" : String(Math.max(0, Math.floor(safeNumber(item.chance, 0))));
         const minutesValue = isNewSegment && safeNumber(item.minutes, 0) === 0 ? "" : String(Math.max(0, Math.floor(safeNumber(item.minutes, 0))));
+        const timerValue = resolveWheelTimerKey(item.timer, nameValue, safeNumber(item.minutes, 0));
+        const timerOptionsMarkup = buildWheelTimerOptionsMarkup(timerValue);
 
         return `
 <div class="wheelRow" data-row-index="${i}">
@@ -2190,8 +3695,17 @@
     <span class="wheelDragDots" aria-hidden="true">::</span>
   </button>
   <input data-wheel-name="${i}" value="${escapeHtmlAttribute(nameValue)}" placeholder="nazwa">
-  <input data-wheel-chance="${i}" type="number" value="${chanceValue}" min="0" step="1" placeholder="%">
-  <input data-wheel-minutes="${i}" type="number" value="${minutesValue}" min="0" step="1" placeholder="czas">
+  <div class="wheelInputWithUnit">
+    <input data-wheel-chance="${i}" type="number" value="${chanceValue}" min="0" step="1" placeholder="0" aria-label="Szansa segmentu ${i + 1}">
+    <span class="wheelInputUnit" aria-hidden="true">%</span>
+  </div>
+  <div class="wheelInputWithUnit">
+    <input data-wheel-minutes="${i}" type="number" value="${minutesValue}" min="0" step="1" placeholder="0" aria-label="Czas segmentu ${i + 1}">
+    <span class="wheelInputUnit" aria-hidden="true">min</span>
+  </div>
+  <select class="wheelTimerSelect" data-wheel-timer="${i}" aria-label="Przypisany timer segmentu ${i + 1}">
+    ${timerOptionsMarkup}
+  </select>
   <input class="wheelColorInput" data-wheel-color="${i}" type="color" value="${normalizeColor(item.color, i)}" aria-label="Kolor segmentu ${item.name}">
   <button class="wheelDeleteBtn" type="button" data-wheel-remove="${i}" title="Usun segment ${i + 1}" aria-label="Usun segment ${i + 1}">x</button>
 </div>`;
@@ -2208,6 +3722,8 @@
     } catch (_error) {
       // Ignore storage write failures.
     }
+    scheduleWheelConfigApiPush(0);
+    publishConfigSync(Date.now());
     emitWheelStatsEvent("takuu:wheel-config-updated", {
       items: wheelItems.map((item) => ({ ...item }))
     });
@@ -2239,12 +3755,12 @@
 
   document.getElementById("wheelSpinNow")?.addEventListener("click", () => {
     primeTickAudioPlayback();
-    spin();
+    spin({ source: resolveDefaultSpinSource() });
   });
 
   document.getElementById("wheelSpin3")?.addEventListener("click", () => {
     primeTickAudioPlayback();
-    queueSpin(3);
+    queueSpin(3, { source: resolveDefaultSpinSource() });
   });
 
   if (wheelSpinPauseBtnEl) {
@@ -2268,7 +3784,7 @@
       if (wheelSpinSeriesCountEl) {
         wheelSpinSeriesCountEl.value = String(count);
       }
-      queueSpin(count);
+      queueSpin(count, { source: resolveDefaultSpinSource() });
     });
   }
 
@@ -2285,7 +3801,8 @@
         return;
       }
       primeTickAudioPlayback();
-      queueSpin(safeNumber(message.count, 1));
+      const source = normalizeSpinSource(message.source || message.spinSource || "obs", "obs");
+      queueSpin(safeNumber(message.count, 1), { source });
       return;
     }
 
@@ -2295,12 +3812,15 @@
       messageType === "wheel_result";
 
     if (isSyncEnvelope && message.payload && typeof message.payload === "object") {
-      handleIncomingWinnerSync(message.payload);
+      handleIncomingWheelSyncPayload(message.payload);
       return;
     }
 
-    if (String(message.type || "").trim().toLowerCase() === "winner") {
-      handleIncomingWinnerSync(message);
+    if (
+      String(message.type || "").trim().toLowerCase() === "winner" ||
+      String(message.type || "").trim().toLowerCase() === "config"
+    ) {
+      handleIncomingWheelSyncPayload(message);
     }
   }
 
@@ -2375,20 +3895,46 @@
     simulateChances: (spins = 10000) => simulateChanceDistribution(spins)
   };
 
+  function refreshWheelTimersFromDefinitions() {
+    refreshWheelTimerLookupMap();
+    wheelItems = normalizeItems(collectItemsFromPanel());
+    renderStreamOBSPanel();
+    draw();
+  }
+
   /* ========================= */
 
   bindWheelConfigToggle();
   renderStreamOBSLinks();
   bindSpinSpeedControl();
+  restoreObsDefaultPresetIfNeeded();
   renderStreamOBSPanel();
+  applyObsOverlayMode();
   applyWheelConfigPanelVisibility();
+  if (isObsOverlayMode) {
+    fetchWheelConfigFromApi({ force: true });
+    startWheelConfigSyncPolling();
+    startWheelSyncApiPolling();
+  }
   startTickAudioWarmupLoop();
   document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && isObsOverlayMode) {
+      fetchWheelConfigFromApi();
+      pollWheelSyncApiOnce({ force: true });
+    }
     if (!document.hidden && OBS_AUDIO_MODE) {
       primeTickAudioPlayback();
     }
   });
   draw();
   updateSpinPauseButton();
+  window.addEventListener("DOMContentLoaded", applyObsOverlayMode);
   window.addEventListener("load", applyObsOverlayMode);
+  window.addEventListener("takuu:kary-definitions-updated", refreshWheelTimersFromDefinitions);
+  window.addEventListener("storage", (event) => {
+    if (!event || event.key !== KARY_TIMER_DEFINITIONS_KEY) {
+      return;
+    }
+    refreshWheelTimersFromDefinitions();
+  });
 })();

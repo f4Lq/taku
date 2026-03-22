@@ -27,7 +27,10 @@
     const karyTimerStatsGridEl = document.getElementById("karyTimerStatsGrid");
     const karyCounterStatsGridEl = document.getElementById("karyCounterStatsGrid");
     const karyPanelEl = document.getElementById("karyPanel");
+    const karyTimersGridEl = document.getElementById("karyTimersGrid");
+    const karyCountersGridEl = document.getElementById("karyCountersGrid");
     const timeryPanelEl = document.getElementById("timeryPanel");
+    const timeryListEl = document.getElementById("timeryList");
     const timeryConfigBtnEl = document.getElementById("timeryConfigBtn");
     const timeryConfigPanelEl = document.getElementById("timeryConfigPanel");
     const timeryLayoutSelectEl = document.getElementById("timeryLayoutSelect");
@@ -36,6 +39,7 @@
     const timeryShowProgressEl = document.getElementById("timeryShowProgress");
     const timeryShowStatusEl = document.getElementById("timeryShowStatus");
     const licznikiPanelEl = document.getElementById("licznikiPanel");
+    const licznikiGridEl = document.getElementById("licznikiGrid");
     const licznikiConfigBtnEl = document.getElementById("licznikiConfigBtn");
     const licznikiConfigPanelEl = document.getElementById("licznikiConfigPanel");
     const licznikiLayoutSelectEl = document.getElementById("licznikiLayoutSelect");
@@ -58,9 +62,13 @@
     const adminTabsWrapEl = document.querySelector(".admin-tabs");
     const adminMembersTabEl = document.getElementById("adminMembersTab");
     const adminKaryTabEl = document.getElementById("adminKaryTab");
+    const adminCennikTabEl = document.getElementById("adminCennikTab");
     const adminBindingsTabEl = document.getElementById("adminBindingsTab");
     const adminStreamObsTabEl = document.getElementById("adminStreamObsTab");
     const adminAccountsTabEl = document.getElementById("adminAccountsTab");
+    const streamObsSubtabsEl = document.getElementById("streamObsSubtabs");
+    const streamObsSubtabPanelEls = document.querySelectorAll("[data-streamobs-subtab-panel]");
+    const streamObsLinksWrapEl = document.getElementById("streamObsLinksWrap");
     const streamObsLinksEl = document.getElementById("streamObsLinks");
     const streamObsLinksStatusEl = document.getElementById("streamObsLinksStatus");
     const streamObsTimeryConfigToggleEl = document.getElementById("streamObsTimeryConfigToggle");
@@ -68,10 +76,12 @@
     const streamObsTimeryLayoutSelectEl = document.getElementById("streamObsTimeryLayoutSelect");
     const streamObsTimeryColorInputEl = document.getElementById("streamObsTimeryColorInput");
     const streamObsTimeryProgressColorInputEl = document.getElementById("streamObsTimeryProgressColorInput");
+    const streamObsTimeryPreviewEl = document.getElementById("streamObsTimeryPreview");
     const streamObsLicznikiConfigToggleEl = document.getElementById("streamObsLicznikiConfigToggle");
     const streamObsLicznikiConfigBodyEl = document.getElementById("streamObsLicznikiConfigBody");
     const streamObsLicznikiLayoutSelectEl = document.getElementById("streamObsLicznikiLayoutSelect");
     const streamObsLicznikiColorInputEl = document.getElementById("streamObsLicznikiColorInput");
+    const streamObsLicznikiPreviewEl = document.getElementById("streamObsLicznikiPreview");
     const adminMemberFormEl = document.getElementById("adminMemberForm");
     const adminMemberSubmitBtnEl = adminMemberFormEl ? adminMemberFormEl.querySelector('button[type="submit"]') : null;
     const adminMemberStatusEl = document.getElementById("adminMemberStatus");
@@ -80,7 +90,14 @@
     const adminCounterFormEl = document.getElementById("adminCounterForm");
     const adminTimerSelectEl = document.getElementById("adminTimerSelect");
     const adminCounterSelectEl = document.getElementById("adminCounterSelect");
+    const adminTimerDefFormEl = document.getElementById("adminTimerDefForm");
+    const adminCounterDefFormEl = document.getElementById("adminCounterDefForm");
+    const adminTimerDefCancelBtnEl = document.getElementById("adminTimerDefCancelBtn");
+    const adminCounterDefCancelBtnEl = document.getElementById("adminCounterDefCancelBtn");
+    const adminTimerDefTableBodyEl = document.getElementById("adminTimerDefTableBody");
+    const adminCounterDefTableBodyEl = document.getElementById("adminCounterDefTableBody");
     const adminKaryStatusEl = document.getElementById("adminKaryStatus");
+    const adminKaryDefsStatusEl = document.getElementById("adminKaryDefsStatus");
     const adminCennikFormEl = document.getElementById("adminCennikForm");
     const adminCennikCancelBtnEl = document.getElementById("adminCennikCancelBtn");
     const adminCennikTableBodyEl = document.getElementById("adminCennikTableBody");
@@ -121,8 +138,6 @@
     const karyPriceEmptyHardEl = document.getElementById("karyPriceEmptyHard");
     const karyJumpButtonEls = document.querySelectorAll("[data-kary-jump]");
     const karyOpenWindowButtonEls = document.querySelectorAll("[data-kary-open-window]");
-    const karyTimerCardEls = document.querySelectorAll("[data-kary-timer]");
-    const karyCounterCardEls = document.querySelectorAll("[data-kary-counter]");
     const karyNavEl = document.querySelector(".stream-nav-kary");
     const homeNavEl = document.querySelector(".stream-nav-item-home");
     const clipsNavEl = document.querySelector(".stream-nav-item-clips");
@@ -170,10 +185,12 @@
     let lastKnownKickSubsCount = null;
     let wheelStatsLiveRefreshId = null;
     let wheelSyncChannel = null;
+    let karyStateChannel = null;
     let wheelSyncPollId = null;
     let wheelSyncSocket = null;
     let wheelSyncSocketRetryId = null;
     let wheelSyncApiDisabled = false;
+    let wheelSyncPollBusy = false;
     let wheelStatsApiDisabled = false;
     let wheelSyncLastEventId = 0;
     let wheelSyncCursorInitialized = false;
@@ -185,6 +202,9 @@
     let licznikiPopupRef = null;
 
     const IS_FILE_PROTOCOL = window.location.protocol === "file:";
+    const CANONICAL_REDIS_API_DOMAIN = "www.taku-live.pl";
+    const LEGACY_REDIS_API_DOMAIN = "taku-live.pl";
+    const CANONICAL_REDIS_API_ORIGIN = `https://${CANONICAL_REDIS_API_DOMAIN}`;
     const HOME_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html" : "/";
     const KARY_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=kary" : "/kary";
     const TIMERY_ROUTE_PATH = IS_FILE_PROTOCOL ? "index.html?view=timery" : "/timery";
@@ -239,11 +259,39 @@
       const isObsUserAgent = ua.includes("obs") || ua.includes("obsbrowser") || ua.includes("obs-studio");
       return isAdminPath && isObsUserAgent;
     }
+    function detectKaryObsWidgetMode() {
+      try {
+        const params = new URLSearchParams(window.location.search || "");
+        const viewParam = String(params.get("view") || "").trim().toLowerCase();
+        const path = String(window.location.pathname || "").toLowerCase();
+        const isTimeryPath = /(^|\/)timery(\/|$)/i.test(path);
+        const isTimeryView = viewParam === "timery" || viewParam === "timers";
+        const isLicznikiPath = /(^|\/)liczniki(\/|$)/i.test(path);
+        const isLicznikiView = viewParam === "liczniki" || viewParam === "counters";
+        const hasTimeryObsFlag =
+          isObsOverlayFlagEnabled(params.get("timeryObs")) ||
+          isObsOverlayFlagEnabled(params.get("obsTimers")) ||
+          isObsOverlayFlagEnabled(params.get("timersObs"));
+        const hasLicznikiObsFlag =
+          isObsOverlayFlagEnabled(params.get("licznikiObs")) ||
+          isObsOverlayFlagEnabled(params.get("obsCounters")) ||
+          isObsOverlayFlagEnabled(params.get("countersObs"));
+        return ((isTimeryPath || isTimeryView) && hasTimeryObsFlag) || ((isLicznikiPath || isLicznikiView) && hasLicznikiObsFlag);
+      } catch (_error) {
+        return false;
+      }
+    }
     const OBS_OVERLAY_MODE = (() => {
       return detectObsOverlayMode();
     })();
+    const KARY_OBS_WIDGET_MODE = detectKaryObsWidgetMode();
     try {
       window.__takuuObsOverlayMode = OBS_OVERLAY_MODE;
+    } catch (_error) {
+      // Ignore global assignment failures.
+    }
+    try {
+      window.__takuuKaryObsWidgetMode = KARY_OBS_WIDGET_MODE;
     } catch (_error) {
       // Ignore global assignment failures.
     }
@@ -296,6 +344,8 @@
     const CCI_MEMBERS_ORDER_KEY = "takuu_members_order";
     const KARY_STATE_KEY = "takuu_kary_live_state";
     const KARY_STATS_KEY = "takuu_kary_stats_state";
+    const KARY_TIMER_DEFINITIONS_KEY = "takuu_kary_timer_definitions";
+    const KARY_COUNTER_DEFINITIONS_KEY = "takuu_kary_counter_definitions";
     const KARY_CENNIK_KEY = "takuu_kary_cennik_items";
     const KARY_CENNIK_MIGRATION_KEY = "takuu_kary_cennik_kicksy_migration_v1";
     const TIMERY_CONFIG_KEY = "takuu_timery_view_config";
@@ -306,17 +356,130 @@
     const WHEEL_SYNC_STORAGE_KEY = "takuu_wheel_sync_event";
     const WHEEL_SYNC_CURSOR_STORAGE_KEY = "takuu_wheel_sync_last_event_id";
     const WHEEL_SYNC_CHANNEL_NAME = "takuu-wheel-sync";
-    const WHEEL_SYNC_API_ENDPOINT = "/api/wheel/sync";
-    const WHEEL_STATS_API_ENDPOINT = "/api/wheel/stats";
-    const KARY_STATE_API_ENDPOINT = "/api/kary/state";
-    const KARY_STATS_API_ENDPOINT = "/api/kary/stats";
-    const ADMIN_STATE_API_ENDPOINT = "/api/admin/state";
+    const KARY_STATE_SYNC_CHANNEL_NAME = "takuu-kary-state-sync";
+    function normalizeApiOrigin(rawValue) {
+      const candidate = String(rawValue || "").trim();
+      if (!candidate) {
+        return "";
+      }
+      try {
+        const url = new URL(candidate);
+        return `${url.protocol}//${url.host}`;
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function getRuntimeHostName() {
+      return String(window.location.hostname || "").trim().toLowerCase();
+    }
+
+    function isRuntimeLocalHostName(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+    }
+
+    function resolveCurrentOrigin() {
+      try {
+        return `${window.location.protocol}//${window.location.host}`;
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function isLocalApiOverrideEnabled() {
+      if (window.TAKUU_USE_LOCAL_API === true) {
+        return true;
+      }
+      try {
+        const params = new URLSearchParams(window.location.search || "");
+        const hasFlag = (name) => {
+          const value = String(params.get(name) || "").trim().toLowerCase();
+          return value === "1" || value === "true" || value === "yes" || value === "on";
+        };
+        return hasFlag("localApi") || hasFlag("useLocalApi") || hasFlag("localhostApi");
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    function resolveRedisApiOrigin() {
+      const protocol = String(window.location.protocol || "").toLowerCase();
+      const host = getRuntimeHostName();
+
+      const explicitOrigin = normalizeApiOrigin(window.TAKUU_REDIS_API_ORIGIN || window.TAKUU_API_ORIGIN || "");
+      if (explicitOrigin) {
+        return explicitOrigin;
+      }
+
+      if (isRuntimeLocalHostName(host)) {
+        return isLocalApiOverrideEnabled() ? "" : CANONICAL_REDIS_API_ORIGIN;
+      }
+
+      if (protocol === "file:") {
+        return CANONICAL_REDIS_API_ORIGIN;
+      }
+      if (host === CANONICAL_REDIS_API_DOMAIN) {
+        return "";
+      }
+      if (host === LEGACY_REDIS_API_DOMAIN) {
+        return CANONICAL_REDIS_API_ORIGIN;
+      }
+      return CANONICAL_REDIS_API_ORIGIN;
+    }
+
+    function buildRedisApiEndpoint(pathname) {
+      const path = String(pathname || "").trim() || "/";
+      const origin = resolveRedisApiOrigin();
+      if (!origin) {
+        return path.startsWith("/") ? path : `/${path}`;
+      }
+      try {
+        return new URL(path.startsWith("/") ? path : `/${path}`, origin).toString();
+      } catch (_error) {
+        return `${CANONICAL_REDIS_API_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
+      }
+    }
+
+    function resolveObsLinksBaseOrigin() {
+      const protocol = String(window.location.protocol || "").toLowerCase();
+      const host = getRuntimeHostName();
+      const isFileProtocol = protocol === "file:";
+      if (isRuntimeLocalHostName(host)) {
+        if (isLocalApiOverrideEnabled()) {
+          return resolveCurrentOrigin() || "";
+        }
+        return CANONICAL_REDIS_API_ORIGIN;
+      }
+
+      const explicitOrigin = normalizeApiOrigin(
+        window.TAKUU_OBS_BASE_ORIGIN || window.TAKUU_OBS_BASE_URL || ""
+      );
+      if (explicitOrigin) {
+        return explicitOrigin;
+      }
+
+      if (isFileProtocol) {
+        return CANONICAL_REDIS_API_ORIGIN;
+      }
+      if (host === CANONICAL_REDIS_API_DOMAIN || host === LEGACY_REDIS_API_DOMAIN) {
+        return CANONICAL_REDIS_API_ORIGIN;
+      }
+
+      return resolveCurrentOrigin() || CANONICAL_REDIS_API_ORIGIN;
+    }
+
+    const WHEEL_SYNC_API_ENDPOINT = buildRedisApiEndpoint("/api/wheel/sync");
+    const WHEEL_STATS_API_ENDPOINT = buildRedisApiEndpoint("/api/wheel/stats");
+    const KARY_STATE_API_ENDPOINT = buildRedisApiEndpoint("/api/kary/state");
+    const KARY_STATS_API_ENDPOINT = buildRedisApiEndpoint("/api/kary/stats");
+    const ADMIN_STATE_API_ENDPOINT = buildRedisApiEndpoint("/api/admin/state");
     const WHEEL_WS_URL = resolveWheelWebSocketUrl();
     const WHEEL_WS_ENABLED = Boolean(WHEEL_WS_URL);
-    const WHEEL_SYNC_POLL_MS = 900;
+    const WHEEL_SYNC_POLL_MS = 220;
     const WHEEL_SYNC_SOCKET_RETRY_MS = 2500;
     const WHEEL_SYNC_MAX_PROCESSED_EVENTS = 600;
-    const KARY_STATE_SYNC_POLL_MS = 1000;
+    const KARY_STATE_SYNC_POLL_MS = OBS_OVERLAY_MODE ? 320 : 1000;
     const KARY_STATS_SYNC_POLL_MS = 1300;
     const KARY_STATE_API_HEARTBEAT_MS = 10000;
     const ADMIN_STATE_SYNC_POLL_MS = 1300;
@@ -332,6 +495,7 @@
     let currentAdminLogin = "";
     let activeDiscordSession = null;
     let activeAdminTab = "members";
+    let activeStreamObsSubtab = "links";
     let adminAccounts = [];
     let baseMembers = [];
     let baseMemberOverrides = {};
@@ -343,6 +507,12 @@
     let draggingCennikId = "";
     let draggingCennikSection = "";
     let draggingCennikRow = null;
+    let draggingTimerDefinitionKey = "";
+    let draggingTimerDefinitionRow = null;
+    let draggingCounterDefinitionKey = "";
+    let draggingCounterDefinitionRow = null;
+    let editingTimerDefinitionKey = "";
+    let editingCounterDefinitionKey = "";
     let karyTimerTickId = null;
     let karyExternalTimerBridgeBound = false;
     let karyStateSyncPollId = null;
@@ -351,6 +521,7 @@
     let karyStateRemoteUpdatedAt = 0;
     let karyStatePushInFlight = false;
     let karyStatePushQueued = false;
+    let karyStatePushQueuedMode = "full";
     let karyStateLastApiHeartbeatAt = 0;
     let karyStatsSyncPollId = null;
     let karyStatsSyncBusy = false;
@@ -372,7 +543,7 @@
     let karyStatsState = { timers: {}, counters: {} };
     let karyCennikItems = [];
     let timeryConfigState = {
-      panelOpen: false,
+      panelOpen: true,
       layout: "list",
       bgColor: "#101420",
       showTitle: true,
@@ -380,18 +551,18 @@
       showStatus: true
     };
     let streamObsTimeryConfigState = {
-      panelOpen: false,
+      panelOpen: true,
       layout: "vertical",
       color: "#1a1e26",
       progressColor: "#6bffc1"
     };
     let streamObsLicznikiConfigState = {
-      panelOpen: false,
+      panelOpen: true,
       layout: "vertical",
       color: "#1a1e26"
     };
     let licznikiConfigState = {
-      panelOpen: false,
+      panelOpen: true,
       layout: "grid",
       bgColor: "#101420",
       showTitle: true,
@@ -427,25 +598,116 @@
       : "";
     const introSubtitleFullText = introSubtitleRaw || INTRO_DEFAULT_SUBTITLE;
     const visibleAdminPasswords = new Set();
-    const karyTimerDefinitions = Array.from(
-      Array.from(karyTimerCardEls).reduce((map, card) => {
-        const key = String(card.dataset.karyTimer || "").trim();
+    function collectTimerDefinitionsFromDom() {
+      return Array.from(document.querySelectorAll("[data-kary-timer]")).reduce((list, card) => {
+        const key = String(card.getAttribute("data-kary-timer") || "").trim();
         const label = String(card.querySelector("h3")?.textContent || "").trim();
-        if (key && !map.has(key)) {
-          map.set(key, { key, label: label || key });
+        if (!key || list.some((item) => item.key === key)) {
+          return list;
         }
-        return map;
-      }, new Map()).values()
+        list.push({
+          key,
+          label: label || key,
+          baseMinutes: 30
+        });
+        return list;
+      }, []);
+    }
+
+    function collectCounterDefinitionsFromDom() {
+      return Array.from(document.querySelectorAll("[data-kary-counter]")).reduce((list, card) => {
+        const key = String(card.getAttribute("data-kary-counter") || "").trim();
+        const label = String(card.querySelector("h3")?.textContent || "").trim();
+        if (!key || list.some((item) => item.key === key)) {
+          return list;
+        }
+        list.push({
+          key,
+          label: label || key
+        });
+        return list;
+      }, []);
+    }
+
+    function normalizeKaryTimerDefinition(item, index = 0) {
+      const source = item && typeof item === "object" ? item : {};
+      const label = String(source.label || source.name || "").trim();
+      const fallbackLabel = label || `Timer ${index + 1}`;
+      const keyFromItem = String(source.key || "").trim();
+      const generatedKey = normalizeTimerLookupToken(fallbackLabel) || `timer-${index + 1}`;
+      const key = keyFromItem || generatedKey;
+      const baseMinutes = Math.max(1, Math.floor(Number(source.baseMinutes) || 30));
+      return {
+        key,
+        label: fallbackLabel,
+        baseMinutes
+      };
+    }
+
+    function normalizeKaryCounterDefinition(item, index = 0) {
+      const source = item && typeof item === "object" ? item : {};
+      const label = String(source.label || source.name || "").trim();
+      const fallbackLabel = label || `Licznik ${index + 1}`;
+      const keyFromItem = String(source.key || "").trim();
+      const generatedKey = normalizeTimerLookupToken(fallbackLabel) || `counter-${index + 1}`;
+      const key = keyFromItem || generatedKey;
+      return {
+        key,
+        label: fallbackLabel
+      };
+    }
+
+    function normalizeKaryTimerDefinitions(rawItems, fallbackItems = []) {
+      const hasExplicitSource = Array.isArray(rawItems);
+      const source = hasExplicitSource ? rawItems : [];
+      const fallback = Array.isArray(fallbackItems) ? fallbackItems : [];
+      const normalized = [];
+      const seen = new Set();
+      const input = hasExplicitSource ? source : fallback;
+
+      input.forEach((item, index) => {
+        const next = normalizeKaryTimerDefinition(item, index);
+        const key = String(next.key || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        normalized.push(next);
+      });
+
+      return normalized;
+    }
+
+    function normalizeKaryCounterDefinitions(rawItems, fallbackItems = []) {
+      const hasExplicitSource = Array.isArray(rawItems);
+      const source = hasExplicitSource ? rawItems : [];
+      const fallback = Array.isArray(fallbackItems) ? fallbackItems : [];
+      const normalized = [];
+      const seen = new Set();
+      const input = hasExplicitSource ? source : fallback;
+
+      input.forEach((item, index) => {
+        const next = normalizeKaryCounterDefinition(item, index);
+        const key = String(next.key || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        normalized.push(next);
+      });
+
+      return normalized;
+    }
+
+    const DEFAULT_KARY_TIMER_DEFINITIONS = normalizeKaryTimerDefinitions(collectTimerDefinitionsFromDom());
+    const DEFAULT_KARY_COUNTER_DEFINITIONS = normalizeKaryCounterDefinitions(collectCounterDefinitionsFromDom());
+    let karyTimerDefinitions = normalizeKaryTimerDefinitions(
+      readStorageJson(KARY_TIMER_DEFINITIONS_KEY, DEFAULT_KARY_TIMER_DEFINITIONS),
+      DEFAULT_KARY_TIMER_DEFINITIONS
     );
-    const karyCounterDefinitions = Array.from(
-      Array.from(karyCounterCardEls).reduce((map, card) => {
-        const key = String(card.dataset.karyCounter || "").trim();
-        const label = String(card.querySelector("h3")?.textContent || "").trim();
-        if (key && !map.has(key)) {
-          map.set(key, { key, label: label || key });
-        }
-        return map;
-      }, new Map()).values()
+    let karyCounterDefinitions = normalizeKaryCounterDefinitions(
+      readStorageJson(KARY_COUNTER_DEFINITIONS_KEY, DEFAULT_KARY_COUNTER_DEFINITIONS),
+      DEFAULT_KARY_COUNTER_DEFINITIONS
     );
 
     function normalizeTimerLookupToken(value) {
@@ -486,33 +748,94 @@
       return tokenToTimerKey;
     }
 
-    const wheelTimerLookupByToken = buildWheelTimerLookupMap();
+    let wheelTimerLookupByToken = buildWheelTimerLookupMap();
 
-    function resolveWheelTimerKey(timerCandidate, winnerName = "", minutesCandidate = 0) {
+    function refreshWheelTimerLookupMap() {
+      wheelTimerLookupByToken = buildWheelTimerLookupMap();
+    }
+
+    function resolveWheelTimerKeyFromCandidate(timerCandidate) {
       const directTimer = String(timerCandidate || "").trim();
-      const minutes = Math.max(0, Math.floor(Number(minutesCandidate) || 0));
-      const winnerToken = normalizeTimerLookupToken(winnerName);
-
-      if (directTimer) {
-        const directToken = normalizeTimerLookupToken(directTimer);
-        if (directToken && wheelTimerLookupByToken.has(directToken)) {
-          return String(wheelTimerLookupByToken.get(directToken) || "").trim();
-        }
-        if (minutes > 0 && winnerToken && wheelTimerLookupByToken.has(winnerToken)) {
-          return String(wheelTimerLookupByToken.get(winnerToken) || "").trim();
-        }
-        return directTimer;
-      }
-
-      if (minutes <= 0) {
+      if (!directTimer) {
         return "";
       }
+      const directToken = normalizeTimerLookupToken(directTimer);
+      if (directToken && wheelTimerLookupByToken.has(directToken)) {
+        return String(wheelTimerLookupByToken.get(directToken) || "").trim();
+      }
+      return directTimer;
+    }
 
-      if (winnerToken && wheelTimerLookupByToken.has(winnerToken)) {
-        return String(wheelTimerLookupByToken.get(winnerToken) || "").trim();
+    function collectAssociatedWheelTimerKeysByName(winnerName = "") {
+      const winnerToken = normalizeTimerLookupToken(winnerName);
+      if (!winnerToken) {
+        return [];
       }
 
-      return "";
+      const related = [];
+      const seen = new Set();
+      const pushUnique = (candidate) => {
+        const key = String(candidate || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        related.push(key);
+      };
+
+      karyTimerDefinitions.forEach((timer) => {
+        const key = String(timer && timer.key ? timer.key : "").trim();
+        if (!key) {
+          return;
+        }
+        const keyToken = normalizeTimerLookupToken(key);
+        const labelToken = normalizeTimerLookupToken(timer && timer.label ? timer.label : "");
+        if (winnerToken === keyToken || winnerToken === labelToken) {
+          pushUnique(key);
+        }
+      });
+
+      if (wheelTimerLookupByToken.has(winnerToken)) {
+        pushUnique(wheelTimerLookupByToken.get(winnerToken));
+      }
+
+      return related;
+    }
+
+    function resolveWheelTimerKeys(timerCandidate, winnerName = "", minutesCandidate = 0) {
+      const minutes = Math.max(0, Math.floor(Number(minutesCandidate) || 0));
+      const timerWasProvided = timerCandidate !== undefined && timerCandidate !== null;
+      const sourceCandidates = Array.isArray(timerCandidate) ? timerCandidate : [timerCandidate];
+      const keys = [];
+      const seen = new Set();
+
+      const pushUnique = (candidate) => {
+        const key = String(candidate || "").trim();
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        keys.push(key);
+      };
+
+      if (timerWasProvided) {
+        sourceCandidates.forEach((candidate) => {
+          pushUnique(resolveWheelTimerKeyFromCandidate(candidate));
+        });
+      }
+
+      if (minutes > 0) {
+        collectAssociatedWheelTimerKeysByName(winnerName).forEach((key) => {
+          pushUnique(key);
+        });
+      }
+
+      return keys;
+    }
+
+    function resolveWheelTimerKey(timerCandidate, winnerName = "", minutesCandidate = 0) {
+      const keys = resolveWheelTimerKeys(timerCandidate, winnerName, minutesCandidate);
+      return keys.length ? keys[0] : "";
     }
 
     function normalizePath(path) {
@@ -1502,6 +1825,7 @@
         return;
       }
       void Promise.all([
+        pollWheelSyncApiOnce(),
         fetchWheelStatsFromApiOnce(),
         syncKaryStatsFromApiOnce({ force: true })
       ]).finally(() => {
@@ -1512,10 +1836,11 @@
         return;
       }
       wheelStatsLiveRefreshId = window.setInterval(() => {
-        if (document.hidden || lastAppliedRouteName !== "stats") {
+        if (lastAppliedRouteName !== "stats") {
           return;
         }
         void Promise.all([
+          pollWheelSyncApiOnce(),
           fetchWheelStatsFromApiOnce(),
           syncKaryStatsFromApiOnce()
         ]).finally(() => {
@@ -1557,8 +1882,21 @@
       }
 
       const minutes = Math.max(0, Math.floor(Number(source.minutes) || 0));
-      const timerRaw = source.timerKey != null ? source.timerKey : source.timer;
-      const timerKey = resolveWheelTimerKey(timerRaw, winnerName, minutes);
+      const timerCandidates = [];
+      if (Array.isArray(source.timerKeys)) {
+        timerCandidates.push(...source.timerKeys);
+      }
+      if (source.timerKey != null) {
+        timerCandidates.push(source.timerKey);
+      } else if (source.timer != null) {
+        timerCandidates.push(source.timer);
+      }
+      const resolvedTimerKeys = resolveWheelTimerKeys(
+        timerCandidates.length ? timerCandidates : null,
+        winnerName,
+        minutes
+      );
+      const timerKey = resolvedTimerKeys.length ? resolvedTimerKeys[0] : "";
       const timestamp = Math.max(
         1,
         Math.floor(Number(source.timestamp || source.time || source.serverTimestamp || Date.now()) || Date.now())
@@ -1577,6 +1915,7 @@
         sourceId,
         winnerName,
         timerKey,
+        timerKeys: resolvedTimerKeys,
         minutes,
         timestamp
       };
@@ -1642,16 +1981,39 @@
         return false;
       }
 
-      if (payload.timerKey && payload.minutes > 0) {
-        addTimerTimeFromExternal(payload.timerKey, payload.minutes, "minutes", {
-          silentStatus: true,
-          emitWebhook: false,
-          source: `wheel-sync-${source}`
+      if (payload.minutes > 0) {
+        const candidateTimerKeys = Array.isArray(payload.timerKeys) && payload.timerKeys.length
+          ? payload.timerKeys
+          : (payload.timerKey ? [payload.timerKey] : []);
+        let appliedAnyTimer = false;
+        candidateTimerKeys.forEach((timerKey) => {
+          const timerResult = addTimerTimeFromExternal(timerKey, payload.minutes, "minutes", {
+            silentStatus: true,
+            emitWebhook: false,
+            skipApiPush: true,
+            source: `wheel-sync-${source}`
+          });
+          if (timerResult && timerResult.ok === true) {
+            appliedAnyTimer = true;
+          }
         });
+        if (!appliedAnyTimer) {
+          void syncKaryStateFromApiOnce({ force: true });
+        }
       }
 
       appendWheelHistorySyncEntry(payload);
       renderWheelStats();
+      if (lastAppliedRouteName === "stats") {
+        void Promise.all([
+          fetchWheelStatsFromApiOnce(),
+          syncKaryStateFromApiOnce(),
+          syncKaryStatsFromApiOnce()
+        ]).finally(() => {
+          renderWheelStats();
+          renderKaryStats();
+        });
+      }
       return true;
     }
 
@@ -1733,109 +2095,113 @@
     }
 
     async function pollWheelSyncApiOnce() {
-      if (wheelSyncApiDisabled || typeof fetch !== "function") {
+      if (wheelSyncApiDisabled || typeof fetch !== "function" || wheelSyncPollBusy) {
         return;
       }
-
-      const query = wheelSyncLastEventId > 0 ? `?after=${wheelSyncLastEventId}` : "";
-      let response;
+      wheelSyncPollBusy = true;
       try {
-        response = await fetch(`${WHEEL_SYNC_API_ENDPOINT}${query}`, { cache: "no-store" });
-      } catch (_error) {
-        console.warn("[TakuuScript] GET /api/wheel/sync request error", _error);
-        return;
-      }
-
-      if (!response.ok) {
-        let details = "";
+        const query = wheelSyncLastEventId > 0 ? `?after=${wheelSyncLastEventId}` : "";
+        let response;
         try {
-          details = await response.text();
+          response = await fetch(`${WHEEL_SYNC_API_ENDPOINT}${query}`, { cache: "no-store" });
         } catch (_error) {
-          details = "";
-        }
-        console.warn("[TakuuScript] GET /api/wheel/sync failed", {
-          status: response.status,
-          details
-        });
-        if (response.status === 404 || response.status === 405 || response.status === 501) {
-          wheelSyncApiDisabled = true;
-          stopWheelSyncApiPolling();
-        }
-        return;
-      }
-
-      const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-      if (!contentType.includes("application/json")) {
-        let preview = "";
-        try {
-          preview = String(await response.text()).slice(0, 220);
-        } catch (_error) {
-          preview = "";
-        }
-        console.warn("[TakuuScript] GET /api/wheel/sync returned non-JSON response", {
-          status: response.status,
-          contentType,
-          preview
-        });
-        return;
-      }
-
-      let data = null;
-      try {
-        data = await response.json();
-      } catch (_error) {
-        console.warn("[TakuuScript] GET /api/wheel/sync invalid JSON", _error);
-        return;
-      }
-
-      if (!data || typeof data !== "object") {
-        return;
-      }
-
-      const events = Array.isArray(data.events) ? data.events : [];
-      const nextAfterFromResponse = Math.max(0, Math.floor(Number(data.nextAfter || 0)));
-      const lastIdFromResponse = Math.max(0, Math.floor(Number(data.lastId || 0)));
-
-      // First poll after page load should not replay old wheel results,
-      // because timer state is already persisted in localStorage.
-      if (wheelSyncLastEventId <= 0 && lastIdFromResponse > 0) {
-        setWheelSyncCursor(lastIdFromResponse);
-        return;
-      }
-
-      // If sync history was rotated/reset on backend, re-anchor cursor.
-      if (
-        wheelSyncLastEventId > 0 &&
-        lastIdFromResponse > 0 &&
-        lastIdFromResponse < wheelSyncLastEventId &&
-        !events.length
-      ) {
-        setWheelSyncCursor(lastIdFromResponse);
-        return;
-      }
-
-      let maxProcessedEventId = wheelSyncLastEventId;
-      events.forEach((eventItem) => {
-        if (!eventItem || typeof eventItem !== "object") {
+          console.warn("[TakuuScript] GET /api/wheel/sync request error", _error);
           return;
         }
-        const serverId = Math.max(0, Math.floor(Number(eventItem.id || 0)));
-        if (serverId > maxProcessedEventId) {
-          maxProcessedEventId = serverId;
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            details = await response.text();
+          } catch (_error) {
+            details = "";
+          }
+          console.warn("[TakuuScript] GET /api/wheel/sync failed", {
+            status: response.status,
+            details
+          });
+          if (response.status === 404 || response.status === 405 || response.status === 501) {
+            wheelSyncApiDisabled = true;
+            stopWheelSyncApiPolling();
+          }
+          return;
         }
-        consumeWheelSyncMessage(eventItem, "api");
-      });
 
-      if (nextAfterFromResponse > maxProcessedEventId) {
-        maxProcessedEventId = nextAfterFromResponse;
-      }
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          let preview = "";
+          try {
+            preview = String(await response.text()).slice(0, 220);
+          } catch (_error) {
+            preview = "";
+          }
+          console.warn("[TakuuScript] GET /api/wheel/sync returned non-JSON response", {
+            status: response.status,
+            contentType,
+            preview
+          });
+          return;
+        }
 
-      if (!events.length && lastIdFromResponse > maxProcessedEventId) {
-        maxProcessedEventId = lastIdFromResponse;
-      }
+        let data = null;
+        try {
+          data = await response.json();
+        } catch (_error) {
+          console.warn("[TakuuScript] GET /api/wheel/sync invalid JSON", _error);
+          return;
+        }
 
-      if (maxProcessedEventId > wheelSyncLastEventId) {
-        setWheelSyncCursor(maxProcessedEventId);
+        if (!data || typeof data !== "object") {
+          return;
+        }
+
+        const events = Array.isArray(data.events) ? data.events : [];
+        const nextAfterFromResponse = Math.max(0, Math.floor(Number(data.nextAfter || 0)));
+        const lastIdFromResponse = Math.max(0, Math.floor(Number(data.lastId || 0)));
+
+        // First poll after page load should not replay old wheel results,
+        // because timer state is already persisted in localStorage.
+        if (wheelSyncLastEventId <= 0 && lastIdFromResponse > 0) {
+          setWheelSyncCursor(lastIdFromResponse);
+          return;
+        }
+
+        // If sync history was rotated/reset on backend, re-anchor cursor.
+        if (
+          wheelSyncLastEventId > 0 &&
+          lastIdFromResponse > 0 &&
+          lastIdFromResponse < wheelSyncLastEventId &&
+          !events.length
+        ) {
+          setWheelSyncCursor(lastIdFromResponse);
+          return;
+        }
+
+        let maxProcessedEventId = wheelSyncLastEventId;
+        events.forEach((eventItem) => {
+          if (!eventItem || typeof eventItem !== "object") {
+            return;
+          }
+          const serverId = Math.max(0, Math.floor(Number(eventItem.id || 0)));
+          if (serverId > maxProcessedEventId) {
+            maxProcessedEventId = serverId;
+          }
+          consumeWheelSyncMessage(eventItem, "api");
+        });
+
+        if (nextAfterFromResponse > maxProcessedEventId) {
+          maxProcessedEventId = nextAfterFromResponse;
+        }
+
+        if (!events.length && lastIdFromResponse > maxProcessedEventId) {
+          maxProcessedEventId = lastIdFromResponse;
+        }
+
+        if (maxProcessedEventId > wheelSyncLastEventId) {
+          setWheelSyncCursor(maxProcessedEventId);
+        }
+      } finally {
+        wheelSyncPollBusy = false;
       }
     }
 
@@ -2868,6 +3234,140 @@
       });
 
       return dropTarget;
+    }
+
+    function clearTimerDefinitionDragTargetRows() {
+      if (!adminTimerDefTableBodyEl) {
+        return;
+      }
+      adminTimerDefTableBodyEl
+        .querySelectorAll("tr.admin-kary-timer-def-row.is-drag-target")
+        .forEach((row) => row.classList.remove("is-drag-target"));
+    }
+
+    function findDropTargetTimerDefinitionRow(pointerY) {
+      if (!adminTimerDefTableBodyEl) {
+        return null;
+      }
+
+      const rows = Array.from(
+        adminTimerDefTableBodyEl.querySelectorAll("tr.admin-kary-timer-def-row[data-timer-def-key]")
+      ).filter((row) => {
+        const rowKey = String(row.dataset.timerDefKey || "").trim();
+        return rowKey && rowKey !== draggingTimerDefinitionKey;
+      });
+
+      let dropTarget = null;
+      let closestOffset = Number.NEGATIVE_INFINITY;
+      rows.forEach((row) => {
+        const rect = row.getBoundingClientRect();
+        const offset = pointerY - rect.top - rect.height / 2;
+        if (offset < 0 && offset > closestOffset) {
+          closestOffset = offset;
+          dropTarget = row;
+        }
+      });
+      return dropTarget;
+    }
+
+    function applyTimerDefinitionOrderFromDom() {
+      if (!adminTimerDefTableBodyEl) {
+        return false;
+      }
+
+      const orderedKeys = Array.from(
+        adminTimerDefTableBodyEl.querySelectorAll("tr.admin-kary-timer-def-row[data-timer-def-key]")
+      )
+        .map((row) => String(row.dataset.timerDefKey || "").trim())
+        .filter(Boolean);
+
+      if (!orderedKeys.length) {
+        return false;
+      }
+
+      const previousOrder = karyTimerDefinitions.map((item) => String(item.key || "").trim()).filter(Boolean);
+      const changed =
+        previousOrder.length !== orderedKeys.length ||
+        previousOrder.some((itemKey, index) => itemKey !== orderedKeys[index]);
+      if (!changed) {
+        return false;
+      }
+
+      const byKey = new Map(karyTimerDefinitions.map((item) => [String(item.key || "").trim(), item]));
+      const nextOrder = orderedKeys.map((key) => byKey.get(key)).filter(Boolean);
+      if (nextOrder.length !== karyTimerDefinitions.length) {
+        return false;
+      }
+
+      karyTimerDefinitions = nextOrder;
+      return true;
+    }
+
+    function clearCounterDefinitionDragTargetRows() {
+      if (!adminCounterDefTableBodyEl) {
+        return;
+      }
+      adminCounterDefTableBodyEl
+        .querySelectorAll("tr.admin-kary-counter-def-row.is-drag-target")
+        .forEach((row) => row.classList.remove("is-drag-target"));
+    }
+
+    function findDropTargetCounterDefinitionRow(pointerY) {
+      if (!adminCounterDefTableBodyEl) {
+        return null;
+      }
+
+      const rows = Array.from(
+        adminCounterDefTableBodyEl.querySelectorAll("tr.admin-kary-counter-def-row[data-counter-def-key]")
+      ).filter((row) => {
+        const rowKey = String(row.dataset.counterDefKey || "").trim();
+        return rowKey && rowKey !== draggingCounterDefinitionKey;
+      });
+
+      let dropTarget = null;
+      let closestOffset = Number.NEGATIVE_INFINITY;
+      rows.forEach((row) => {
+        const rect = row.getBoundingClientRect();
+        const offset = pointerY - rect.top - rect.height / 2;
+        if (offset < 0 && offset > closestOffset) {
+          closestOffset = offset;
+          dropTarget = row;
+        }
+      });
+      return dropTarget;
+    }
+
+    function applyCounterDefinitionOrderFromDom() {
+      if (!adminCounterDefTableBodyEl) {
+        return false;
+      }
+
+      const orderedKeys = Array.from(
+        adminCounterDefTableBodyEl.querySelectorAll("tr.admin-kary-counter-def-row[data-counter-def-key]")
+      )
+        .map((row) => String(row.dataset.counterDefKey || "").trim())
+        .filter(Boolean);
+
+      if (!orderedKeys.length) {
+        return false;
+      }
+
+      const previousOrder = karyCounterDefinitions.map((item) => String(item.key || "").trim()).filter(Boolean);
+      const changed =
+        previousOrder.length !== orderedKeys.length ||
+        previousOrder.some((itemKey, index) => itemKey !== orderedKeys[index]);
+      if (!changed) {
+        return false;
+      }
+
+      const byKey = new Map(karyCounterDefinitions.map((item) => [String(item.key || "").trim(), item]));
+      const nextOrder = orderedKeys.map((key) => byKey.get(key)).filter(Boolean);
+      if (nextOrder.length !== karyCounterDefinitions.length) {
+        return false;
+      }
+
+      karyCounterDefinitions = nextOrder;
+      return true;
     }
 
     function clearCennikDragTargetRows() {
@@ -3944,6 +4444,52 @@
       });
     }
 
+    function normalizeStreamObsSubtab(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      return normalized === "links" || normalized === "timery" || normalized === "liczniki" || normalized === "wheel"
+        ? normalized
+        : "links";
+    }
+
+    function applyStreamObsScopedVisibility() {
+      if (streamObsLinksWrapEl) {
+        const showLinks = activeAdminTab === "streamobs" && activeStreamObsSubtab === "links";
+        streamObsLinksWrapEl.hidden = !showLinks;
+      }
+    }
+
+    function setActiveStreamObsSubtab(tabName) {
+      const nextSubtab = normalizeStreamObsSubtab(tabName);
+      activeStreamObsSubtab = nextSubtab;
+
+      if (streamObsSubtabsEl) {
+        const buttons = streamObsSubtabsEl.querySelectorAll("[data-streamobs-subtab]");
+        buttons.forEach((button) => {
+          const subtab = normalizeStreamObsSubtab(button.dataset.streamobsSubtab || "");
+          const isActive = subtab === nextSubtab;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+      }
+
+      if (streamObsSubtabPanelEls && streamObsSubtabPanelEls.length) {
+        streamObsSubtabPanelEls.forEach((panel) => {
+          const subtab = normalizeStreamObsSubtab(panel.dataset.streamobsSubtabPanel || "");
+          const isActive = subtab === nextSubtab;
+          panel.hidden = !isActive;
+          panel.classList.toggle("is-active", isActive);
+        });
+      }
+
+      if (nextSubtab === "timery") {
+        applyStreamObsTimeryConfig();
+      } else if (nextSubtab === "liczniki") {
+        applyStreamObsLicznikiConfig();
+      }
+
+      applyStreamObsScopedVisibility();
+    }
+
     function setActiveAdminTab(tabName) {
       const ownerAccess = hasOwnerAdminAccess();
       const streamObsAccess = hasStreamObsAccess();
@@ -3951,6 +4497,7 @@
       const requestedTab =
         tabName === "accounts" ||
         tabName === "bindings" ||
+        tabName === "cennik" ||
         tabName === "kary" ||
         tabName === "members" ||
         tabName === "streamobs"
@@ -4001,6 +4548,11 @@
         adminKaryTabEl.hidden = !isKary;
         adminKaryTabEl.classList.toggle("is-active", isKary);
       }
+      if (adminCennikTabEl) {
+        const isCennik = activeAdminTab === "cennik";
+        adminCennikTabEl.hidden = !isCennik;
+        adminCennikTabEl.classList.toggle("is-active", isCennik);
+      }
       if (adminAccountsTabEl) {
         const isAccounts = activeAdminTab === "accounts";
         adminAccountsTabEl.hidden = !isAccounts;
@@ -4016,10 +4568,13 @@
         adminStreamObsTabEl.hidden = !isStreamObs;
         adminStreamObsTabEl.classList.toggle("is-active", isStreamObs);
         if (isStreamObs) {
+          setActiveStreamObsSubtab(OBS_OVERLAY_MODE ? "wheel" : activeStreamObsSubtab);
           applyStreamObsTimeryConfig();
           applyStreamObsLicznikiConfig();
         }
       }
+
+      applyStreamObsScopedVisibility();
 
       updateKickOAuthPanelView(cachedKickOAuthStatus);
     }
@@ -4388,7 +4943,7 @@
         fallbackState && typeof fallbackState === "object"
           ? fallbackState
           : {
-              panelOpen: false,
+              panelOpen: true,
               layout: "list",
               bgColor: "#101420",
               showTitle: true,
@@ -4463,7 +5018,7 @@
         fallbackState && typeof fallbackState === "object"
           ? fallbackState
           : {
-              panelOpen: false,
+              panelOpen: true,
               layout: "vertical",
               color: "#1a1e26",
               progressColor: "#6bffc1"
@@ -4471,7 +5026,7 @@
       const asObject = rawValue && typeof rawValue === "object" ? rawValue : {};
       const layoutRaw = String(asObject.layout || fallback.layout || "vertical").toLowerCase();
       return {
-        panelOpen: Boolean(asObject.panelOpen),
+        panelOpen: true,
         layout: layoutRaw === "horizontal" ? "horizontal" : "vertical",
         color: /^#[\da-f]{6}$/i.test(String(asObject.color || ""))
           ? String(asObject.color)
@@ -4499,14 +5054,14 @@
         fallbackState && typeof fallbackState === "object"
           ? fallbackState
           : {
-              panelOpen: false,
+              panelOpen: true,
               layout: "vertical",
               color: "#1a1e26"
             };
       const asObject = rawValue && typeof rawValue === "object" ? rawValue : {};
       const layoutRaw = String(asObject.layout || fallback.layout || "vertical").toLowerCase();
       return {
-        panelOpen: Boolean(asObject.panelOpen),
+        panelOpen: true,
         layout: layoutRaw === "horizontal" ? "horizontal" : "vertical",
         color: /^#[\da-f]{6}$/i.test(String(asObject.color || ""))
           ? String(asObject.color)
@@ -4562,7 +5117,7 @@
     function buildStreamObsTimeryUrl() {
       let url = null;
       try {
-        url = new URL(TIMERY_ROUTE_PATH, window.location.href);
+        url = new URL(TIMERY_ROUTE_PATH, resolveObsLinksBaseOrigin());
       } catch (_error) {
         return String(TIMERY_ROUTE_PATH || "/timery");
       }
@@ -4576,7 +5131,7 @@
     function buildStreamObsLicznikiUrl() {
       let url = null;
       try {
-        url = new URL(LICZNIKI_ROUTE_PATH, window.location.href);
+        url = new URL(LICZNIKI_ROUTE_PATH, resolveObsLinksBaseOrigin());
       } catch (_error) {
         return String(LICZNIKI_ROUTE_PATH || "/liczniki");
       }
@@ -4672,15 +5227,105 @@
       card.dataset.streamobsLinkUrl = linkUrl;
     }
 
+    function buildStreamObsTimerPreviewItems() {
+      const source = Array.isArray(karyTimerDefinitions) ? karyTimerDefinitions : [];
+      const firstTimer = source[0] && typeof source[0] === "object" ? source[0] : null;
+      if (firstTimer) {
+        const key = String(firstTimer.key || "").trim();
+        const label = String(firstTimer.label || "Przykładowy timer").trim();
+        return [
+          {
+            key: key || "timer-preview-1",
+            label: label || "Przykładowy timer",
+            clock: "00:00:00",
+            progress: 68
+          }
+        ];
+      }
+
+      return [
+        { key: "preview-1", label: "Przykładowy timer", clock: "00:00:00", progress: 68 }
+      ];
+    }
+
+    function renderStreamObsTimeryPreview() {
+      if (!streamObsTimeryPreviewEl) {
+        return;
+      }
+
+      const layout = streamObsTimeryConfigState.layout === "horizontal" ? "horizontal" : "vertical";
+      streamObsTimeryPreviewEl.dataset.layout = layout;
+      streamObsTimeryPreviewEl.style.setProperty("--streamobs-preview-card", streamObsTimeryConfigState.color);
+      streamObsTimeryPreviewEl.style.setProperty("--streamobs-preview-progress", streamObsTimeryConfigState.progressColor);
+      streamObsTimeryPreviewEl.dataset.widgetType = "timery";
+
+      const items = buildStreamObsTimerPreviewItems();
+      streamObsTimeryPreviewEl.innerHTML = items
+        .map((item) => {
+          return `
+            <article class="streamobs-preview-obs-card streamobs-preview-obs-card--timer" data-streamobs-preview-timer="${escapeHtml(item.key)}">
+              <p class="streamobs-preview-obs-name">${escapeHtml(item.label)}</p>
+              <p class="streamobs-preview-obs-value">${escapeHtml(item.clock)}</p>
+              <div class="streamobs-preview-obs-progress" aria-hidden="true">
+                <span style="width:${Math.max(0, Math.min(100, Number(item.progress) || 0))}%;"></span>
+              </div>
+            </article>
+          `;
+        })
+        .join("");
+    }
+
+    function buildStreamObsCounterPreviewItems() {
+      const source = Array.isArray(karyCounterDefinitions) ? karyCounterDefinitions : [];
+      const firstCounter = source[0] && typeof source[0] === "object" ? source[0] : null;
+      if (firstCounter) {
+        const key = String(firstCounter.key || "").trim();
+        const label = String(firstCounter.label || "Przykładowy licznik").trim();
+        return [
+          {
+            key: key || "counter-preview-1",
+            label: label || "Przykładowy licznik",
+            value: 0
+          }
+        ];
+      }
+
+      return [
+        { key: "counter-preview-1", label: "Przykładowy licznik", value: 0 }
+      ];
+    }
+
+    function renderStreamObsLicznikiPreview() {
+      if (!streamObsLicznikiPreviewEl) {
+        return;
+      }
+
+      const layout = streamObsLicznikiConfigState.layout === "horizontal" ? "horizontal" : "vertical";
+      streamObsLicznikiPreviewEl.dataset.layout = layout;
+      streamObsLicznikiPreviewEl.style.setProperty("--streamobs-preview-card", streamObsLicznikiConfigState.color);
+      streamObsLicznikiPreviewEl.dataset.widgetType = "liczniki";
+
+      const items = buildStreamObsCounterPreviewItems();
+      streamObsLicznikiPreviewEl.innerHTML = items
+        .map((item) => {
+          return `
+            <article class="streamobs-preview-obs-card streamobs-preview-obs-card--counter" data-streamobs-preview-counter="${escapeHtml(item.key)}">
+              <p class="streamobs-preview-obs-name">${escapeHtml(item.label)}</p>
+              <p class="streamobs-preview-obs-value">${escapeHtml(String(item.value))}</p>
+            </article>
+          `;
+        })
+        .join("");
+    }
+
     function applyStreamObsTimeryConfig() {
+      streamObsTimeryConfigState.panelOpen = true;
       if (streamObsTimeryConfigBodyEl) {
-        streamObsTimeryConfigBodyEl.hidden = !streamObsTimeryConfigState.panelOpen;
+        streamObsTimeryConfigBodyEl.hidden = false;
       }
       if (streamObsTimeryConfigToggleEl) {
-        streamObsTimeryConfigToggleEl.setAttribute("aria-expanded", streamObsTimeryConfigState.panelOpen ? "true" : "false");
-        streamObsTimeryConfigToggleEl.textContent = streamObsTimeryConfigState.panelOpen
-          ? "Ukryj konfigurację timerów OBS"
-          : "Konfiguracja timerów OBS";
+        streamObsTimeryConfigToggleEl.setAttribute("aria-expanded", "true");
+        streamObsTimeryConfigToggleEl.textContent = "Konfiguracja timerów OBS";
       }
       if (streamObsTimeryLayoutSelectEl) {
         streamObsTimeryLayoutSelectEl.value = streamObsTimeryConfigState.layout;
@@ -4693,17 +5338,17 @@
       }
 
       upsertStreamObsTimeryLinkCard();
+      renderStreamObsTimeryPreview();
     }
 
     function applyStreamObsLicznikiConfig() {
+      streamObsLicznikiConfigState.panelOpen = true;
       if (streamObsLicznikiConfigBodyEl) {
-        streamObsLicznikiConfigBodyEl.hidden = !streamObsLicznikiConfigState.panelOpen;
+        streamObsLicznikiConfigBodyEl.hidden = false;
       }
       if (streamObsLicznikiConfigToggleEl) {
-        streamObsLicznikiConfigToggleEl.setAttribute("aria-expanded", streamObsLicznikiConfigState.panelOpen ? "true" : "false");
-        streamObsLicznikiConfigToggleEl.textContent = streamObsLicznikiConfigState.panelOpen
-          ? "Ukryj konfigurację liczników OBS"
-          : "Konfiguracja liczników OBS";
+        streamObsLicznikiConfigToggleEl.setAttribute("aria-expanded", "true");
+        streamObsLicznikiConfigToggleEl.textContent = "Konfiguracja liczników OBS";
       }
       if (streamObsLicznikiLayoutSelectEl) {
         streamObsLicznikiLayoutSelectEl.value = streamObsLicznikiConfigState.layout;
@@ -4713,6 +5358,7 @@
       }
 
       upsertStreamObsLicznikiLinkCard();
+      renderStreamObsLicznikiPreview();
     }
 
     function normalizeLicznikiConfig(rawValue, fallbackState = null) {
@@ -4720,7 +5366,7 @@
         fallbackState && typeof fallbackState === "object"
           ? fallbackState
           : {
-              panelOpen: false,
+              panelOpen: true,
               layout: "grid",
               bgColor: "#101420",
               showTitle: true,
@@ -5007,6 +5653,25 @@
       const lastTickRaw = Number(karyLiveState.lastTickAt || 0);
       karyLiveState.lastTickAt = Number.isFinite(lastTickRaw) && lastTickRaw > 0 ? Math.floor(lastTickRaw) : Date.now();
 
+      const allowedTimerKeys = new Set(karyTimerDefinitions.map((timer) => String(timer.key || "").trim()).filter(Boolean));
+      const allowedCounterKeys = new Set(karyCounterDefinitions.map((counter) => String(counter.key || "").trim()).filter(Boolean));
+
+      Object.keys(karyLiveState.timers).forEach((key) => {
+        if (!allowedTimerKeys.has(key)) {
+          delete karyLiveState.timers[key];
+        }
+      });
+      Object.keys(karyLiveState.timerTotals).forEach((key) => {
+        if (!allowedTimerKeys.has(key)) {
+          delete karyLiveState.timerTotals[key];
+        }
+      });
+      Object.keys(karyLiveState.counters).forEach((key) => {
+        if (!allowedCounterKeys.has(key)) {
+          delete karyLiveState.counters[key];
+        }
+      });
+
       karyTimerDefinitions.forEach((timer) => {
         const currentValue = Number(karyLiveState.timers[timer.key] || 0);
         const normalizedCurrent = Number.isFinite(currentValue) && currentValue > 0 ? Math.floor(currentValue) : 0;
@@ -5035,6 +5700,19 @@
       if (!karyStatsState.counters || typeof karyStatsState.counters !== "object") {
         karyStatsState.counters = {};
       }
+
+      const allowedTimerKeys = new Set(karyTimerDefinitions.map((timer) => String(timer.key || "").trim()).filter(Boolean));
+      const allowedCounterKeys = new Set(karyCounterDefinitions.map((counter) => String(counter.key || "").trim()).filter(Boolean));
+      Object.keys(karyStatsState.timers).forEach((key) => {
+        if (!allowedTimerKeys.has(key)) {
+          delete karyStatsState.timers[key];
+        }
+      });
+      Object.keys(karyStatsState.counters).forEach((key) => {
+        if (!allowedCounterKeys.has(key)) {
+          delete karyStatsState.counters[key];
+        }
+      });
 
       karyTimerDefinitions.forEach((timer) => {
         const rawEntry = karyStatsState.timers[timer.key];
@@ -5201,9 +5879,13 @@
 
       karyTimerDefinitions.forEach((timer) => {
         const current = Math.max(0, Math.floor(Number(karyLiveState.timers[timer.key] || 0)));
+        const currentChainTotal = Math.max(
+          current,
+          Math.floor(Number(karyLiveState.timerTotals[timer.key] || 0))
+        );
         const timerStats = karyStatsState.timers[timer.key] || { recordSeconds: 0, totalAddedSeconds: 0 };
-        if (current > Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)))) {
-          timerStats.recordSeconds = current;
+        if (currentChainTotal > Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)))) {
+          timerStats.recordSeconds = currentChainTotal;
           changed = true;
         }
         karyStatsState.timers[timer.key] = timerStats;
@@ -5239,6 +5921,10 @@
         nextSnapshot && nextSnapshot.timers && typeof nextSnapshot.timers === "object"
           ? nextSnapshot.timers
           : {};
+      const nextTotals =
+        nextSnapshot && nextSnapshot.timerTotals && typeof nextSnapshot.timerTotals === "object"
+          ? nextSnapshot.timerTotals
+          : {};
       const nextCounters =
         nextSnapshot && nextSnapshot.counters && typeof nextSnapshot.counters === "object"
           ? nextSnapshot.counters
@@ -5250,10 +5936,14 @@
         const timerKey = timer.key;
         const previousValue = Math.max(0, Math.floor(Number(prevTimers[timerKey] || 0)));
         const nextValue = Math.max(0, Math.floor(Number(nextTimers[timerKey] || 0)));
+        const nextTotal = Math.max(
+          nextValue,
+          Math.floor(Number(nextTotals[timerKey] || 0))
+        );
         const timerStats = karyStatsState.timers[timerKey] || { recordSeconds: 0, totalAddedSeconds: 0 };
 
-        if (nextValue > Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)))) {
-          timerStats.recordSeconds = nextValue;
+        if (nextTotal > Math.max(0, Math.floor(Number(timerStats.recordSeconds || 0)))) {
+          timerStats.recordSeconds = nextTotal;
           changed = true;
         }
 
@@ -5297,7 +5987,9 @@
 
     function saveKaryState() {
       ensureKaryStateShape();
-      saveStorageJson(KARY_STATE_KEY, karyLiveState);
+      const snapshot = getKaryStateSnapshot();
+      saveStorageJson(KARY_STATE_KEY, snapshot);
+      publishKaryStateSnapshot(snapshot);
     }
 
     function getKaryStateSnapshot() {
@@ -5307,6 +5999,56 @@
         timerTotals: { ...karyLiveState.timerTotals },
         counters: { ...karyLiveState.counters },
         lastTickAt: Math.max(0, Math.floor(Number(karyLiveState.lastTickAt || 0)))
+      };
+    }
+
+    function ensureKaryStateSyncChannel() {
+      if (karyStateChannel) {
+        return karyStateChannel;
+      }
+      if (!("BroadcastChannel" in window)) {
+        return null;
+      }
+      try {
+        karyStateChannel = new BroadcastChannel(KARY_STATE_SYNC_CHANNEL_NAME);
+      } catch (_error) {
+        karyStateChannel = null;
+      }
+      return karyStateChannel;
+    }
+
+    function publishKaryStateSnapshot(snapshot = null) {
+      const channel = ensureKaryStateSyncChannel();
+      if (!channel) {
+        return;
+      }
+      const normalizedSnapshot =
+        snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+          ? snapshot
+          : getKaryStateSnapshot();
+      try {
+        channel.postMessage({
+          type: "kary_state",
+          state: normalizedSnapshot,
+          updatedAt: Date.now()
+        });
+      } catch (_error) {
+        // Ignore BroadcastChannel write failures.
+      }
+    }
+
+    function normalizeKaryStatePushMode(mode) {
+      const clean = String(mode || "").trim().toLowerCase();
+      return clean === "timers-only" || clean === "timers_only" ? "timers-only" : "full";
+    }
+
+    function buildKaryStateApiPayload(mode = "full") {
+      const pushMode = normalizeKaryStatePushMode(mode);
+      const snapshot = getKaryStateSnapshot();
+      return {
+        mode: pushMode,
+        action: "set",
+        state: snapshot
       };
     }
 
@@ -5366,12 +6108,12 @@
       karyStateSyncPollId = null;
     }
 
-    async function pushKaryStateToApiOnce() {
-      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+    async function pushKaryStateToApiOnce(mode = "full") {
+      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function" || KARY_OBS_WIDGET_MODE) {
         return false;
       }
 
-      const snapshot = getKaryStateSnapshot();
+      const payloadBody = buildKaryStateApiPayload(mode);
       karyStatePushInFlight = true;
 
       try {
@@ -5379,8 +6121,8 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action: "set",
-            state: snapshot
+            action: payloadBody.action,
+            state: payloadBody.state
           }),
           keepalive: true
         });
@@ -5440,21 +6182,29 @@
       } finally {
         karyStatePushInFlight = false;
         if (karyStatePushQueued) {
+          const nextMode = karyStatePushQueuedMode;
           karyStatePushQueued = false;
-          queueKaryStateApiPush();
+          karyStatePushQueuedMode = "full";
+          queueKaryStateApiPush(nextMode);
         }
       }
     }
 
-    function queueKaryStateApiPush() {
-      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function") {
+    function queueKaryStateApiPush(mode = "full") {
+      if (karyStateApiDisabled || IS_FILE_PROTOCOL || typeof fetch !== "function" || KARY_OBS_WIDGET_MODE) {
         return;
       }
+      const pushMode = normalizeKaryStatePushMode(mode);
       if (karyStatePushInFlight) {
+        if (!karyStatePushQueued) {
+          karyStatePushQueuedMode = pushMode;
+        } else if (pushMode === "full") {
+          karyStatePushQueuedMode = "full";
+        }
         karyStatePushQueued = true;
         return;
       }
-      void pushKaryStateToApiOnce();
+      void pushKaryStateToApiOnce(pushMode);
     }
 
     async function syncKaryStateFromApiOnce(options = {}) {
@@ -5551,7 +6301,7 @@
 
       void syncKaryStateFromApiOnce({ force: true }).finally(() => {
         // If Redis has no snapshot yet, seed it with current local state.
-        if (karyStateRemoteUpdatedAt <= 0) {
+        if (!KARY_OBS_WIDGET_MODE && karyStateRemoteUpdatedAt <= 0) {
           queueKaryStateApiPush();
         }
       });
@@ -5790,6 +6540,8 @@
         baseMemberOverrides: sanitizeBaseMemberOverrides(source.baseMemberOverrides),
         customMembers: normalizeCustomMembers(source.customMembers),
         membersOrder: normalizedMembersOrder,
+        karyTimerDefinitions: normalizeKaryTimerDefinitions(source.karyTimerDefinitions, karyTimerDefinitions),
+        karyCounterDefinitions: normalizeKaryCounterDefinitions(source.karyCounterDefinitions, karyCounterDefinitions),
         karyCennikItems: normalizeKaryCennikItems(source.karyCennikItems),
         timeryConfig: normalizeTimeryConfig(source.timeryConfig, timeryConfigState),
         licznikiConfig: normalizeLicznikiConfig(source.licznikiConfig, licznikiConfigState),
@@ -5804,6 +6556,8 @@
         baseMemberOverrides: sanitizeBaseMemberOverrides(baseMemberOverrides),
         customMembers: normalizeCustomMembers(customMembers),
         membersOrder: normalizeMembersOrder(membersOrder),
+        karyTimerDefinitions: normalizeKaryTimerDefinitions(karyTimerDefinitions, DEFAULT_KARY_TIMER_DEFINITIONS),
+        karyCounterDefinitions: normalizeKaryCounterDefinitions(karyCounterDefinitions, DEFAULT_KARY_COUNTER_DEFINITIONS),
         karyCennikItems: normalizeKaryCennikItems(karyCennikItems),
         timeryConfig: normalizeTimeryConfig(timeryConfigState, timeryConfigState),
         licznikiConfig: normalizeLicznikiConfig(licznikiConfigState, licznikiConfigState),
@@ -5819,6 +6573,8 @@
       saveStorageJson(CCI_BASE_MEMBER_OVERRIDES_KEY, source.baseMemberOverrides);
       saveStorageJson(CCI_MEMBERS_KEY, source.customMembers);
       saveStorageJson(CCI_MEMBERS_ORDER_KEY, source.membersOrder);
+      saveStorageJson(KARY_TIMER_DEFINITIONS_KEY, source.karyTimerDefinitions);
+      saveStorageJson(KARY_COUNTER_DEFINITIONS_KEY, source.karyCounterDefinitions);
       saveStorageJson(KARY_CENNIK_KEY, source.karyCennikItems);
       saveStorageJson(TIMERY_CONFIG_KEY, source.timeryConfig);
       saveStorageJson(LICZNIKI_CONFIG_KEY, source.licznikiConfig);
@@ -5851,11 +6607,20 @@
         baseMemberOverrides = normalized.baseMemberOverrides;
         customMembers = normalized.customMembers;
         membersOrder = normalized.membersOrder;
+        karyTimerDefinitions = normalized.karyTimerDefinitions;
+        karyCounterDefinitions = normalized.karyCounterDefinitions;
         karyCennikItems = normalized.karyCennikItems;
         timeryConfigState = normalized.timeryConfig;
         licznikiConfigState = normalized.licznikiConfig;
         streamObsTimeryConfigState = normalized.streamObsTimeryConfig;
         streamObsLicznikiConfigState = normalized.streamObsLicznikiConfig;
+
+        refreshWheelTimerLookupMap();
+        renderKaryDefinitionCards();
+        populateKaryAdminControls();
+        renderAdminKaryDefinitionTables();
+        syncKaryTimerTickLifecycle();
+        renderKaryLiveState();
 
         baseMembers = loadBaseMembersFromGrid();
         refreshMembersOrder(false);
@@ -6078,12 +6843,11 @@
       }
 
       void syncAdminStateFromApiOnce({ force: true }).finally(() => {
+        const shouldPushPending = adminStatePendingLocalPush === true;
         adminStateSyncInitialized = true;
-        if (adminStatePendingLocalPush && adminStateRemoteUpdatedAt <= 0) {
-          adminStatePendingLocalPush = false;
+        adminStatePendingLocalPush = false;
+        if (shouldPushPending) {
           queueAdminStateApiPush();
-        } else {
-          adminStatePendingLocalPush = false;
         }
       });
 
@@ -6095,11 +6859,106 @@
       }, ADMIN_STATE_SYNC_POLL_MS);
     }
 
+    function renderKaryTimerCardMarkup(timer, variant = "kary") {
+      if (variant === "timery") {
+        return `
+          <article class="kary-timer-card timery-card" data-kary-timer="${escapeHtml(timer.key)}">
+            <div class="timery-left">
+              <p class="kary-card-state" data-kary-timer-state>IDLE</p>
+              <h3>${escapeHtml(timer.label)}</h3>
+            </div>
+            <span class="kary-time-pill" data-kary-timer-time>00:00:00</span>
+            <div class="timery-progress-line"></div>
+          </article>
+        `;
+      }
+
+      return `
+        <article class="kary-timer-card" data-kary-timer="${escapeHtml(timer.key)}">
+          <p class="kary-card-state" data-kary-timer-state>IDLE</p>
+          <div class="kary-card-head">
+            <h3>${escapeHtml(timer.label)}</h3>
+            <span class="kary-time-pill" data-kary-timer-time>00:00:00</span>
+          </div>
+          <div class="kary-progress-line"></div>
+        </article>
+      `;
+    }
+
+    function renderKaryCounterCardMarkup(counter, variant = "kary") {
+      if (variant === "liczniki") {
+        return `
+          <article class="kary-counter-card liczniki-card" data-kary-counter="${escapeHtml(counter.key)}">
+            <p class="kary-card-state">COUNTER</p>
+            <h3>${escapeHtml(counter.label)}</h3>
+            <span class="kary-counter-pill" data-kary-counter-value>0</span>
+          </article>
+        `;
+      }
+
+      return `
+        <article class="kary-counter-card" data-kary-counter="${escapeHtml(counter.key)}">
+          <p class="kary-card-state">COUNTER</p>
+          <div class="kary-card-head">
+            <h3>${escapeHtml(counter.label)}</h3>
+            <span class="kary-counter-pill" data-kary-counter-value>0</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderKaryDefinitionCards() {
+      if (karyTimersGridEl) {
+        if (!karyTimerDefinitions.length) {
+          karyTimersGridEl.innerHTML = `<p class="wheel-stats-empty">Brak timerów.</p>`;
+        } else {
+          karyTimersGridEl.innerHTML = karyTimerDefinitions
+            .map((timer) => renderKaryTimerCardMarkup(timer, "kary"))
+            .join("");
+        }
+      }
+
+      if (timeryListEl) {
+        if (!karyTimerDefinitions.length) {
+          timeryListEl.innerHTML = `<p class="wheel-stats-empty">Brak timerów.</p>`;
+        } else {
+          timeryListEl.innerHTML = karyTimerDefinitions
+            .map((timer) => renderKaryTimerCardMarkup(timer, "timery"))
+            .join("");
+        }
+      }
+
+      if (karyCountersGridEl) {
+        if (!karyCounterDefinitions.length) {
+          karyCountersGridEl.innerHTML = `<p class="wheel-stats-empty">Brak liczników.</p>`;
+        } else {
+          karyCountersGridEl.innerHTML = karyCounterDefinitions
+            .map((counter) => renderKaryCounterCardMarkup(counter, "kary"))
+            .join("");
+        }
+      }
+
+      if (licznikiGridEl) {
+        if (!karyCounterDefinitions.length) {
+          licznikiGridEl.innerHTML = `<p class="wheel-stats-empty">Brak liczników.</p>`;
+        } else {
+          licznikiGridEl.innerHTML = karyCounterDefinitions
+            .map((counter) => renderKaryCounterCardMarkup(counter, "liczniki"))
+            .join("");
+        }
+      }
+
+      renderStreamObsTimeryPreview();
+      renderStreamObsLicznikiPreview();
+    }
+
     function renderKaryLiveState() {
       ensureKaryStateShape();
       const activeTimerKeys = new Set();
+      const timerCards = Array.from(document.querySelectorAll("[data-kary-timer]"));
+      const counterCards = Array.from(document.querySelectorAll("[data-kary-counter]"));
 
-      karyTimerCardEls.forEach((card) => {
+      timerCards.forEach((card) => {
         const key = String(card.dataset.karyTimer || "");
         if (!key) {
           return;
@@ -6184,7 +7043,7 @@
         }
       }
 
-      karyCounterCardEls.forEach((card) => {
+      counterCards.forEach((card) => {
         const key = String(card.dataset.karyCounter || "");
         if (!key) {
           return;
@@ -6195,6 +7054,9 @@
           valueEl.textContent = String(value);
         }
       });
+
+      renderStreamObsTimeryPreview();
+      renderStreamObsLicznikiPreview();
 
       if (lastAppliedRouteName === "stats") {
         renderKaryStats();
@@ -6236,7 +7098,7 @@
         const shouldHeartbeatStatePush =
           !hasActiveTimers || (now - karyStateLastApiHeartbeatAt >= KARY_STATE_API_HEARTBEAT_MS);
         if (shouldHeartbeatStatePush) {
-          queueKaryStateApiPush();
+          queueKaryStateApiPush("timers-only");
           karyStateLastApiHeartbeatAt = now;
         }
       } else {
@@ -6246,22 +7108,401 @@
     }
 
     function startKaryTimerTick() {
-      if (karyTimerTickId || !karyTimerDefinitions.length) {
+      if (KARY_OBS_WIDGET_MODE || karyTimerTickId || !karyTimerDefinitions.length) {
         return;
       }
       karyTimerTickId = window.setInterval(tickKaryTimers, 1000);
     }
 
+    function syncKaryTimerTickLifecycle() {
+      if (karyTimerDefinitions.length) {
+        startKaryTimerTick();
+        return;
+      }
+      if (karyTimerTickId) {
+        window.clearInterval(karyTimerTickId);
+        karyTimerTickId = null;
+      }
+    }
+
+    function setKaryDefinitionsStatus(text, type = "info") {
+      setPanelStatus(adminKaryDefsStatusEl, text, type);
+    }
+
+    function ensureUniqueDefinitionKey(baseKey, existingKeys, prefix) {
+      const cleanPrefix = String(prefix || "item").trim() || "item";
+      const normalizedBase = normalizeTimerLookupToken(baseKey) || cleanPrefix;
+      if (!existingKeys.has(normalizedBase)) {
+        return normalizedBase;
+      }
+      let index = 2;
+      while (existingKeys.has(`${normalizedBase}-${index}`)) {
+        index += 1;
+      }
+      return `${normalizedBase}-${index}`;
+    }
+
+    function resetAdminTimerDefinitionForm() {
+      editingTimerDefinitionKey = "";
+      if (!adminTimerDefFormEl) {
+        return;
+      }
+      adminTimerDefFormEl.reset();
+      const keyInput = adminTimerDefFormEl.querySelector('input[name="timerDefKey"]');
+      const baseMinutesInput = adminTimerDefFormEl.querySelector('input[name="timerDefBaseMinutes"]');
+      if (keyInput) {
+        keyInput.value = "";
+      }
+      if (baseMinutesInput) {
+        baseMinutesInput.value = "";
+      }
+    }
+
+    function resetAdminCounterDefinitionForm() {
+      editingCounterDefinitionKey = "";
+      if (!adminCounterDefFormEl) {
+        return;
+      }
+      adminCounterDefFormEl.reset();
+      const keyInput = adminCounterDefFormEl.querySelector('input[name="counterDefKey"]');
+      if (keyInput) {
+        keyInput.value = "";
+      }
+    }
+
+    function renderAdminKaryDefinitionTables() {
+      if (adminTimerDefTableBodyEl) {
+        if (!karyTimerDefinitions.length) {
+          adminTimerDefTableBodyEl.innerHTML = `
+            <tr>
+              <td colspan="4" class="admin-table-empty">Brak timerów.</td>
+            </tr>`;
+        } else {
+          adminTimerDefTableBodyEl.innerHTML = karyTimerDefinitions
+            .map((timer) => {
+              return `
+                <tr class="admin-kary-timer-def-row" data-timer-def-key="${escapeHtml(timer.key)}">
+                  <td>
+                    <button
+                      class="admin-row-btn admin-kary-def-drag-handle"
+                      type="button"
+                      data-timer-def-drag-handle="1"
+                      draggable="true"
+                      title="Przeciągnij, aby ustawić kolejność"
+                      aria-label="Przeciągnij, aby ustawić kolejność"
+                    >⇅</button>
+                  </td>
+                  <td>${escapeHtml(timer.label)}</td>
+                  <td>${Math.max(1, Math.floor(Number(timer.baseMinutes) || 30))} min</td>
+                  <td>
+                    <button class="admin-row-btn" type="button" data-timer-def-edit="${escapeHtml(timer.key)}">Edytuj</button>
+                    <button class="admin-row-btn admin-row-btn-danger" type="button" data-timer-def-remove="${escapeHtml(timer.key)}">Usuń</button>
+                  </td>
+                </tr>`;
+            })
+            .join("");
+        }
+      }
+
+      if (adminCounterDefTableBodyEl) {
+        if (!karyCounterDefinitions.length) {
+          adminCounterDefTableBodyEl.innerHTML = `
+            <tr>
+              <td colspan="3" class="admin-table-empty">Brak liczników.</td>
+            </tr>`;
+        } else {
+          adminCounterDefTableBodyEl.innerHTML = karyCounterDefinitions
+            .map((counter) => {
+              return `
+                <tr class="admin-kary-counter-def-row" data-counter-def-key="${escapeHtml(counter.key)}">
+                  <td>
+                    <button
+                      class="admin-row-btn admin-kary-def-drag-handle"
+                      type="button"
+                      data-counter-def-drag-handle="1"
+                      draggable="true"
+                      title="Przeciągnij, aby ustawić kolejność"
+                      aria-label="Przeciągnij, aby ustawić kolejność"
+                    >⇅</button>
+                  </td>
+                  <td>${escapeHtml(counter.label)}</td>
+                  <td>
+                    <button class="admin-row-btn" type="button" data-counter-def-edit="${escapeHtml(counter.key)}">Edytuj</button>
+                    <button class="admin-row-btn admin-row-btn-danger" type="button" data-counter-def-remove="${escapeHtml(counter.key)}">Usuń</button>
+                  </td>
+                </tr>`;
+            })
+            .join("");
+        }
+      }
+    }
+
+    function persistKaryDefinitions() {
+      karyTimerDefinitions = normalizeKaryTimerDefinitions(karyTimerDefinitions, DEFAULT_KARY_TIMER_DEFINITIONS);
+      karyCounterDefinitions = normalizeKaryCounterDefinitions(karyCounterDefinitions, DEFAULT_KARY_COUNTER_DEFINITIONS);
+
+      saveStorageJson(KARY_TIMER_DEFINITIONS_KEY, karyTimerDefinitions);
+      saveStorageJson(KARY_COUNTER_DEFINITIONS_KEY, karyCounterDefinitions);
+      window.dispatchEvent(
+        new CustomEvent("takuu:kary-definitions-updated", {
+          detail: {
+            timers: karyTimerDefinitions.map((timer) => ({
+              key: String(timer.key || "").trim(),
+              label: String(timer.label || "").trim()
+            }))
+          }
+        })
+      );
+
+      refreshWheelTimerLookupMap();
+      ensureKaryStateShape();
+      ensureKaryStatsShape();
+      saveKaryState();
+      saveKaryStats({ queueApi: false });
+      queueKaryStateApiPush();
+      queueKaryStatsApiPush();
+      if (!adminStateApplyingRemote) {
+        queueAdminStateApiPush();
+      }
+
+      renderKaryDefinitionCards();
+      populateKaryAdminControls();
+      renderAdminKaryDefinitionTables();
+      renderKaryLiveState();
+      if (lastAppliedRouteName === "stats") {
+        renderKaryStats();
+      }
+      syncKaryTimerTickLifecycle();
+    }
+
+    function startTimerDefinitionEdit(timerKey) {
+      const key = String(timerKey || "").trim();
+      const timer = karyTimerDefinitions.find((item) => item.key === key);
+      if (!timer || !adminTimerDefFormEl) {
+        return;
+      }
+
+      editingTimerDefinitionKey = key;
+      const keyInput = adminTimerDefFormEl.querySelector('input[name="timerDefKey"]');
+      const labelInput = adminTimerDefFormEl.querySelector('input[name="timerDefLabel"]');
+      const baseMinutesInput = adminTimerDefFormEl.querySelector('input[name="timerDefBaseMinutes"]');
+      if (keyInput) {
+        keyInput.value = key;
+      }
+      if (labelInput) {
+        labelInput.value = timer.label;
+      }
+      if (baseMinutesInput) {
+        baseMinutesInput.value = String(Math.max(1, Math.floor(Number(timer.baseMinutes) || 30)));
+      }
+      setKaryDefinitionsStatus(`Edytujesz timer: ${timer.label}`, "info");
+    }
+
+    function startCounterDefinitionEdit(counterKey) {
+      const key = String(counterKey || "").trim();
+      const counter = karyCounterDefinitions.find((item) => item.key === key);
+      if (!counter || !adminCounterDefFormEl) {
+        return;
+      }
+
+      editingCounterDefinitionKey = key;
+      const keyInput = adminCounterDefFormEl.querySelector('input[name="counterDefKey"]');
+      const labelInput = adminCounterDefFormEl.querySelector('input[name="counterDefLabel"]');
+      if (keyInput) {
+        keyInput.value = key;
+      }
+      if (labelInput) {
+        labelInput.value = counter.label;
+      }
+      setKaryDefinitionsStatus(`Edytujesz licznik: ${counter.label}`, "info");
+    }
+
+    function upsertTimerDefinitionFromForm() {
+      if (!adminTimerDefFormEl) {
+        return;
+      }
+      const formData = new FormData(adminTimerDefFormEl);
+      const editingKey = String(formData.get("timerDefKey") || editingTimerDefinitionKey || "").trim();
+      const label = String(formData.get("timerDefLabel") || "").trim();
+      const baseMinutes = Math.max(1, Math.floor(Number(formData.get("timerDefBaseMinutes")) || 30));
+      if (!label) {
+        setKaryDefinitionsStatus("Podaj nazwę timera.", "error");
+        return;
+      }
+
+      if (editingKey) {
+        const index = karyTimerDefinitions.findIndex((item) => item.key === editingKey);
+        if (index < 0) {
+          setKaryDefinitionsStatus("Nie znaleziono timera do edycji.", "error");
+          return;
+        }
+
+        const previous = karyTimerDefinitions[index];
+        karyTimerDefinitions[index] = {
+          ...previous,
+          label,
+          baseMinutes
+        };
+        persistKaryDefinitions();
+        resetAdminTimerDefinitionForm();
+        setKaryDefinitionsStatus("Zaktualizowano timer.", "success");
+        sendAdminWebhookEvent("timer_definition_update", label, {
+          timerKey: previous.key,
+          previousLabel: previous.label,
+          nextLabel: label,
+          baseMinutes
+        });
+        return;
+      }
+
+      const existingKeys = new Set(karyTimerDefinitions.map((item) => String(item.key || "").trim()).filter(Boolean));
+      const key = ensureUniqueDefinitionKey(label, existingKeys, "timer");
+      const nextTimer = {
+        key,
+        label,
+        baseMinutes
+      };
+      karyTimerDefinitions.push(nextTimer);
+      persistKaryDefinitions();
+      resetAdminTimerDefinitionForm();
+      setKaryDefinitionsStatus("Dodano nowy timer.", "success");
+      sendAdminWebhookEvent("timer_definition_add", label, {
+        timerKey: key,
+        timerLabel: label,
+        baseMinutes
+      });
+    }
+
+    function upsertCounterDefinitionFromForm() {
+      if (!adminCounterDefFormEl) {
+        return;
+      }
+      const formData = new FormData(adminCounterDefFormEl);
+      const editingKey = String(formData.get("counterDefKey") || editingCounterDefinitionKey || "").trim();
+      const label = String(formData.get("counterDefLabel") || "").trim();
+      if (!label) {
+        setKaryDefinitionsStatus("Podaj nazwę licznika.", "error");
+        return;
+      }
+
+      if (editingKey) {
+        const index = karyCounterDefinitions.findIndex((item) => item.key === editingKey);
+        if (index < 0) {
+          setKaryDefinitionsStatus("Nie znaleziono licznika do edycji.", "error");
+          return;
+        }
+
+        const previous = karyCounterDefinitions[index];
+        karyCounterDefinitions[index] = {
+          ...previous,
+          label
+        };
+        persistKaryDefinitions();
+        resetAdminCounterDefinitionForm();
+        setKaryDefinitionsStatus("Zaktualizowano licznik.", "success");
+        sendAdminWebhookEvent("counter_definition_update", label, {
+          counterKey: previous.key,
+          previousLabel: previous.label,
+          nextLabel: label
+        });
+        return;
+      }
+
+      const existingKeys = new Set(karyCounterDefinitions.map((item) => String(item.key || "").trim()).filter(Boolean));
+      const key = ensureUniqueDefinitionKey(label, existingKeys, "counter");
+      const nextCounter = {
+        key,
+        label
+      };
+      karyCounterDefinitions.push(nextCounter);
+      persistKaryDefinitions();
+      resetAdminCounterDefinitionForm();
+      setKaryDefinitionsStatus("Dodano nowy licznik.", "success");
+      sendAdminWebhookEvent("counter_definition_add", label, {
+        counterKey: key,
+        counterLabel: label
+      });
+    }
+
+    function removeTimerDefinition(timerKey) {
+      const key = String(timerKey || "").trim();
+      const removed = karyTimerDefinitions.find((item) => item.key === key) || null;
+      if (!removed) {
+        return;
+      }
+      karyTimerDefinitions = karyTimerDefinitions.filter((item) => item.key !== key);
+      if (editingTimerDefinitionKey === key) {
+        resetAdminTimerDefinitionForm();
+      }
+      persistKaryDefinitions();
+      setKaryDefinitionsStatus("Usunięto timer.", "info");
+      sendAdminWebhookEvent("timer_definition_remove", removed.label, {
+        timerKey: removed.key,
+        timerLabel: removed.label,
+        baseMinutes: Math.max(1, Math.floor(Number(removed.baseMinutes) || 30))
+      });
+    }
+
+    function removeCounterDefinition(counterKey) {
+      const key = String(counterKey || "").trim();
+      const removed = karyCounterDefinitions.find((item) => item.key === key) || null;
+      if (!removed) {
+        return;
+      }
+      karyCounterDefinitions = karyCounterDefinitions.filter((item) => item.key !== key);
+      if (editingCounterDefinitionKey === key) {
+        resetAdminCounterDefinitionForm();
+      }
+      persistKaryDefinitions();
+      setKaryDefinitionsStatus("Usunięto licznik.", "info");
+      sendAdminWebhookEvent("counter_definition_remove", removed.label, {
+        counterKey: removed.key,
+        counterLabel: removed.label
+      });
+    }
+
     function populateKaryAdminControls() {
+      const hasTimers = karyTimerDefinitions.length > 0;
+      const hasCounters = karyCounterDefinitions.length > 0;
+
       if (adminTimerSelectEl) {
-        adminTimerSelectEl.innerHTML = karyTimerDefinitions
-          .map((timer) => `<option value="${escapeHtml(timer.key)}">${escapeHtml(timer.label)}</option>`)
-          .join("");
+        if (!hasTimers) {
+          adminTimerSelectEl.innerHTML = `<option value="" selected>Brak timerów</option>`;
+          adminTimerSelectEl.disabled = true;
+        } else {
+          adminTimerSelectEl.disabled = false;
+          const previousValue = String(adminTimerSelectEl.value || "").trim();
+          adminTimerSelectEl.innerHTML = karyTimerDefinitions
+            .map((timer) => `<option value="${escapeHtml(timer.key)}">${escapeHtml(timer.label)}</option>`)
+            .join("");
+          const hasPrevious = karyTimerDefinitions.some((timer) => timer.key === previousValue);
+          adminTimerSelectEl.value = hasPrevious ? previousValue : karyTimerDefinitions[0].key;
+        }
       }
       if (adminCounterSelectEl) {
-        adminCounterSelectEl.innerHTML = karyCounterDefinitions
-          .map((counter) => `<option value="${escapeHtml(counter.key)}">${escapeHtml(counter.label)}</option>`)
-          .join("");
+        if (!hasCounters) {
+          adminCounterSelectEl.innerHTML = `<option value="" selected>Brak liczników</option>`;
+          adminCounterSelectEl.disabled = true;
+        } else {
+          adminCounterSelectEl.disabled = false;
+          const previousValue = String(adminCounterSelectEl.value || "").trim();
+          adminCounterSelectEl.innerHTML = karyCounterDefinitions
+            .map((counter) => `<option value="${escapeHtml(counter.key)}">${escapeHtml(counter.label)}</option>`)
+            .join("");
+          const hasPrevious = karyCounterDefinitions.some((counter) => counter.key === previousValue);
+          adminCounterSelectEl.value = hasPrevious ? previousValue : karyCounterDefinitions[0].key;
+        }
+      }
+
+      if (adminTimerFormEl) {
+        adminTimerFormEl.querySelectorAll("[data-timer-action]").forEach((button) => {
+          button.disabled = !hasTimers;
+        });
+      }
+      if (adminCounterFormEl) {
+        adminCounterFormEl.querySelectorAll("[data-counter-action]").forEach((button) => {
+          button.disabled = !hasCounters;
+        });
       }
       updateTimerQuickActionButtons();
     }
@@ -6307,6 +7548,14 @@
       const cleanKey = String(timerKey || "").trim();
       if (!cleanKey) {
         return fallbackMinutes;
+      }
+
+      const definitionMinutes = Math.max(
+        0,
+        Math.floor(Number(karyTimerDefinitions.find((timer) => timer.key === cleanKey)?.baseMinutes || 0))
+      );
+      if (definitionMinutes > 0) {
+        return definitionMinutes;
       }
 
       const timerLabel = getTimerLabel(cleanKey);
@@ -6484,7 +7733,9 @@
       updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
 
       saveKaryState();
-      queueKaryStateApiPush();
+      if (options.skipApiPush !== true) {
+        queueKaryStateApiPush("timers-only");
+      }
       renderKaryLiveState();
 
       const timerLabel = getTimerLabel(normalizedKey);
@@ -6531,6 +7782,7 @@
       return addTimerTimeToLiveState(timerKey, deltaSeconds, {
         silentStatus: options.silentStatus !== false,
         emitWebhook: options.emitWebhook === true,
+        skipApiPush: options.skipApiPush === true,
         webhookAction: options.webhookAction,
         source: options.source || "external"
       });
@@ -6586,6 +7838,7 @@
         options: {
           silentStatus: payload.silentStatus !== false,
           emitWebhook: payload.emitWebhook === true,
+          skipApiPush: payload.skipApiPush === true,
           webhookAction: payload.webhookAction,
           source: String(payload.source || defaultSource || "external-event")
         }
@@ -6630,6 +7883,7 @@
         return addTimerTimeFromExternal(timerKey, amount, unit, {
           silentStatus: options.silentStatus !== false,
           emitWebhook: options.emitWebhook === true,
+          skipApiPush: options.skipApiPush === true,
           webhookAction: options.webhookAction,
           source: options.source || "external-api"
         });
@@ -6679,7 +7933,7 @@
         karyLiveState.lastTickAt = Date.now();
         updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
         saveKaryState();
-        queueKaryStateApiPush();
+        queueKaryStateApiPush("timers-only");
         renderKaryLiveState();
         setKaryStatus("Timer zresetowany.", "success");
         sendAdminWebhookEvent("timer_reset", timerLabel, {
@@ -6701,7 +7955,7 @@
         karyLiveState.lastTickAt = Date.now();
         updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
         saveKaryState();
-        queueKaryStateApiPush();
+        queueKaryStateApiPush("timers-only");
         renderKaryLiveState();
         setKaryStatus(`Usunięto ${stepMinutes} min z timera.`, "success");
         sendAdminWebhookEvent("timer_remove_quick", timerLabel, {
@@ -6762,7 +8016,7 @@
       karyLiveState.lastTickAt = Date.now();
       updateKaryStatsFromStateTransition(previousSnapshot, getKaryStateSnapshot(), { render: false });
       saveKaryState();
-      queueKaryStateApiPush();
+      queueKaryStateApiPush("timers-only");
       renderKaryLiveState();
       if (normalizedAction === "set") {
         setKaryStatus("Ustawiono czas timera.", "success");
@@ -6954,6 +8208,7 @@
         renderAdminMembersTable();
         renderAdminAccountsTable();
         renderAdminKaryCennikTable();
+        renderAdminKaryDefinitionTables();
         setActiveAdminTab(showObsOverlay ? "streamobs" : activeAdminTab);
       }
 
@@ -6969,11 +8224,19 @@
 
       if (showTimery) {
         loadTimeryConfig();
+        if (!timeryConfigState.panelOpen) {
+          timeryConfigState.panelOpen = true;
+          saveTimeryConfig();
+        }
         applyTimeryConfig();
       }
 
       if (showLiczniki) {
         loadLicznikiConfig();
+        if (!licznikiConfigState.panelOpen) {
+          licznikiConfigState.panelOpen = true;
+          saveLicznikiConfig();
+        }
         applyLicznikiConfig();
       }
 
@@ -9445,7 +10708,9 @@
         void updateKickFollowersBadge(true);
         return;
       }
-      stopWheelStatsLiveUpdates();
+      if (lastAppliedRouteName !== "stats") {
+        stopWheelStatsLiveUpdates();
+      }
     });
     window.addEventListener("focus", () => {
       if (document.hidden) {
@@ -9494,14 +10759,19 @@
     renderPublicKaryCennik();
     renderAdminKaryCennikTable();
     resetAdminCennikForm();
+    resetAdminTimerDefinitionForm();
+    resetAdminCounterDefinitionForm();
+    renderKaryDefinitionCards();
+    renderAdminKaryDefinitionTables();
     populateKaryAdminControls();
     applyTimeryConfig();
     applyStreamObsTimeryConfig();
     applyStreamObsLicznikiConfig();
+    setActiveStreamObsSubtab(OBS_OVERLAY_MODE ? "wheel" : activeStreamObsSubtab);
     applyLicznikiConfig();
     renderKaryLiveState();
     renderKaryStats();
-    startKaryTimerTick();
+    syncKaryTimerTickLifecycle();
     renderCustomMembersCards();
     startFriendsLivePolling();
     consumeKickOAuthResultFromUrl();
@@ -9509,7 +10779,7 @@
     startKickFollowersPolling();
     renderAdminMembersTable();
     renderAdminAccountsTable();
-    setActiveAdminTab(activeAdminTab);
+    setActiveAdminTab(OBS_OVERLAY_MODE ? "streamobs" : activeAdminTab);
 
     if (adminTabsWrapEl) {
       adminTabsWrapEl.addEventListener("click", (event) => {
@@ -9518,6 +10788,17 @@
           return;
         }
         setActiveAdminTab(button.dataset.tab || "members");
+      });
+    }
+
+    if (streamObsSubtabsEl) {
+      streamObsSubtabsEl.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-streamobs-subtab]");
+        if (!button) {
+          return;
+        }
+        const nextSubtab = normalizeStreamObsSubtab(button.dataset.streamobsSubtab || "");
+        setActiveStreamObsSubtab(nextSubtab);
       });
     }
 
@@ -9813,6 +11094,242 @@
         const action = String(actionButton.dataset.counterAction || "");
         const formData = new FormData(adminCounterFormEl);
         applyCounterAction(action, formData);
+      });
+    }
+
+    if (adminTimerDefFormEl) {
+      adminTimerDefFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        upsertTimerDefinitionFromForm();
+      });
+    }
+
+    if (adminCounterDefFormEl) {
+      adminCounterDefFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        upsertCounterDefinitionFromForm();
+      });
+    }
+
+    if (adminTimerDefCancelBtnEl) {
+      adminTimerDefCancelBtnEl.addEventListener("click", () => {
+        resetAdminTimerDefinitionForm();
+        setKaryDefinitionsStatus("Wyczyszczono formularz timera.", "info");
+      });
+    }
+
+    if (adminCounterDefCancelBtnEl) {
+      adminCounterDefCancelBtnEl.addEventListener("click", () => {
+        resetAdminCounterDefinitionForm();
+        setKaryDefinitionsStatus("Wyczyszczono formularz licznika.", "info");
+      });
+    }
+
+    if (adminTimerDefTableBodyEl) {
+      adminTimerDefTableBodyEl.addEventListener("click", (event) => {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target) {
+          return;
+        }
+
+        const editButton = target.closest("[data-timer-def-edit]");
+        if (editButton) {
+          startTimerDefinitionEdit(String(editButton.getAttribute("data-timer-def-edit") || ""));
+          return;
+        }
+
+        const removeButton = target.closest("[data-timer-def-remove]");
+        if (!removeButton) {
+          return;
+        }
+        removeTimerDefinition(String(removeButton.getAttribute("data-timer-def-remove") || ""));
+      });
+
+      adminTimerDefTableBodyEl.addEventListener("dragstart", (event) => {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        const handle = target ? target.closest("[data-timer-def-drag-handle]") : null;
+        if (!handle) {
+          event.preventDefault();
+          return;
+        }
+
+        const row = handle.closest("tr.admin-kary-timer-def-row[data-timer-def-key]");
+        if (!row) {
+          event.preventDefault();
+          return;
+        }
+
+        const timerKey = String(row.dataset.timerDefKey || "").trim();
+        if (!timerKey) {
+          event.preventDefault();
+          return;
+        }
+
+        draggingTimerDefinitionKey = timerKey;
+        draggingTimerDefinitionRow = row;
+        draggingTimerDefinitionRow.classList.add("is-dragging");
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", timerKey);
+        }
+      });
+
+      adminTimerDefTableBodyEl.addEventListener("dragover", (event) => {
+        if (!draggingTimerDefinitionRow || !draggingTimerDefinitionKey) {
+          return;
+        }
+        event.preventDefault();
+
+        const dropTarget = findDropTargetTimerDefinitionRow(event.clientY);
+        clearTimerDefinitionDragTargetRows();
+
+        if (!dropTarget) {
+          adminTimerDefTableBodyEl.appendChild(draggingTimerDefinitionRow);
+          return;
+        }
+
+        dropTarget.classList.add("is-drag-target");
+        if (dropTarget !== draggingTimerDefinitionRow) {
+          adminTimerDefTableBodyEl.insertBefore(draggingTimerDefinitionRow, dropTarget);
+        }
+      });
+
+      adminTimerDefTableBodyEl.addEventListener("drop", (event) => {
+        if (!draggingTimerDefinitionRow || !draggingTimerDefinitionKey) {
+          return;
+        }
+        event.preventDefault();
+
+        clearTimerDefinitionDragTargetRows();
+        draggingTimerDefinitionRow.classList.remove("is-dragging");
+
+        const changed = applyTimerDefinitionOrderFromDom();
+        draggingTimerDefinitionRow = null;
+        draggingTimerDefinitionKey = "";
+
+        if (!changed) {
+          return;
+        }
+
+        persistKaryDefinitions();
+        setKaryDefinitionsStatus("Zmieniono kolejność timerów.", "success");
+        sendAdminWebhookEvent("timer_definition_reorder", "Timery", {
+          order: karyTimerDefinitions.map((item) => String(item.key || "").trim()).filter(Boolean)
+        });
+      });
+
+      adminTimerDefTableBodyEl.addEventListener("dragend", () => {
+        clearTimerDefinitionDragTargetRows();
+        if (draggingTimerDefinitionRow) {
+          draggingTimerDefinitionRow.classList.remove("is-dragging");
+        }
+        draggingTimerDefinitionRow = null;
+        draggingTimerDefinitionKey = "";
+      });
+    }
+
+    if (adminCounterDefTableBodyEl) {
+      adminCounterDefTableBodyEl.addEventListener("click", (event) => {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target) {
+          return;
+        }
+
+        const editButton = target.closest("[data-counter-def-edit]");
+        if (editButton) {
+          startCounterDefinitionEdit(String(editButton.getAttribute("data-counter-def-edit") || ""));
+          return;
+        }
+
+        const removeButton = target.closest("[data-counter-def-remove]");
+        if (!removeButton) {
+          return;
+        }
+        removeCounterDefinition(String(removeButton.getAttribute("data-counter-def-remove") || ""));
+      });
+
+      adminCounterDefTableBodyEl.addEventListener("dragstart", (event) => {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        const handle = target ? target.closest("[data-counter-def-drag-handle]") : null;
+        if (!handle) {
+          event.preventDefault();
+          return;
+        }
+
+        const row = handle.closest("tr.admin-kary-counter-def-row[data-counter-def-key]");
+        if (!row) {
+          event.preventDefault();
+          return;
+        }
+
+        const counterKey = String(row.dataset.counterDefKey || "").trim();
+        if (!counterKey) {
+          event.preventDefault();
+          return;
+        }
+
+        draggingCounterDefinitionKey = counterKey;
+        draggingCounterDefinitionRow = row;
+        draggingCounterDefinitionRow.classList.add("is-dragging");
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", counterKey);
+        }
+      });
+
+      adminCounterDefTableBodyEl.addEventListener("dragover", (event) => {
+        if (!draggingCounterDefinitionRow || !draggingCounterDefinitionKey) {
+          return;
+        }
+        event.preventDefault();
+
+        const dropTarget = findDropTargetCounterDefinitionRow(event.clientY);
+        clearCounterDefinitionDragTargetRows();
+
+        if (!dropTarget) {
+          adminCounterDefTableBodyEl.appendChild(draggingCounterDefinitionRow);
+          return;
+        }
+
+        dropTarget.classList.add("is-drag-target");
+        if (dropTarget !== draggingCounterDefinitionRow) {
+          adminCounterDefTableBodyEl.insertBefore(draggingCounterDefinitionRow, dropTarget);
+        }
+      });
+
+      adminCounterDefTableBodyEl.addEventListener("drop", (event) => {
+        if (!draggingCounterDefinitionRow || !draggingCounterDefinitionKey) {
+          return;
+        }
+        event.preventDefault();
+
+        clearCounterDefinitionDragTargetRows();
+        draggingCounterDefinitionRow.classList.remove("is-dragging");
+
+        const changed = applyCounterDefinitionOrderFromDom();
+        draggingCounterDefinitionRow = null;
+        draggingCounterDefinitionKey = "";
+
+        if (!changed) {
+          return;
+        }
+
+        persistKaryDefinitions();
+        setKaryDefinitionsStatus("Zmieniono kolejność liczników.", "success");
+        sendAdminWebhookEvent("counter_definition_reorder", "Liczniki", {
+          order: karyCounterDefinitions.map((item) => String(item.key || "").trim()).filter(Boolean)
+        });
+      });
+
+      adminCounterDefTableBodyEl.addEventListener("dragend", () => {
+        clearCounterDefinitionDragTargetRows();
+        if (draggingCounterDefinitionRow) {
+          draggingCounterDefinitionRow.classList.remove("is-dragging");
+        }
+        draggingCounterDefinitionRow = null;
+        draggingCounterDefinitionKey = "";
       });
     }
 
@@ -10462,12 +11979,8 @@
 
     if (streamObsTimeryConfigToggleEl) {
       streamObsTimeryConfigToggleEl.addEventListener("click", () => {
-        streamObsTimeryConfigState.panelOpen = !streamObsTimeryConfigState.panelOpen;
-        saveStreamObsTimeryConfig();
+        streamObsTimeryConfigState.panelOpen = true;
         applyStreamObsTimeryConfig();
-        sendAdminWebhookEvent("streamobs_timer_config_toggle", "StreamOBS - Timery OBS", {
-          panelOpen: streamObsTimeryConfigState.panelOpen
-        });
       });
     }
 
@@ -10484,18 +11997,25 @@
     }
 
     if (streamObsTimeryColorInputEl) {
-      streamObsTimeryColorInputEl.addEventListener("input", () => {
+      const applyStreamObsTimeryColorInput = () => {
         const color = String(streamObsTimeryColorInputEl.value || "").trim();
         if (!/^#[\da-f]{6}$/i.test(color)) {
-          return;
+          return "";
         }
-        streamObsTimeryConfigState.color = color;
-        saveStreamObsTimeryConfig();
-        applyStreamObsTimeryConfig();
+        if (streamObsTimeryConfigState.color !== color) {
+          streamObsTimeryConfigState.color = color;
+          saveStreamObsTimeryConfig();
+          applyStreamObsTimeryConfig();
+        }
+        return color;
+      };
+
+      streamObsTimeryColorInputEl.addEventListener("input", () => {
+        applyStreamObsTimeryColorInput();
       });
       streamObsTimeryColorInputEl.addEventListener("change", () => {
-        const color = String(streamObsTimeryColorInputEl.value || "").trim();
-        if (!/^#[\da-f]{6}$/i.test(color)) {
+        const color = applyStreamObsTimeryColorInput();
+        if (!color) {
           return;
         }
         sendAdminWebhookEvent("streamobs_timer_color_change", "StreamOBS - Timery OBS", {
@@ -10505,18 +12025,25 @@
     }
 
     if (streamObsTimeryProgressColorInputEl) {
-      streamObsTimeryProgressColorInputEl.addEventListener("input", () => {
+      const applyStreamObsTimeryProgressColorInput = () => {
         const color = String(streamObsTimeryProgressColorInputEl.value || "").trim();
         if (!/^#[\da-f]{6}$/i.test(color)) {
-          return;
+          return "";
         }
-        streamObsTimeryConfigState.progressColor = color;
-        saveStreamObsTimeryConfig();
-        applyStreamObsTimeryConfig();
+        if (streamObsTimeryConfigState.progressColor !== color) {
+          streamObsTimeryConfigState.progressColor = color;
+          saveStreamObsTimeryConfig();
+          applyStreamObsTimeryConfig();
+        }
+        return color;
+      };
+
+      streamObsTimeryProgressColorInputEl.addEventListener("input", () => {
+        applyStreamObsTimeryProgressColorInput();
       });
       streamObsTimeryProgressColorInputEl.addEventListener("change", () => {
-        const color = String(streamObsTimeryProgressColorInputEl.value || "").trim();
-        if (!/^#[\da-f]{6}$/i.test(color)) {
+        const color = applyStreamObsTimeryProgressColorInput();
+        if (!color) {
           return;
         }
         sendAdminWebhookEvent("streamobs_timer_progress_color_change", "StreamOBS - Timery OBS", {
@@ -10527,12 +12054,8 @@
 
     if (streamObsLicznikiConfigToggleEl) {
       streamObsLicznikiConfigToggleEl.addEventListener("click", () => {
-        streamObsLicznikiConfigState.panelOpen = !streamObsLicznikiConfigState.panelOpen;
-        saveStreamObsLicznikiConfig();
+        streamObsLicznikiConfigState.panelOpen = true;
         applyStreamObsLicznikiConfig();
-        sendAdminWebhookEvent("streamobs_counter_config_toggle", "StreamOBS - Liczniki OBS", {
-          panelOpen: streamObsLicznikiConfigState.panelOpen
-        });
       });
     }
 
@@ -10549,18 +12072,25 @@
     }
 
     if (streamObsLicznikiColorInputEl) {
-      streamObsLicznikiColorInputEl.addEventListener("input", () => {
+      const applyStreamObsLicznikiColorInput = () => {
         const color = String(streamObsLicznikiColorInputEl.value || "").trim();
         if (!/^#[\da-f]{6}$/i.test(color)) {
-          return;
+          return "";
         }
-        streamObsLicznikiConfigState.color = color;
-        saveStreamObsLicznikiConfig();
-        applyStreamObsLicznikiConfig();
+        if (streamObsLicznikiConfigState.color !== color) {
+          streamObsLicznikiConfigState.color = color;
+          saveStreamObsLicznikiConfig();
+          applyStreamObsLicznikiConfig();
+        }
+        return color;
+      };
+
+      streamObsLicznikiColorInputEl.addEventListener("input", () => {
+        applyStreamObsLicznikiColorInput();
       });
       streamObsLicznikiColorInputEl.addEventListener("change", () => {
-        const color = String(streamObsLicznikiColorInputEl.value || "").trim();
-        if (!/^#[\da-f]{6}$/i.test(color)) {
+        const color = applyStreamObsLicznikiColorInput();
+        if (!color) {
           return;
         }
         sendAdminWebhookEvent("streamobs_counter_color_change", "StreamOBS - Liczniki OBS", {
@@ -10635,6 +12165,14 @@
     });
     window.addEventListener("pagehide", () => {
       saveReloadSourcePath(window.location.pathname);
+      if (karyStateChannel) {
+        try {
+          karyStateChannel.close();
+        } catch (_error) {
+          // Ignore channel close failures.
+        }
+        karyStateChannel = null;
+      }
     });
 
     handleDiscordOAuthCallback().finally(() => {
@@ -10770,9 +12308,12 @@
         var isGrid = layout === "grid";
         var isCompact = layout === "compact";
         var bgColor = /^#[\da-f]{6}$/i.test(String(config.bgColor || "")) ? String(config.bgColor) : "#101420";
+        var panelOpen = config.panelOpen !== false;
         var showTitle = config.showTitle !== false;
         var showProgress = config.showProgress !== false;
         var showStatus = config.showStatus !== false;
+        var configPanel = document.getElementById("timeryConfigPanel");
+        var configBtn = document.getElementById("timeryConfigBtn");
 
         panel.classList.toggle("timery-layout-grid", isGrid);
         panel.classList.toggle("timery-layout-compact", isCompact);
@@ -10780,6 +12321,12 @@
         panel.classList.toggle("timery-hide-progress", !showProgress);
         panel.classList.toggle("timery-hide-status", !showStatus);
         panel.style.setProperty("--timery-card-bg", bgColor);
+        if (configPanel) {
+          configPanel.hidden = !panelOpen;
+        }
+        if (configBtn) {
+          configBtn.textContent = panelOpen ? "Ukryj konfigurację" : "Konfiguracja";
+        }
       }
 
       function applyLicznikiConfigFallback(config) {
@@ -10791,9 +12338,12 @@
         var isCompact = layout === "compact";
         var isGrid = !isList && !isCompact;
         var bgColor = /^#[\da-f]{6}$/i.test(String(config.bgColor || "")) ? String(config.bgColor) : "#101420";
+        var panelOpen = config.panelOpen !== false;
         var showTitle = config.showTitle !== false;
         var showStatus = config.showStatus !== false;
         var showValue = config.showValue !== false;
+        var configPanel = document.getElementById("licznikiConfigPanel");
+        var configBtn = document.getElementById("licznikiConfigBtn");
 
         panel.classList.toggle("liczniki-layout-list", isList);
         panel.classList.toggle("liczniki-layout-grid", isGrid);
@@ -10802,12 +12352,18 @@
         panel.classList.toggle("liczniki-hide-status", !showStatus);
         panel.classList.toggle("liczniki-hide-value", !showValue);
         panel.style.setProperty("--liczniki-card-bg", bgColor);
+        if (configPanel) {
+          configPanel.hidden = !panelOpen;
+        }
+        if (configBtn) {
+          configBtn.textContent = panelOpen ? "Ukryj konfigurację" : "Konfiguracja";
+        }
       }
 
       function bindTimeryConfigControlsFallback() {
         var storageKey = "takuu_timery_view_config";
         var defaultConfig = {
-          panelOpen: false,
+          panelOpen: true,
           layout: "list",
           bgColor: "#101420",
           showTitle: true,
@@ -10873,7 +12429,7 @@
       function bindLicznikiConfigControlsFallback() {
         var storageKey = "takuu_liczniki_view_config";
         var defaultConfig = {
-          panelOpen: false,
+          panelOpen: true,
           layout: "grid",
           bgColor: "#101420",
           showTitle: true,
@@ -11553,7 +13109,7 @@
         setVisible(friends, route === "home");
 
         if (isObsOverlay) {
-          var tabsToHide = ["adminMembersTab", "adminKaryTab", "adminBindingsTab", "adminAccountsTab"];
+          var tabsToHide = ["adminMembersTab", "adminKaryTab", "adminCennikTab", "adminBindingsTab", "adminAccountsTab"];
           tabsToHide.forEach(function (id) {
             var tab = document.getElementById(id);
             if (!tab) return;
@@ -11568,6 +13124,25 @@
             if (!active) {
               button.hidden = true;
             }
+          });
+
+          var streamObsSubtabButtons = document.querySelectorAll("[data-streamobs-subtab]");
+          streamObsSubtabButtons.forEach(function (button) {
+            var subtabName = String(button.getAttribute("data-streamobs-subtab") || "").trim().toLowerCase();
+            var isWheelSubtab = subtabName === "wheel";
+            button.classList.toggle("is-active", isWheelSubtab);
+            button.setAttribute("aria-selected", isWheelSubtab ? "true" : "false");
+            if (!isWheelSubtab) {
+              button.hidden = true;
+            }
+          });
+
+          var streamObsSubtabPanels = document.querySelectorAll("[data-streamobs-subtab-panel]");
+          streamObsSubtabPanels.forEach(function (panel) {
+            var panelName = String(panel.getAttribute("data-streamobs-subtab-panel") || "").trim().toLowerCase();
+            var isWheelPanel = panelName === "wheel";
+            panel.hidden = !isWheelPanel;
+            panel.classList.toggle("is-active", isWheelPanel);
           });
         }
 

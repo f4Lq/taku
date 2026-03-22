@@ -18,7 +18,20 @@ function normalizeWinnerSyncPayload(rawPayload, fallbackTime = Date.now(), fallb
 
   const timestamp = Math.max(1, getSafeInt(source.timestamp ?? source.time, fallbackTime));
   const sourceId = normalizeString(source.sourceId);
+  const timerCandidates = [];
+  if (Array.isArray(source.timerKeys)) {
+    source.timerKeys.forEach((entry) => {
+      const normalized = normalizeString(entry);
+      if (normalized) {
+        timerCandidates.push(normalized);
+      }
+    });
+  }
   const timerKey = normalizeString(source.timerKey ?? source.timer);
+  if (timerKey) {
+    timerCandidates.push(timerKey);
+  }
+  const timerKeys = Array.from(new Set(timerCandidates));
   const minutes = Math.max(0, getSafeInt(source.minutes, 0));
 
   let eventId = normalizeString(source.eventId ?? source.id ?? fallbackEventId);
@@ -31,7 +44,8 @@ function normalizeWinnerSyncPayload(rawPayload, fallbackTime = Date.now(), fallb
     eventId,
     sourceId,
     winnerName,
-    timerKey,
+    timerKey: timerKeys.length ? timerKeys[0] : "",
+    timerKeys,
     minutes,
     timestamp,
   };
@@ -48,6 +62,13 @@ function normalizeSyncPayload(rawPayload, fallbackTime = Date.now(), fallbackEve
   }
 
   return normalizeWinnerSyncPayload(rawPayload, fallbackTime, fallbackEventId);
+}
+
+function isConfigSyncPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  return normalizeString(payload.type).toLowerCase() === "config";
 }
 
 function parseStoredEvent(rawItem) {
@@ -123,9 +144,20 @@ module.exports = async function handler(req, res) {
         .sort((a, b) => a.id - b.id);
 
       const filtered = allEvents.filter((eventItem) => eventItem.id > afterId);
-      const events = filtered.slice(0, limit);
+      const events =
+        afterId <= 0
+          ? filtered.slice(Math.max(0, filtered.length - limit))
+          : filtered.slice(0, limit);
       const lastId = Math.max(0, getSafeInt(rawLastId, 0));
       const lastReturnedId = events.length > 0 ? events[events.length - 1].id : afterId;
+      let latestConfig = null;
+      for (let i = allEvents.length - 1; i >= 0; i -= 1) {
+        const payload = allEvents[i] && typeof allEvents[i] === "object" ? allEvents[i].payload : null;
+        if (isConfigSyncPayload(payload)) {
+          latestConfig = payload;
+          break;
+        }
+      }
 
       sendJson(res, {
         ok: true,
@@ -134,6 +166,7 @@ module.exports = async function handler(req, res) {
         nextAfter: Math.max(0, lastReturnedId),
         hasMore: filtered.length > events.length || lastId > lastReturnedId,
         lastId,
+        latestConfig,
         serverTime: Date.now(),
       });
       return;
