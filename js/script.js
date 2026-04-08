@@ -203,6 +203,7 @@
   let adminStateSyncPending = false;
   let adminStateRemoteUpdatedAt = 0;
   let adminStateRemoteCache = null;
+  let adminStateLastSyncError = "";
   let editingMemberId = "";
   let editingLicznikId = "";
   let activeAdminTab = "members";
@@ -402,6 +403,48 @@
     adminLicznikStatusEl.classList.toggle("is-success", type === "success");
   }
 
+  function setActiveAdminSyncStatus(text, type = "info") {
+    if (activeAdminTab === "members") {
+      setAdminMemberStatus(text, type);
+      return;
+    }
+    if (activeAdminTab === "liczniki") {
+      setAdminLicznikStatus(text, type);
+      return;
+    }
+    setAdminAccountStatus(text, type);
+  }
+
+  function normalizeAdminSyncErrorMessage(rawValue) {
+    const text = String(rawValue || "").trim();
+    if (!text) {
+      return "nieznany błąd synchronizacji";
+    }
+    return text
+      .replace(/^ADMIN_STATE_[A-Z_0-9]+:\s*/i, "")
+      .replace(/^KV_[A-Z_0-9]+:\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function notifyAdminStateSyncError(rawError) {
+    const message = normalizeAdminSyncErrorMessage(rawError);
+    adminStateLastSyncError = message;
+    if (getRouteFromLocation() === "admin") {
+      setActiveAdminSyncStatus(`Błąd zapisu do Redis: ${message}`, "error");
+    }
+  }
+
+  function notifyAdminStateSyncSuccess() {
+    if (!adminStateLastSyncError) {
+      return;
+    }
+    adminStateLastSyncError = "";
+    if (getRouteFromLocation() === "admin") {
+      setActiveAdminSyncStatus("Zmiany zapisane w Redis.", "success");
+    }
+  }
+
   function sanitizeMemberUrl(rawValue) {
     const input = String(rawValue || "").trim();
     if (!input) {
@@ -537,6 +580,7 @@
   function saveCciMembers() {
     saveStorageJsonFallback(CCI_MEMBERS_KEY, cciMembers);
     scheduleAdminStateSync();
+    void pushAdminStateToRemote();
   }
 
   function normalizeLicznikMode(modeValue) {
@@ -677,6 +721,7 @@
   function saveLicznikiItems() {
     saveStorageJsonFallback(LICZNIKI_ITEMS_KEY, licznikiItems);
     scheduleAdminStateSync();
+    void pushAdminStateToRemote();
   }
 
   function formatLicznikModeLabel(modeValue) {
@@ -2524,11 +2569,22 @@
         "ADMIN_STATE_POST_TIMEOUT"
       );
 
-      if (!response.ok) {
-        throw new Error(`ADMIN_STATE_POST_HTTP_${response.status}`);
+      const rawText = await response.text();
+      let payload = null;
+      try {
+        payload = rawText ? JSON.parse(rawText) : null;
+      } catch (_error) {
+        payload = null;
       }
 
-      const payload = await response.json();
+      if (!response.ok) {
+        const errorText =
+          String(payload?.error || "").trim() ||
+          (rawText ? String(rawText).trim().slice(0, 220) : "") ||
+          `HTTP_${response.status}`;
+        throw new Error(errorText);
+      }
+
       if (!payload || payload.ok !== true) {
         throw new Error(String(payload?.error || "ADMIN_STATE_POST_INVALID"));
       }
@@ -2541,8 +2597,10 @@
       if (updatedAt > 0) {
         adminStateRemoteUpdatedAt = Math.max(adminStateRemoteUpdatedAt, updatedAt);
       }
+      notifyAdminStateSyncSuccess();
       return true;
-    } catch (_error) {
+    } catch (error) {
+      notifyAdminStateSyncError(error?.message || error);
       return false;
     } finally {
       adminStateSyncInFlight = false;
@@ -2749,6 +2807,7 @@
     adminAccounts = normalizeAdminAccounts(adminAccounts);
     saveStorageJsonFallback(ADMIN_ACCOUNTS_KEY, adminAccounts);
     scheduleAdminStateSync();
+    void pushAdminStateToRemote();
   }
 
   function getInlineAdminAccountsFallback() {

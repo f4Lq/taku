@@ -292,26 +292,27 @@ async function runPipeline(config, commands) {
   });
 }
 
-function createRedisClient() {
+function createRedisClient(options = {}) {
+  const allowMemoryFallback = options == null || options.allowMemoryFallback !== false;
   const config = resolveRedisConfig();
   if (!config) {
-    return createMemoryRedisClient();
+    return allowMemoryFallback ? createMemoryRedisClient() : null;
   }
 
-  const memoryFallback = createMemoryRedisClient();
+  const memoryFallback = allowMemoryFallback ? createMemoryRedisClient() : null;
   let fallbackEnabled = false;
   const shouldFallbackToMemory = (error) => String(error?.message || "").toUpperCase().startsWith("KV_");
 
   return {
-    __kind: "upstash",
+    __kind: allowMemoryFallback ? "upstash" : "upstash-strict",
     async command(...parts) {
-      if (fallbackEnabled) {
+      if (fallbackEnabled && memoryFallback) {
         return memoryFallback.command(...parts);
       }
       try {
         return await runCommand(config, parts);
       } catch (error) {
-        if (shouldFallbackToMemory(error)) {
+        if (allowMemoryFallback && memoryFallback && shouldFallbackToMemory(error)) {
           fallbackEnabled = true;
           return memoryFallback.command(...parts);
         }
@@ -319,13 +320,13 @@ function createRedisClient() {
       }
     },
     async pipeline(commands) {
-      if (fallbackEnabled) {
+      if (fallbackEnabled && memoryFallback) {
         return memoryFallback.pipeline(commands);
       }
       try {
         return await runPipeline(config, commands);
       } catch (error) {
-        if (shouldFallbackToMemory(error)) {
+        if (allowMemoryFallback && memoryFallback && shouldFallbackToMemory(error)) {
           fallbackEnabled = true;
           return memoryFallback.pipeline(commands);
         }

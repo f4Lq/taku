@@ -17,7 +17,13 @@ function sanitizeScopeSegment(value) {
 function resolveAdminStateScope(url, requestHeaders = {}) {
   const requestHost = String(requestHeaders['x-forwarded-host'] || requestHeaders.host || '').trim();
   const urlHost = String(url?.hostname || '').trim();
-  const hostScope = sanitizeScopeSegment(urlHost || requestHost || 'default');
+  let hostScope = sanitizeScopeSegment(urlHost || requestHost || 'default');
+  if (hostScope.startsWith('www.')) {
+    hostScope = hostScope.slice(4);
+  }
+  if (hostScope === '127.0.0.1' || hostScope === '::1') {
+    hostScope = 'localhost';
+  }
   return hostScope || 'default';
 }
 
@@ -135,7 +141,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const redis = createRedisClient();
+  const redis = createRedisClient({ allowMemoryFallback: false });
   if (!redis) {
     sendJson(
       res,
@@ -143,6 +149,7 @@ module.exports = async function handler(req, res) {
         ok: false,
         error: 'MISSING_KV_REST_ENV',
         requiredEnv: ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+        optionalAliases: ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
       },
       500
     );
