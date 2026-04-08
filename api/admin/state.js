@@ -1,0 +1,184 @@
+const { createRedisClient } = require("../_lib/redis.js");
+const { getRequestUrl, getSafeInt, readJsonBody, sendJson, sendOptions } = require("../_lib/http.js");
+
+const ADMIN_STATE_DATA_KEY_PREFIX = 'admin:state:data';
+const ADMIN_STATE_UPDATED_AT_KEY_PREFIX = 'admin:state:updated_at';
+
+function sanitizeScopeSegment(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, '')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120);
+}
+
+function resolveAdminStateScope(url, requestHeaders = {}) {
+  const requestHost = String(requestHeaders['x-forwarded-host'] || requestHeaders.host || '').trim();
+  const urlHost = String(url?.hostname || '').trim();
+  const hostScope = sanitizeScopeSegment(urlHost || requestHost || 'default');
+  return hostScope || 'default';
+}
+
+function buildScopedKey(prefix, scope) {
+  const safePrefix = String(prefix || '').trim() || 'admin:state';
+  const safeScope = sanitizeScopeSegment(scope || 'default') || 'default';
+  return `${safePrefix}:${safeScope}`;
+}
+function toSafeJsonValue(value, fallback) {
+  try {
+    if (value == null) {
+      return fallback;
+    }
+    return JSON.parse(JSON.stringify(value));
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+}
+
+function normalizeAdminState(rawState) {
+  const source =
+    rawState && typeof rawState === 'object' && !Array.isArray(rawState)
+      ? rawState
+      : {};
+
+  return {
+    accounts: Array.isArray(source.accounts) ? toSafeJsonValue(source.accounts, []) : [],
+    baseMemberOverrides: toSafeJsonValue(source.baseMemberOverrides, {}),
+    customMembers: Array.isArray(source.customMembers) ? toSafeJsonValue(source.customMembers, []) : [],
+    membersOrder: normalizeStringList(source.membersOrder),
+    karyTimerDefinitions: Array.isArray(source.karyTimerDefinitions) ? toSafeJsonValue(source.karyTimerDefinitions, []) : [],
+    karyCounterDefinitions: Array.isArray(source.karyCounterDefinitions) ? toSafeJsonValue(source.karyCounterDefinitions, []) : [],
+    karyCennikItems: Array.isArray(source.karyCennikItems) ? toSafeJsonValue(source.karyCennikItems, []) : [],
+    timeryConfig: toSafeJsonValue(source.timeryConfig, {}),
+    licznikiConfig: toSafeJsonValue(source.licznikiConfig, {}),
+  };
+}
+
+function parseStoredState(rawValue) {
+  const text = String(rawValue ?? '').trim();
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return normalizeAdminState(JSON.parse(text));
+  } catch (_error) {
+    return null;
+  }
+}
+
+module.exports = async function handler(req, res) {
+  const method = String(req.method || 'GET').toUpperCase();
+  const url = getRequestUrl(req);
+  const scope = resolveAdminStateScope(url, req && req.headers ? req.headers : {});
+  const ADMIN_STATE_DATA_KEY = buildScopedKey(ADMIN_STATE_DATA_KEY_PREFIX, scope);
+  const ADMIN_STATE_UPDATED_AT_KEY = buildScopedKey(ADMIN_STATE_UPDATED_AT_KEY_PREFIX, scope);
+  if (method === 'OPTIONS') {
+    sendOptions(res);
+    return;
+  }
+  if (method !== 'GET' && method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST, OPTIONS');
+    sendJson(res, { ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
+    return;
+  }
+
+  const redis = createRedisClient();
+  if (!redis) {
+    sendJson(
+      res,
+      {
+        ok: false,
+        error: 'MISSING_KV_REST_ENV',
+        requiredEnv: ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+      },
+      500
+    );
+    return;
+  }
+
+  try {
+    if (method === 'GET') {
+      const afterUpdatedAt = Math.max(0, getSafeInt(url.searchParams.get('after'), 0));
+
+      const [rawState, rawUpdatedAt] = await redis.pipeline([
+        ['GET', ADMIN_STATE_DATA_KEY],
+        ['GET', ADMIN_STATE_UPDATED_AT_KEY],
+      ]);
+      const state = parseStoredState(rawState);
+      const updatedAt = Math.max(0, getSafeInt(rawUpdatedAt, 0));
+
+      if (afterUpdatedAt > 0 && updatedAt > 0 && updatedAt <= afterUpdatedAt) {
+        sendJson(res, {
+          ok: true,
+          changed: false,
+          updatedAt,
+          state: null,
+          serverTime: Date.now(),
+          storage: 'redis',
+          scope,
+        });
+        return;
+      }
+
+      sendJson(res, {
+        ok: true,
+        changed: Boolean(state),
+        updatedAt,
+        state,
+        serverTime: Date.now(),
+        storage: 'redis',
+        scope,
+      });
+      return;
+    }
+
+    const payload = await readJsonBody(req);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      sendJson(res, { ok: false, error: 'INVALID_JSON' }, 400);
+      return;
+    }
+
+    const action = String(payload.action || 'set').trim().toLowerCase();
+    if (action !== 'set' && action !== 'replace') {
+      sendJson(res, { ok: false, error: 'INVALID_ACTION' }, 400);
+      return;
+    }
+
+    const now = Date.now();
+    const nextState = normalizeAdminState(payload.state);
+
+    await redis.pipeline([
+      ['SET', ADMIN_STATE_DATA_KEY, JSON.stringify(nextState)],
+      ['SET', ADMIN_STATE_UPDATED_AT_KEY, now],
+    ]);
+
+    sendJson(res, {
+      ok: true,
+      updatedAt: now,
+      state: nextState,
+      storage: 'redis',
+      scope,
+    });
+  } catch (error) {
+    sendJson(
+      res,
+      {
+        ok: false,
+        error: `ADMIN_STATE_API_ERROR: ${String(error?.message || 'request_failed')}`,
+      },
+      500
+    );
+  }
+};
