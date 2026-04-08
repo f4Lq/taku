@@ -3842,12 +3842,6 @@ body.route-liczniki::before{
     linear-gradient(90deg, rgba(164, 198, 255, 0.09) 1px, transparent 1px);
 }
 
-body.route-liczniki .stream-topbar{
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-}
-
 body.route-liczniki .stream-shell{
   padding-top: 0;
 }
