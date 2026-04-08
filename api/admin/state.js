@@ -52,16 +52,57 @@ function normalizeAdminState(rawState) {
       ? rawState
       : {};
 
+  const membersSource = Array.isArray(source.cciMembers)
+    ? source.cciMembers
+    : Array.isArray(source.customMembers)
+      ? source.customMembers
+      : [];
+  const normalizedMembers = Array.isArray(membersSource) ? toSafeJsonValue(membersSource, []) : [];
+
+  const incomingOrder = normalizeStringList(source.membersOrder);
+  const membersOrder = incomingOrder.length
+    ? incomingOrder
+    : normalizedMembers
+        .map((entry) => String(entry && entry.id ? entry.id : '').trim())
+        .filter(Boolean);
+
+  const licznikiConfigRaw =
+    source.licznikiConfig && typeof source.licznikiConfig === 'object' && !Array.isArray(source.licznikiConfig)
+      ? toSafeJsonValue(source.licznikiConfig, {})
+      : {};
+  const licznikiItemsFromConfig = Array.isArray(licznikiConfigRaw.items)
+    ? licznikiConfigRaw.items
+    : Array.isArray(licznikiConfigRaw.licznikiItems)
+      ? licznikiConfigRaw.licznikiItems
+      : Array.isArray(licznikiConfigRaw.entries)
+        ? licznikiConfigRaw.entries
+        : null;
+  const hasExplicitLicznikiItems =
+    Array.isArray(source.licznikiItems) || Array.isArray(licznikiItemsFromConfig);
+  const licznikiItemsSource = Array.isArray(source.licznikiItems)
+    ? source.licznikiItems
+    : Array.isArray(licznikiItemsFromConfig)
+      ? licznikiItemsFromConfig
+      : [];
+  const normalizedLicznikiItems = Array.isArray(licznikiItemsSource)
+    ? toSafeJsonValue(licznikiItemsSource, [])
+    : [];
+  if (hasExplicitLicznikiItems) {
+    licznikiConfigRaw.items = normalizedLicznikiItems;
+  }
+
   return {
     accounts: Array.isArray(source.accounts) ? toSafeJsonValue(source.accounts, []) : [],
     baseMemberOverrides: toSafeJsonValue(source.baseMemberOverrides, {}),
-    customMembers: Array.isArray(source.customMembers) ? toSafeJsonValue(source.customMembers, []) : [],
-    membersOrder: normalizeStringList(source.membersOrder),
+    cciMembers: normalizedMembers,
+    customMembers: normalizedMembers,
+    membersOrder,
     karyTimerDefinitions: Array.isArray(source.karyTimerDefinitions) ? toSafeJsonValue(source.karyTimerDefinitions, []) : [],
     karyCounterDefinitions: Array.isArray(source.karyCounterDefinitions) ? toSafeJsonValue(source.karyCounterDefinitions, []) : [],
     karyCennikItems: Array.isArray(source.karyCennikItems) ? toSafeJsonValue(source.karyCennikItems, []) : [],
     timeryConfig: toSafeJsonValue(source.timeryConfig, {}),
-    licznikiConfig: toSafeJsonValue(source.licznikiConfig, {}),
+    licznikiItems: normalizedLicznikiItems,
+    licznikiConfig: licznikiConfigRaw,
   };
 }
 

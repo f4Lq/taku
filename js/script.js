@@ -2319,6 +2319,22 @@
     return null;
   }
 
+  function extractRemoteCciMembers(state) {
+    const source = state && typeof state === "object" ? state : null;
+    if (!source) {
+      return null;
+    }
+
+    if (Array.isArray(source.cciMembers)) {
+      return source.cciMembers;
+    }
+    if (Array.isArray(source.customMembers)) {
+      return source.customMembers;
+    }
+
+    return null;
+  }
+
   function applyRemoteMembersOrder(membersList, membersOrder) {
     const members = Array.isArray(membersList) ? membersList.filter(Boolean) : [];
     const order = Array.isArray(membersOrder)
@@ -2377,8 +2393,9 @@
       }
     }
 
-    if (Array.isArray(source.customMembers)) {
-      let nextMembers = source.customMembers
+    const remoteMembers = extractRemoteCciMembers(source);
+    if (remoteMembers !== null) {
+      let nextMembers = (Array.isArray(remoteMembers) ? remoteMembers : [])
         .map((entry, index) => normalizeMemberEntry(entry, index))
         .filter(Boolean);
 
@@ -2448,10 +2465,12 @@
     return {
       ...cachedState,
       accounts: nextAccounts,
+      cciMembers: nextMembers,
       customMembers: nextMembers,
       membersOrder: nextMembers
         .map((member) => String(member?.id || "").trim())
         .filter(Boolean),
+      licznikiItems: nextLicznikiItems,
       licznikiConfig: {
         ...cachedLicznikiConfig,
         items: nextLicznikiItems
@@ -2487,10 +2506,6 @@
 
     adminStateSyncInFlight = true;
     try {
-      if (!adminStateRemoteCache) {
-        await hydrateAdminStateFromRemote(true, { render: false });
-      }
-
       const response = await withAdminStateTimeout(
         () =>
           fetch(LOCAL_ADMIN_STATE_ENDPOINT, {
@@ -2502,7 +2517,8 @@
               action: "set",
               state: buildAdminStateSnapshot()
             }),
-            cache: "no-store"
+            cache: "no-store",
+            keepalive: true
           }),
         ADMIN_STATE_REQUEST_TIMEOUT_MS,
         "ADMIN_STATE_POST_TIMEOUT"
