@@ -656,24 +656,46 @@
     const rawDate = String(targetDateRaw || "").trim();
 
     // Legacy fix:
-    // WL:ON 3.0 canonical value in fixed UTC+1 is 2023-07-06 23:00:00+01:00.
-    // Normalize older variants to that exact representation.
+    // Keep base counters in local wall-clock format (without explicit timezone),
+    // so all cards behave consistently and are not shifted by DST changes.
     if (
       title === "77rp wl:on 3.0" &&
       (
+        /^2023-07-07t00:00(?::00)?$/i.test(rawDate) ||
         /^2023-07-07t00:00(?::00)?\+01:00$/i.test(rawDate) ||
-        /^2023-07-07t00:00(?::00)?\+02:00$/i.test(rawDate)
+        /^2023-07-07t00:00(?::00)?\+02:00$/i.test(rawDate) ||
+        /^2023-07-06t22:00(?::00)?(?:\.000)?z$/i.test(rawDate) ||
+        /^2023-07-06t23:00(?::00)?(?:\.000)?z$/i.test(rawDate)
       )
     ) {
-      return "2023-07-06T23:00:00+01:00";
+      return "2023-07-07T00:00:00";
     }
 
-    // Canonical fixed UTC+1 values for remaining base counters.
-    if (title === "77rp wl:off" && /^2025-12-17t18:00(?::00)?\+02:00$/i.test(rawDate)) {
-      return "2025-12-17T18:00:00+01:00";
+    // Canonical local values for remaining base counters.
+    if (
+      title === "77rp wl:off" &&
+      (
+        /^2025-12-17t18:00(?::00)?$/i.test(rawDate) ||
+        /^2025-12-17t18:00(?::00)?\+01:00$/i.test(rawDate) ||
+        /^2025-12-17t18:00(?::00)?\+02:00$/i.test(rawDate) ||
+        /^2025-12-17t16:00(?::00)?(?:\.000)?z$/i.test(rawDate) ||
+        /^2025-12-17t17:00(?::00)?(?:\.000)?z$/i.test(rawDate) ||
+        /^2025-12-17t18:00(?::00)?(?:\.000)?z$/i.test(rawDate)
+      )
+    ) {
+      return "2025-12-17T18:00:00";
     }
-    if (title === "gta vi" && /^2026-11-19t00:00(?::00)?\+02:00$/i.test(rawDate)) {
-      return "2026-11-19T00:00:00+01:00";
+    if (
+      title === "gta vi" &&
+      (
+        /^2026-11-19t00:00(?::00)?$/i.test(rawDate) ||
+        /^2026-11-19t00:00(?::00)?\+01:00$/i.test(rawDate) ||
+        /^2026-11-19t00:00(?::00)?\+02:00$/i.test(rawDate) ||
+        /^2026-11-18t22:00(?::00)?(?:\.000)?z$/i.test(rawDate) ||
+        /^2026-11-18t23:00(?::00)?(?:\.000)?z$/i.test(rawDate)
+      )
+    ) {
+      return "2026-11-19T00:00:00";
     }
 
     return rawDate;
@@ -6797,6 +6819,22 @@
     return days > 0 ? `${days}d ${hms}` : hms;
   }
 
+  function getLicznikCivilMs(dateObj) {
+    if (!(dateObj instanceof Date) || !Number.isFinite(dateObj.getTime())) {
+      return Number.NaN;
+    }
+
+    return Date.UTC(
+      dateObj.getFullYear(),
+      dateObj.getMonth(),
+      dateObj.getDate(),
+      dateObj.getHours(),
+      dateObj.getMinutes(),
+      dateObj.getSeconds(),
+      dateObj.getMilliseconds()
+    );
+  }
+
   function computeLicznikDisplay(modeValue, targetDateMs, nowMs, endDateMs = Number.NaN) {
     const mode = normalizeLicznikMode(modeValue);
 
@@ -6846,7 +6884,7 @@
       return;
     }
 
-    const nowMs = Date.now();
+    const nowCivilMs = getLicznikCivilMs(new Date());
     cards.forEach((card) => {
       const mode = String(card.getAttribute("data-licznik-mode") || "since").trim().toLowerCase();
       const targetText = String(card.getAttribute("data-licznik-date") || "").trim();
@@ -6856,9 +6894,9 @@
 
       const parsedDate = parseLicznikDateInputValue(targetText);
       const parsedEndDate = parseLicznikDateInputValue(endDateText);
-      const parsedDateMs = parsedDate ? parsedDate.getTime() : Number.NaN;
-      const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
-      if (!Number.isFinite(parsedDateMs)) {
+      const parsedDateCivilMs = getLicznikCivilMs(parsedDate);
+      const parsedEndDateCivilMs = getLicznikCivilMs(parsedEndDate);
+      if (!Number.isFinite(parsedDateCivilMs) || !Number.isFinite(nowCivilMs)) {
         if (valueEl) {
           valueEl.textContent = "--";
         }
@@ -6868,7 +6906,7 @@
         return;
       }
 
-      const display = computeLicznikDisplay(mode, parsedDateMs, nowMs, parsedEndDateMs);
+      const display = computeLicznikDisplay(mode, parsedDateCivilMs, nowCivilMs, parsedEndDateCivilMs);
       if (valueEl) {
         valueEl.textContent = display.value;
       }
