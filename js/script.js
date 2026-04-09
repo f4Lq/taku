@@ -102,6 +102,7 @@
   const statusEl = document.getElementById("status");
   const clipsEl = document.getElementById("clips");
   const refreshBtn = document.getElementById("refreshBtn");
+  const streamPlayerEl = document.querySelector(".stream-player");
   const streamIntroFollowersStatEl = document.getElementById("streamIntroFollowersStat");
   const streamIntroFollowersCountEl = document.getElementById("streamIntroFollowersCount");
   const streamIntroFollowersTextEl = document.getElementById("streamIntroFollowersText");
@@ -151,6 +152,8 @@
   const CLIP_VIEWER_AUTO_HIDE_DELAY_MS = 2000;
   const FRIENDS_LIVE_POLL_MS = 5000;
   const KICK_FOLLOWERS_POLL_MS = 2500;
+  const STREAM_PLAYER_AUTO_REFRESH_MS = 2 * 60 * 1000;
+  const STREAM_PLAYER_REFRESH_QUERY_KEY = "_streamRefresh";
   const KICK_OAUTH_STATUS_POLL_MS = 2000;
   const ADMIN_STATE_SYNC_DEBOUNCE_MS = 420;
   const ADMIN_STATE_REQUEST_TIMEOUT_MS = 2600;
@@ -166,6 +169,22 @@
   const ROOT_ADMIN_ID = "root-admin";
   const CCI_MEMBERS_KEY = getStorageKey("custom_members");
   const LICZNIKI_ITEMS_KEY = getStorageKey("liczniki_items");
+  const LICZNIKI_FIXED_UTC_OFFSET_MINUTES = 60;
+  const LICZNIKI_FIXED_UTC_OFFSET_MS = LICZNIKI_FIXED_UTC_OFFSET_MINUTES * 60 * 1000;
+  const LICZNIKI_MONTH_NAMES_PL = [
+    "styczeń",
+    "luty",
+    "marzec",
+    "kwiecień",
+    "maj",
+    "czerwiec",
+    "lipiec",
+    "sierpień",
+    "wrzesień",
+    "październik",
+    "listopad",
+    "grudzień"
+  ];
   // Keep root credential decoding stable even when STORAGE_NAMESPACE changes per streamer.
   const ADMIN_SECRET_XOR_KEY =
     String(window.ADMIN_SECRET_XOR_KEY || "strona-live_2026").trim() || "strona-live_2026";
@@ -187,6 +206,9 @@
   let friendsLiveRequestSeq = 0;
   let kickFollowersPollId = 0;
   let kickFollowersPollBusy = false;
+  let streamPlayerAutoRefreshId = 0;
+  let streamPlayerBaseSrc = "";
+  let lastKickChannelLiveState = false;
   let kickOAuthStatusPollId = 0;
   let kickOAuthStatusBusy = false;
   let cachedKickOAuthStatus = null;
@@ -629,16 +651,49 @@
     return `licznik-${cleanSeed || "item"}-${stamp}-${rand}`;
   }
 
+  function normalizeLegacyLicznikTargetDate(titleValue, targetDateRaw) {
+    const title = String(titleValue || "").trim().toLowerCase();
+    const rawDate = String(targetDateRaw || "").trim();
+
+    // Legacy fix:
+    // WL:ON 3.0 canonical value in fixed UTC+1 is 2023-07-06 23:00:00+01:00.
+    // Normalize older variants to that exact representation.
+    if (
+      title === "77rp wl:on 3.0" &&
+      (
+        /^2023-07-07t00:00(?::00)?\+01:00$/i.test(rawDate) ||
+        /^2023-07-07t00:00(?::00)?\+02:00$/i.test(rawDate)
+      )
+    ) {
+      return "2023-07-06T23:00:00+01:00";
+    }
+
+    // Canonical fixed UTC+1 values for remaining base counters.
+    if (title === "77rp wl:off" && /^2025-12-17t18:00(?::00)?\+02:00$/i.test(rawDate)) {
+      return "2025-12-17T18:00:00+01:00";
+    }
+    if (title === "gta vi" && /^2026-11-19t00:00(?::00)?\+02:00$/i.test(rawDate)) {
+      return "2026-11-19T00:00:00+01:00";
+    }
+
+    return rawDate;
+  }
+
   function normalizeLicznikEntry(entry, index = 0) {
     const source = entry && typeof entry === "object" ? entry : {};
     const title = String(source.title || source.name || "").trim();
     const mode = normalizeLicznikMode(source.mode || source.type || "since");
-    const targetDateRaw = String(source.targetDate || source.date || source.target || "").trim();
-    const parsedDateMs = Date.parse(targetDateRaw);
+    const targetDateRaw = normalizeLegacyLicznikTargetDate(title, source.targetDate || source.date || source.target || "");
+    const endDateRaw = String(source.endDate || source.finishDate || source.end || "").trim();
+    const parsedTargetDate = parseLicznikDateInputValue(targetDateRaw);
+    const parsedDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
     if (!title || !Number.isFinite(parsedDateMs)) {
       return null;
     }
 
+    const parsedEndDate = parseLicznikDateInputValue(endDateRaw);
+    const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
+    const hasValidEndDate = mode === "since" && Number.isFinite(parsedEndDateMs) && parsedEndDateMs > parsedDateMs;
     const id = String(source.id || "").trim() || createLicznikId(`${title}-${index}`);
     const explicitImageUrl = sanitizeLicznikImageUrl(source.imageUrl || source.image || source.graphic || "");
     return {
@@ -646,6 +701,7 @@
       title,
       mode,
       targetDate: new Date(parsedDateMs).toISOString(),
+      endDate: hasValidEndDate ? new Date(parsedEndDateMs).toISOString() : "",
       imageUrl: explicitImageUrl || sanitizeLicznikImageUrl(getDefaultLicznikImageByTitle(title))
     };
   }
@@ -661,11 +717,16 @@
         const title = String(card.querySelector("h3")?.textContent || "").trim();
         const mode = normalizeLicznikMode(card.getAttribute("data-licznik-mode") || "since");
         const targetDateRaw = String(card.getAttribute("data-licznik-date") || "").trim();
-        const parsedDateMs = Date.parse(targetDateRaw);
+        const endDateRaw = String(card.getAttribute("data-licznik-end-date") || "").trim();
+        const parsedTargetDate = parseLicznikDateInputValue(targetDateRaw);
+        const parsedDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
         if (!title || !Number.isFinite(parsedDateMs)) {
           return null;
         }
 
+        const parsedEndDate = parseLicznikDateInputValue(endDateRaw);
+        const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
+        const hasValidEndDate = mode === "since" && Number.isFinite(parsedEndDateMs) && parsedEndDateMs > parsedDateMs;
         const explicitImageUrl = sanitizeLicznikImageUrl(
           card.getAttribute("data-licznik-image") || card.querySelector("img")?.getAttribute("src") || ""
         );
@@ -677,6 +738,7 @@
           title,
           mode,
           targetDate: new Date(parsedDateMs).toISOString(),
+          endDate: hasValidEndDate ? new Date(parsedEndDateMs).toISOString() : "",
           imageUrl
         };
       })
@@ -687,35 +749,48 @@
     const safeEntry = entry && typeof entry === "object" ? entry : {};
     const title = String(safeEntry.title || "").trim().toLowerCase();
     const mode = normalizeLicznikMode(safeEntry.mode || "since");
-    const parsedDateMs = Date.parse(String(safeEntry.targetDate || "").trim());
+    const parsedTargetDate = parseLicznikDateInputValue(String(safeEntry.targetDate || "").trim());
+    const parsedEndDate = parseLicznikDateInputValue(String(safeEntry.endDate || "").trim());
+    const parsedDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
+    const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
+    const endDateToken =
+      mode === "since" && Number.isFinite(parsedEndDateMs) && parsedEndDateMs > parsedDateMs
+        ? new Date(parsedEndDateMs).toISOString()
+        : "";
     if (!title || !Number.isFinite(parsedDateMs)) {
       return "";
     }
-    return `${title}::${mode}::${new Date(parsedDateMs).toISOString()}`;
+    return `${title}::${mode}::${new Date(parsedDateMs).toISOString()}::${endDateToken}`;
+  }
+
+  function mergeMissingBaseLicznikiItems(itemsList) {
+    const normalizedList = Array.isArray(itemsList) ? itemsList.filter(Boolean) : [];
+    const baseItems = extractBaseLicznikiFromGrid();
+    if (!baseItems.length) {
+      return normalizedList;
+    }
+    if (!normalizedList.length) {
+      return baseItems;
+    }
+
+    const itemsKeys = new Set(normalizedList.map((entry) => getLicznikIdentityKey(entry)).filter(Boolean));
+    const missingBaseItems = baseItems.filter((entry) => {
+      const key = getLicznikIdentityKey(entry);
+      return key && !itemsKeys.has(key);
+    });
+
+    return missingBaseItems.length ? [...normalizedList, ...missingBaseItems] : normalizedList;
   }
 
   function loadLicznikiItems() {
-    const baseItems = extractBaseLicznikiFromGrid();
     const stored = readStorageJsonFallback(LICZNIKI_ITEMS_KEY, null);
     if (Array.isArray(stored) && stored.length) {
       const normalizedStored = stored.map((entry, index) => normalizeLicznikEntry(entry, index)).filter(Boolean);
       if (normalizedStored.length) {
-        if (!baseItems.length) {
-          return normalizedStored;
-        }
-
-        const storedKeys = new Set(
-          normalizedStored.map((entry) => getLicznikIdentityKey(entry)).filter(Boolean)
-        );
-        const missingBaseItems = baseItems.filter((entry) => {
-          const key = getLicznikIdentityKey(entry);
-          return key && !storedKeys.has(key);
-        });
-
-        return missingBaseItems.length ? [...normalizedStored, ...missingBaseItems] : normalizedStored;
+        return mergeMissingBaseLicznikiItems(normalizedStored);
       }
     }
-    return baseItems;
+    return mergeMissingBaseLicznikiItems([]);
   }
 
   function saveLicznikiItems() {
@@ -734,41 +809,112 @@
     return imageUrl ? "Tak" : "Nie";
   }
 
+  function padLicznikDateSegment(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function getLicznikUtcPlusOnePartsFromTimestamp(timestampMs) {
+    const sourceMs = Number(timestampMs);
+    if (!Number.isFinite(sourceMs)) {
+      return null;
+    }
+
+    const localDate = new Date(sourceMs);
+    if (!Number.isFinite(localDate.getTime())) {
+      return null;
+    }
+
+    return {
+      year: localDate.getFullYear(),
+      month: localDate.getMonth() + 1,
+      day: localDate.getDate(),
+      hour: localDate.getHours(),
+      minute: localDate.getMinutes(),
+      second: localDate.getSeconds()
+    };
+  }
+
+  function getLicznikUtcPlusOneParts(dateObj) {
+    if (!(dateObj instanceof Date) || !Number.isFinite(dateObj.getTime())) {
+      return null;
+    }
+    return getLicznikUtcPlusOnePartsFromTimestamp(dateObj.getTime());
+  }
+
+  function createLicznikDateFromUtcPlusOneParts(year, month, day, hour = 0, minute = 0, second = 0, millisecond = 0) {
+    const localDate = new Date(year, month - 1, day, hour, minute, second, millisecond);
+    if (!Number.isFinite(localDate.getTime())) {
+      return null;
+    }
+    return localDate;
+  }
+
+  function getLicznikUtcPlusOneDayOfWeek(year, month, day) {
+    const localDate = new Date(year, month - 1, day, 12, 0, 0, 0);
+    if (!Number.isFinite(localDate.getTime())) {
+      return Number.NaN;
+    }
+    return localDate.getDay();
+  }
+
+  function addDaysToLicznikUtcPlusOneDateParts(year, month, day, deltaDays) {
+    const localDate = new Date(year, month - 1, day + deltaDays, 12, 0, 0, 0);
+    if (!Number.isFinite(localDate.getTime())) {
+      return null;
+    }
+    return {
+      year: localDate.getFullYear(),
+      month: localDate.getMonth() + 1,
+      day: localDate.getDate()
+    };
+  }
+
   function formatLicznikDateLabel(dateValue) {
-    const parsedDateMs = Date.parse(String(dateValue || "").trim());
-    if (!Number.isFinite(parsedDateMs)) {
+    const parsedDate = parseLicznikDateInputValue(String(dateValue || "").trim());
+    if (!parsedDate || !Number.isFinite(parsedDate.getTime())) {
       return "-";
     }
-    return new Date(parsedDateMs).toLocaleString("pl-PL", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    const parts = getLicznikUtcPlusOneParts(parsedDate);
+    if (!parts) {
+      return "-";
+    }
+    return `${padLicznikDateSegment(parts.day)}.${padLicznikDateSegment(parts.month)}.${parts.year}, ${padLicznikDateSegment(
+      parts.hour
+    )}:${padLicznikDateSegment(parts.minute)}`;
+  }
+
+  function formatLicznikEndDateLabel(item) {
+    const safeItem = item && typeof item === "object" ? item : {};
+    if (normalizeLicznikMode(safeItem.mode) !== "since") {
+      return "-";
+    }
+
+    const parsedEndDate = parseLicznikDateInputValue(String(safeItem.endDate || "").trim());
+    if (!parsedEndDate || !Number.isFinite(parsedEndDate.getTime())) {
+      return "Brak";
+    }
+    return formatLicznikDateLabel(parsedEndDate.toISOString());
   }
 
   function toLicznikDateInputValue(dateValue) {
-    const parsedDateMs = Date.parse(String(dateValue || "").trim());
-    if (!Number.isFinite(parsedDateMs)) {
+    const parsedDate = parseLicznikDateInputValue(String(dateValue || "").trim());
+    if (!parsedDate || !Number.isFinite(parsedDate.getTime())) {
       return "";
     }
-
-    const date = new Date(parsedDateMs);
-    const pad = (value) => String(value).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
-      date.getMinutes()
-    )}`;
+    const parts = getLicznikUtcPlusOneParts(parsedDate);
+    if (!parts) {
+      return "";
+    }
+    return `${parts.year}-${padLicznikDateSegment(parts.month)}-${padLicznikDateSegment(parts.day)}T${padLicznikDateSegment(
+      parts.hour
+    )}:${padLicznikDateSegment(parts.minute)}`;
   }
 
   function toLicznikDateInputValueFromDate(dateObj) {
     if (!(dateObj instanceof Date) || !Number.isFinite(dateObj.getTime())) {
       return "";
     }
-    const pad = (value) => String(value).padStart(2, "0");
-    return `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}T${pad(
-      dateObj.getHours()
-    )}:${pad(dateObj.getMinutes())}`;
+    return toLicznikDateInputValue(dateObj.toISOString());
   }
 
   function parseLicznikDateInputValue(inputValue) {
@@ -777,21 +923,45 @@
       return null;
     }
 
-    const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
     if (match) {
       const year = Number.parseInt(match[1], 10);
       const month = Number.parseInt(match[2], 10);
       const day = Number.parseInt(match[3], 10);
       const hour = Number.parseInt(match[4], 10);
       const minute = Number.parseInt(match[5], 10);
-      if (
+      const second = Number.parseInt(match[6] || "0", 10);
+      const isInRange =
         Number.isFinite(year) &&
         Number.isFinite(month) &&
         Number.isFinite(day) &&
         Number.isFinite(hour) &&
-        Number.isFinite(minute)
-      ) {
-        return new Date(year, month - 1, day, hour, minute, 0, 0);
+        Number.isFinite(minute) &&
+        Number.isFinite(second) &&
+        month >= 1 &&
+        month <= 12 &&
+        day >= 1 &&
+        day <= 31 &&
+        hour >= 0 &&
+        hour <= 23 &&
+        minute >= 0 &&
+        minute <= 59 &&
+        second >= 0 &&
+        second <= 59;
+      if (isInRange) {
+        const parsedDate = createLicznikDateFromUtcPlusOneParts(year, month, day, hour, minute, second, 0);
+        const parsedParts = getLicznikUtcPlusOneParts(parsedDate);
+        if (
+          parsedParts &&
+          parsedParts.year === year &&
+          parsedParts.month === month &&
+          parsedParts.day === day &&
+          parsedParts.hour === hour &&
+          parsedParts.minute === minute &&
+          parsedParts.second === second
+        ) {
+          return parsedDate;
+        }
       }
     }
 
@@ -806,10 +976,13 @@
     if (!(dateObj instanceof Date) || !Number.isFinite(dateObj.getTime())) {
       return "";
     }
-    const pad = (value) => String(value).padStart(2, "0");
-    return `${pad(dateObj.getDate())}.${pad(dateObj.getMonth() + 1)}.${dateObj.getFullYear()} ${pad(
-      dateObj.getHours()
-    )}:${pad(dateObj.getMinutes())}`;
+    const parts = getLicznikUtcPlusOneParts(dateObj);
+    if (!parts) {
+      return "";
+    }
+    return `${padLicznikDateSegment(parts.day)}.${padLicznikDateSegment(parts.month)}.${parts.year} ${padLicznikDateSegment(
+      parts.hour
+    )}:${padLicznikDateSegment(parts.minute)}`;
   }
 
   function readImageFileAsDataUrl(file) {
@@ -851,35 +1024,57 @@
       return now + 7 * dayMs;
     }
     if (cleanPreset === "next_midnight") {
-      const nextMidnight = new Date(now);
-      nextMidnight.setHours(24, 0, 0, 0);
-      return nextMidnight.getTime();
+      const nowParts = getLicznikUtcPlusOnePartsFromTimestamp(now);
+      if (!nowParts) {
+        return Number.NaN;
+      }
+      const nextMidnight = createLicznikDateFromUtcPlusOneParts(
+        nowParts.year,
+        nowParts.month,
+        nowParts.day + 1,
+        0,
+        0,
+        0,
+        0
+      );
+      return nextMidnight ? nextMidnight.getTime() : Number.NaN;
     }
 
     return Number.NaN;
   }
 
-  function bindAdminLicznikDateControls() {
+  function bindAdminLicznikSingleDateControl(options = {}) {
     if (!adminLicznikFormEl) {
       return;
     }
 
-    const dateInput = adminLicznikFormEl.querySelector('input[name="licznikDate"]');
-    const dateDisplayInput = adminLicznikFormEl.querySelector('input[name="licznikDateDisplay"]');
-    const presetSelect = adminLicznikFormEl.querySelector('select[name="licznikDatePreset"]');
-    const openPickerBtn = adminLicznikFormEl.querySelector("[data-licznik-date-open]");
-    const pickerEl = document.getElementById("adminLicznikDatePicker");
-    const pickerMonthEl = pickerEl ? pickerEl.querySelector("[data-licznik-picker-month]") : null;
-    const pickerGridEl = pickerEl ? pickerEl.querySelector("[data-licznik-picker-grid]") : null;
-    const pickerPrevBtn = pickerEl ? pickerEl.querySelector("[data-licznik-picker-prev]") : null;
-    const pickerNextBtn = pickerEl ? pickerEl.querySelector("[data-licznik-picker-next]") : null;
-    const pickerYearPrevBtn = pickerEl ? pickerEl.querySelector("[data-licznik-picker-year-prev]") : null;
-    const pickerYearNextBtn = pickerEl ? pickerEl.querySelector("[data-licznik-picker-year-next]") : null;
-    const pickerYearInput = pickerEl ? pickerEl.querySelector("[data-licznik-picker-year-input]") : null;
-    const pickerHourInput = pickerEl ? pickerEl.querySelector("[data-licznik-picker-hour]") : null;
-    const pickerMinuteInput = pickerEl ? pickerEl.querySelector("[data-licznik-picker-minute]") : null;
-    const pickerApplyBtn = pickerEl ? pickerEl.querySelector("[data-licznik-picker-apply]") : null;
-    const pickerNowBtn = pickerEl ? pickerEl.querySelector("[data-licznik-picker-now]") : null;
+    const dateInputSelector = String(options.dateInputSelector || "").trim();
+    const dateDisplaySelector = String(options.dateDisplaySelector || "").trim();
+    const openButtonSelector = String(options.openButtonSelector || "").trim();
+    const pickerId = String(options.pickerId || "").trim();
+    const pickerAttrPrefix = String(options.pickerAttrPrefix || "").trim();
+    const presetSelectSelector = String(options.presetSelectSelector || "").trim();
+
+    if (!dateInputSelector || !dateDisplaySelector || !pickerId || !pickerAttrPrefix) {
+      return;
+    }
+
+    const dateInput = adminLicznikFormEl.querySelector(dateInputSelector);
+    const dateDisplayInput = adminLicznikFormEl.querySelector(dateDisplaySelector);
+    const presetSelect = presetSelectSelector ? adminLicznikFormEl.querySelector(presetSelectSelector) : null;
+    const openPickerBtn = openButtonSelector ? adminLicznikFormEl.querySelector(openButtonSelector) : null;
+    const pickerEl = document.getElementById(pickerId);
+    const pickerMonthEl = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-month]`) : null;
+    const pickerGridEl = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-grid]`) : null;
+    const pickerPrevBtn = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-prev]`) : null;
+    const pickerNextBtn = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-next]`) : null;
+    const pickerYearPrevBtn = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-year-prev]`) : null;
+    const pickerYearNextBtn = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-year-next]`) : null;
+    const pickerYearInput = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-year-input]`) : null;
+    const pickerHourInput = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-hour]`) : null;
+    const pickerMinuteInput = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-minute]`) : null;
+    const pickerApplyBtn = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-apply]`) : null;
+    const pickerNowBtn = pickerEl ? pickerEl.querySelector(`[data-${pickerAttrPrefix}-now]`) : null;
     if (
       !dateInput ||
       !dateDisplayInput ||
@@ -899,11 +1094,8 @@
       return;
     }
 
-    const monthFormatter = new Intl.DateTimeFormat("pl-PL", {
-      month: "long"
-    });
-
-    const pad = (value) => String(value).padStart(2, "0");
+    const dayAttr = `data-${pickerAttrPrefix}-day`;
+    const daySelector = `[${dayAttr}]`;
     const clamp = (value, min, max, fallback) => {
       const numeric = Number.parseInt(String(value || "").trim(), 10);
       if (!Number.isFinite(numeric)) {
@@ -911,58 +1103,74 @@
       }
       return Math.min(max, Math.max(min, numeric));
     };
-    const toIsoDate = (dateObj) =>
-      `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}`;
-    const isSameDay = (left, right) =>
-      left &&
-      right &&
-      left.getFullYear() === right.getFullYear() &&
-      left.getMonth() === right.getMonth() &&
-      left.getDate() === right.getDate();
+
+    function createNowUtcPlusOneDate() {
+      const nowParts = getLicznikUtcPlusOneParts(new Date());
+      if (!nowParts) {
+        return new Date();
+      }
+      return (
+        createLicznikDateFromUtcPlusOneParts(nowParts.year, nowParts.month, nowParts.day, nowParts.hour, nowParts.minute, 0, 0) ||
+        new Date()
+      );
+    }
+
+    let selectedDate = parseLicznikDateInputValue(dateInput.value) || createNowUtcPlusOneDate();
+    let selectedParts = getLicznikUtcPlusOneParts(selectedDate) || getLicznikUtcPlusOneParts(new Date());
+    let viewYear = selectedParts ? selectedParts.year : new Date().getUTCFullYear();
+    let viewMonth = selectedParts ? selectedParts.month - 1 : 0;
     const clampYear = (value) => clamp(value, 1970, 2100, viewYear);
 
-    let selectedDate = parseLicznikDateInputValue(dateInput.value) || new Date();
-    let viewYear = selectedDate.getFullYear();
-    let viewMonth = selectedDate.getMonth();
-
     function setPickerTimeFromSelected() {
-      pickerHourInput.value = pad(selectedDate.getHours());
-      pickerMinuteInput.value = pad(selectedDate.getMinutes());
+      const parts = getLicznikUtcPlusOneParts(selectedDate);
+      if (!parts) {
+        return;
+      }
+      pickerHourInput.value = padLicznikDateSegment(parts.hour);
+      pickerMinuteInput.value = padLicznikDateSegment(parts.minute);
     }
 
     function renderPickerGrid() {
-      const monthLabel = monthFormatter.format(new Date(viewYear, viewMonth, 1));
-      pickerMonthEl.textContent = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+      const monthLabel = String(LICZNIKI_MONTH_NAMES_PL[viewMonth] || "");
+      pickerMonthEl.textContent = monthLabel ? monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1) : "";
       pickerYearInput.value = String(viewYear);
       pickerGridEl.innerHTML = "";
 
-      const firstDayOfMonth = new Date(viewYear, viewMonth, 1);
-      const startOffset = (firstDayOfMonth.getDay() + 6) % 7; // Monday first
-      const gridStartDate = new Date(viewYear, viewMonth, 1 - startOffset);
-      const today = new Date();
+      const firstDayDow = getLicznikUtcPlusOneDayOfWeek(viewYear, viewMonth + 1, 1);
+      const startOffset = (firstDayDow + 6) % 7; // Monday first
+      const todayParts = getLicznikUtcPlusOneParts(new Date());
+      const activeParts = getLicznikUtcPlusOneParts(selectedDate);
 
       for (let i = 0; i < 42; i += 1) {
-        const dayDate = new Date(
-          gridStartDate.getFullYear(),
-          gridStartDate.getMonth(),
-          gridStartDate.getDate() + i,
-          0,
-          0,
-          0,
-          0
-        );
+        const dayParts = addDaysToLicznikUtcPlusOneDateParts(viewYear, viewMonth + 1, 1, i - startOffset);
+        if (!dayParts) {
+          continue;
+        }
         const dayBtn = document.createElement("button");
         dayBtn.type = "button";
         dayBtn.className = "admin-date-picker-day";
-        dayBtn.textContent = String(dayDate.getDate());
-        dayBtn.setAttribute("data-licznik-picker-day", toIsoDate(dayDate));
-        if (dayDate.getMonth() !== viewMonth) {
+        dayBtn.textContent = String(dayParts.day);
+        dayBtn.setAttribute(
+          dayAttr,
+          `${dayParts.year}-${padLicznikDateSegment(dayParts.month)}-${padLicznikDateSegment(dayParts.day)}`
+        );
+        if (dayParts.month !== viewMonth + 1) {
           dayBtn.classList.add("is-outside");
         }
-        if (isSameDay(dayDate, today)) {
+        if (
+          todayParts &&
+          dayParts.year === todayParts.year &&
+          dayParts.month === todayParts.month &&
+          dayParts.day === todayParts.day
+        ) {
           dayBtn.classList.add("is-today");
         }
-        if (isSameDay(dayDate, selectedDate)) {
+        if (
+          activeParts &&
+          dayParts.year === activeParts.year &&
+          dayParts.month === activeParts.month &&
+          dayParts.day === activeParts.day
+        ) {
           dayBtn.classList.add("is-selected");
         }
         pickerGridEl.appendChild(dayBtn);
@@ -980,17 +1188,22 @@
     }
 
     function applyPickerSelection(closeAfterApply = true) {
-      const hours = clamp(pickerHourInput.value, 0, 23, selectedDate.getHours());
-      const minutes = clamp(pickerMinuteInput.value, 0, 59, selectedDate.getMinutes());
-      selectedDate = new Date(
-        selectedDate.getFullYear(),
-        selectedDate.getMonth(),
-        selectedDate.getDate(),
-        hours,
-        minutes,
-        0,
-        0
-      );
+      const currentParts = getLicznikUtcPlusOneParts(selectedDate);
+      if (!currentParts) {
+        return;
+      }
+      const hours = clamp(pickerHourInput.value, 0, 23, currentParts.hour);
+      const minutes = clamp(pickerMinuteInput.value, 0, 59, currentParts.minute);
+      selectedDate =
+        createLicznikDateFromUtcPlusOneParts(
+          currentParts.year,
+          currentParts.month,
+          currentParts.day,
+          hours,
+          minutes,
+          0,
+          0
+        ) || selectedDate;
 
       dateInput.value = toLicznikDateInputValueFromDate(selectedDate);
       dateDisplayInput.value = formatLicznikDateDisplay(selectedDate);
@@ -1005,12 +1218,21 @@
     function syncFromHiddenDateInput() {
       const parsed = parseLicznikDateInputValue(dateInput.value);
       if (!parsed) {
+        selectedDate = createNowUtcPlusOneDate();
+        const nowParts = getLicznikUtcPlusOneParts(selectedDate);
+        if (nowParts) {
+          viewYear = nowParts.year;
+          viewMonth = nowParts.month - 1;
+        }
         dateDisplayInput.value = "";
         return;
       }
       selectedDate = parsed;
-      viewYear = selectedDate.getFullYear();
-      viewMonth = selectedDate.getMonth();
+      const parts = getLicznikUtcPlusOneParts(selectedDate);
+      if (parts) {
+        viewYear = parts.year;
+        viewMonth = parts.month - 1;
+      }
       dateDisplayInput.value = formatLicznikDateDisplay(selectedDate);
       setPickerTimeFromSelected();
       renderPickerGrid();
@@ -1084,11 +1306,11 @@
     );
 
     pickerGridEl.addEventListener("click", (event) => {
-      const dayBtn = event.target.closest("[data-licznik-picker-day]");
+      const dayBtn = event.target.closest(daySelector);
       if (!dayBtn) {
         return;
       }
-      const rawDate = String(dayBtn.getAttribute("data-licznik-picker-day") || "").trim();
+      const rawDate = String(dayBtn.getAttribute(dayAttr) || "").trim();
       const match = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (!match) {
         return;
@@ -1096,19 +1318,24 @@
       const year = Number.parseInt(match[1], 10);
       const month = Number.parseInt(match[2], 10);
       const day = Number.parseInt(match[3], 10);
-      const hours = clamp(pickerHourInput.value, 0, 23, selectedDate.getHours());
-      const minutes = clamp(pickerMinuteInput.value, 0, 59, selectedDate.getMinutes());
-      selectedDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-      viewYear = selectedDate.getFullYear();
-      viewMonth = selectedDate.getMonth();
+      const currentParts = getLicznikUtcPlusOneParts(selectedDate);
+      const fallbackHour = currentParts ? currentParts.hour : 0;
+      const fallbackMinute = currentParts ? currentParts.minute : 0;
+      const hours = clamp(pickerHourInput.value, 0, 23, fallbackHour);
+      const minutes = clamp(pickerMinuteInput.value, 0, 59, fallbackMinute);
+      selectedDate = createLicznikDateFromUtcPlusOneParts(year, month, day, hours, minutes, 0, 0) || selectedDate;
+      viewYear = year;
+      viewMonth = month - 1;
       renderPickerGrid();
     });
 
     pickerNowBtn.addEventListener("click", () => {
-      const now = new Date();
-      selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), 0, 0);
-      viewYear = selectedDate.getFullYear();
-      viewMonth = selectedDate.getMonth();
+      selectedDate = createNowUtcPlusOneDate();
+      const parts = getLicznikUtcPlusOneParts(selectedDate);
+      if (parts) {
+        viewYear = parts.year;
+        viewMonth = parts.month - 1;
+      }
       setPickerTimeFromSelected();
       renderPickerGrid();
       applyPickerSelection(true);
@@ -1123,9 +1350,12 @@
 
     adminLicznikFormEl.addEventListener("reset", () => {
       window.setTimeout(() => {
-        selectedDate = new Date();
-        viewYear = selectedDate.getFullYear();
-        viewMonth = selectedDate.getMonth();
+        selectedDate = createNowUtcPlusOneDate();
+        const parts = getLicznikUtcPlusOneParts(selectedDate);
+        if (parts) {
+          viewYear = parts.year;
+          viewMonth = parts.month - 1;
+        }
         dateDisplayInput.value = "";
         setPickerTimeFromSelected();
         renderPickerGrid();
@@ -1157,23 +1387,46 @@
           openPicker();
           return;
         }
-        const presetDate = new Date(presetMs);
-        selectedDate = new Date(
-          presetDate.getFullYear(),
-          presetDate.getMonth(),
-          presetDate.getDate(),
-          presetDate.getHours(),
-          presetDate.getMinutes(),
-          0,
-          0
-        );
-        viewYear = selectedDate.getFullYear();
-        viewMonth = selectedDate.getMonth();
+        const presetParts = getLicznikUtcPlusOnePartsFromTimestamp(presetMs);
+        if (!presetParts) {
+          return;
+        }
+        selectedDate =
+          createLicznikDateFromUtcPlusOneParts(
+            presetParts.year,
+            presetParts.month,
+            presetParts.day,
+            presetParts.hour,
+            presetParts.minute,
+            0,
+            0
+          ) || selectedDate;
+        viewYear = presetParts.year;
+        viewMonth = presetParts.month - 1;
         setPickerTimeFromSelected();
         renderPickerGrid();
         applyPickerSelection(false);
       });
     }
+  }
+
+  function bindAdminLicznikDateControls() {
+    bindAdminLicznikSingleDateControl({
+      dateInputSelector: 'input[name="licznikDate"]',
+      dateDisplaySelector: 'input[name="licznikDateDisplay"]',
+      openButtonSelector: "[data-licznik-date-open]",
+      pickerId: "adminLicznikDatePicker",
+      pickerAttrPrefix: "licznik-picker",
+      presetSelectSelector: 'select[name="licznikDatePreset"]'
+    });
+
+    bindAdminLicznikSingleDateControl({
+      dateInputSelector: 'input[name="licznikEndDate"]',
+      dateDisplaySelector: 'input[name="licznikEndDateDisplay"]',
+      openButtonSelector: "[data-licznik-end-date-open]",
+      pickerId: "adminLicznikEndDatePicker",
+      pickerAttrPrefix: "licznik-end-picker"
+    });
   }
 
   function renderPublicLicznikiCards() {
@@ -1196,6 +1449,13 @@
     licznikiItems.forEach((item) => {
       const imageUrl = sanitizeLicznikImageUrl(item.imageUrl) || sanitizeLicznikImageUrl(getDefaultLicznikImageByTitle(item.title));
       const safeImageUrl = escapeHtmlText(imageUrl);
+      const mode = normalizeLicznikMode(item.mode);
+      const parsedTargetDate = parseLicznikDateInputValue(String(item.targetDate || "").trim());
+      const parsedEndDate = parseLicznikDateInputValue(String(item.endDate || "").trim());
+      const parsedTargetDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
+      const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
+      const hasValidEndDate =
+        mode === "since" && Number.isFinite(parsedTargetDateMs) && Number.isFinite(parsedEndDateMs) && parsedEndDateMs > parsedTargetDateMs;
       const card = document.createElement("article");
       card.className = "kary-counter-card liczniki-card";
       if (imageUrl) {
@@ -1204,8 +1464,13 @@
       } else {
         card.removeAttribute("data-licznik-image");
       }
-      card.setAttribute("data-licznik-mode", normalizeLicznikMode(item.mode));
+      card.setAttribute("data-licznik-mode", mode);
       card.setAttribute("data-licznik-date", String(item.targetDate || ""));
+      if (hasValidEndDate) {
+        card.setAttribute("data-licznik-end-date", new Date(parsedEndDateMs).toISOString());
+      } else {
+        card.removeAttribute("data-licznik-end-date");
+      }
       card.innerHTML = `
         ${
           imageUrl
@@ -1217,7 +1482,7 @@
             : ""
         }
         <div class="liczniki-card-content">
-          <p class="kary-card-state" data-licznik-state>${normalizeLicznikMode(item.mode) === "until" ? "DO STARTU" : "OD STARTU"}</p>
+          <p class="kary-card-state" data-licznik-state>${mode === "until" ? "DO STARTU" : "OD STARTU"}</p>
           <h3>${escapeHtmlText(item.title)}</h3>
           <span class="kary-counter-pill" data-licznik-value>00:00:00</span>
         </div>
@@ -1235,7 +1500,7 @@
     if (!licznikiItems.length) {
       adminLicznikiTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="5" class="admin-table-empty">Brak liczników.</td>
+          <td colspan="6" class="admin-table-empty">Brak liczników.</td>
         </tr>
       `;
       return;
@@ -1260,6 +1525,7 @@
         </td>
         <td>${escapeHtmlText(formatLicznikModeLabel(item.mode))}</td>
         <td>${escapeHtmlText(formatLicznikDateLabel(item.targetDate))}</td>
+        <td>${escapeHtmlText(formatLicznikEndDateLabel(item))}</td>
         <td>
           ${
             imageUrl
@@ -1346,14 +1612,66 @@
     }
   }
 
+  function syncAdminLicznikEndDateFieldVisibility(options = {}) {
+    if (!adminLicznikFormEl) {
+      return;
+    }
+
+    const clearWhenHidden = options && options.clearWhenHidden === false ? false : true;
+    const modeInput = adminLicznikFormEl.querySelector('select[name="licznikMode"]');
+    const endDateField = adminLicznikFormEl.querySelector("[data-licznik-end-field]");
+    const endDateInput = adminLicznikFormEl.querySelector('input[name="licznikEndDate"]');
+    const endDateDisplayInput = adminLicznikFormEl.querySelector('input[name="licznikEndDateDisplay"]');
+    const endDateOpenBtn = adminLicznikFormEl.querySelector("[data-licznik-end-date-open]");
+    const endDatePickerEl = document.getElementById("adminLicznikEndDatePicker");
+    const mode = normalizeLicznikMode(modeInput ? modeInput.value : "since");
+    const shouldShow = mode === "since";
+
+    if (endDateField) {
+      endDateField.hidden = !shouldShow;
+    }
+    if (endDateInput) {
+      endDateInput.disabled = !shouldShow;
+      if (!shouldShow && clearWhenHidden) {
+        endDateInput.value = "";
+      }
+    }
+    if (endDateDisplayInput) {
+      endDateDisplayInput.disabled = !shouldShow;
+      if (!shouldShow && clearWhenHidden) {
+        endDateDisplayInput.value = "";
+      }
+    }
+    if (endDateOpenBtn) {
+      endDateOpenBtn.disabled = !shouldShow;
+    }
+    if (!shouldShow && endDatePickerEl) {
+      endDatePickerEl.hidden = true;
+    }
+  }
+
   function bindAdminLicznikiFeature() {
     if (adminLicznikiBound) {
       return;
     }
     adminLicznikiBound = true;
     bindAdminLicznikDateControls();
+    syncAdminLicznikEndDateFieldVisibility();
 
     if (adminLicznikFormEl) {
+      const modeInput = adminLicznikFormEl.querySelector('select[name="licznikMode"]');
+      if (modeInput) {
+        modeInput.addEventListener("change", () => {
+          syncAdminLicznikEndDateFieldVisibility();
+        });
+      }
+
+      adminLicznikFormEl.addEventListener("reset", () => {
+        window.setTimeout(() => {
+          syncAdminLicznikEndDateFieldVisibility();
+        }, 0);
+      });
+
       adminLicznikFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
 
@@ -1361,13 +1679,29 @@
         const title = String(formData.get("licznikTitle") || "").trim();
         const mode = normalizeLicznikMode(formData.get("licznikMode"));
         const dateInputRaw = String(formData.get("licznikDate") || "").trim();
+        const endDateInputRaw = String(formData.get("licznikEndDate") || "").trim();
         const imageUrlInput = sanitizeLicznikImageUrl(formData.get("licznikImageUrl"));
-        const parsedDateMs = Date.parse(dateInputRaw);
-        if (!title || !Number.isFinite(parsedDateMs)) {
+        const parsedTargetDate = parseLicznikDateInputValue(dateInputRaw);
+        const parsedDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
+        if (!title || !parsedTargetDate || !Number.isFinite(parsedDateMs)) {
           setAdminLicznikStatus("Podaj nazwę i poprawną datę licznika.", "error");
           return;
         }
-        const targetDate = new Date(parsedDateMs).toISOString();
+        const targetDate = parsedTargetDate.toISOString();
+        let endDate = "";
+        if (mode === "since" && endDateInputRaw) {
+          const parsedEndDate = parseLicznikDateInputValue(endDateInputRaw);
+          const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
+          if (!parsedEndDate || !Number.isFinite(parsedEndDateMs)) {
+            setAdminLicznikStatus("Podaj poprawną datę zakończenia odliczania.", "error");
+            return;
+          }
+          if (parsedEndDateMs <= parsedDateMs) {
+            setAdminLicznikStatus("Data zakończenia musi być późniejsza niż data startu.", "error");
+            return;
+          }
+          endDate = parsedEndDate.toISOString();
+        }
         const imageFileInput = adminLicznikFormEl.querySelector('input[name="licznikImageFile"]');
         const selectedImageFile =
           imageFileInput && imageFileInput.files && imageFileInput.files.length ? imageFileInput.files[0] : null;
@@ -1403,6 +1737,7 @@
             title,
             mode,
             targetDate,
+            endDate,
             imageUrl
           };
           setAdminLicznikStatus("Zaktualizowano licznik.", "success");
@@ -1412,6 +1747,7 @@
             title,
             mode,
             targetDate,
+            endDate,
             imageUrl
           });
           setAdminLicznikStatus("Dodano licznik.", "success");
@@ -1454,6 +1790,7 @@
           const modeInput = adminLicznikFormEl.querySelector('select[name="licznikMode"]');
           const presetInput = adminLicznikFormEl.querySelector('select[name="licznikDatePreset"]');
           const dateInput = adminLicznikFormEl.querySelector('input[name="licznikDate"]');
+          const endDateInput = adminLicznikFormEl.querySelector('input[name="licznikEndDate"]');
           const imageUrlInput = adminLicznikFormEl.querySelector('input[name="licznikImageUrl"]');
           const imageFileInput = adminLicznikFormEl.querySelector('input[name="licznikImageFile"]');
           if (titleInput) {
@@ -1462,12 +1799,17 @@
           if (modeInput) {
             modeInput.value = normalizeLicznikMode(licznik.mode);
           }
+          syncAdminLicznikEndDateFieldVisibility({ clearWhenHidden: false });
           if (presetInput) {
             presetInput.value = "";
           }
           if (dateInput) {
             dateInput.value = toLicznikDateInputValue(licznik.targetDate);
             dateInput.dispatchEvent(new Event("change"));
+          }
+          if (endDateInput) {
+            endDateInput.value = toLicznikDateInputValue(licznik.endDate);
+            endDateInput.dispatchEvent(new Event("change"));
           }
           if (imageUrlInput) {
             imageUrlInput.value = sanitizeLicznikImageUrl(licznik.imageUrl);
@@ -2469,9 +2811,10 @@
 
     const remoteLicznikiItems = extractRemoteLicznikiItems(source);
     if (remoteLicznikiItems !== null) {
-      const nextLicznikiItems = (Array.isArray(remoteLicznikiItems) ? remoteLicznikiItems : [])
+      const normalizedRemoteLicznikiItems = (Array.isArray(remoteLicznikiItems) ? remoteLicznikiItems : [])
         .map((entry, index) => normalizeLicznikEntry(entry, index))
         .filter(Boolean);
+      const nextLicznikiItems = mergeMissingBaseLicznikiItems(normalizedRemoteLicznikiItems);
       if (jsonSnapshot(nextLicznikiItems) !== jsonSnapshot(licznikiItems)) {
         licznikiItems = nextLicznikiItems;
         saveStorageJsonFallback(LICZNIKI_ITEMS_KEY, licznikiItems);
@@ -3954,10 +4297,88 @@
     streamIntroFollowersStatEl.classList.toggle("is-error", state === "error");
   }
 
+  function getStreamPlayerBaseSrc() {
+    if (!streamPlayerEl) {
+      return "";
+    }
+    if (streamPlayerBaseSrc) {
+      return streamPlayerBaseSrc;
+    }
+
+    const currentSrc = String(streamPlayerEl.getAttribute("src") || streamPlayerEl.src || "").trim();
+    if (!currentSrc) {
+      return "";
+    }
+
+    try {
+      const url = new URL(currentSrc, window.location.href);
+      url.searchParams.delete(STREAM_PLAYER_REFRESH_QUERY_KEY);
+      streamPlayerBaseSrc = url.toString();
+      return streamPlayerBaseSrc;
+    } catch (_error) {
+      streamPlayerBaseSrc = currentSrc;
+      return streamPlayerBaseSrc;
+    }
+  }
+
+  function refreshStreamPlayerEmbed() {
+    if (!streamPlayerEl) {
+      return;
+    }
+
+    const baseSrc = getStreamPlayerBaseSrc();
+    if (!baseSrc) {
+      return;
+    }
+
+    try {
+      const url = new URL(baseSrc, window.location.href);
+      url.searchParams.set(STREAM_PLAYER_REFRESH_QUERY_KEY, String(Date.now()));
+      streamPlayerEl.src = url.toString();
+    } catch (_error) {
+      const separator = baseSrc.includes("?") ? "&" : "?";
+      streamPlayerEl.src = `${baseSrc}${separator}${STREAM_PLAYER_REFRESH_QUERY_KEY}=${Date.now()}`;
+    }
+  }
+
+  function stopStreamPlayerAutoRefresh() {
+    if (!streamPlayerAutoRefreshId) {
+      return;
+    }
+    window.clearInterval(streamPlayerAutoRefreshId);
+    streamPlayerAutoRefreshId = 0;
+  }
+
+  function startStreamPlayerAutoRefresh() {
+    if (!streamPlayerEl || streamPlayerAutoRefreshId) {
+      return;
+    }
+
+    streamPlayerAutoRefreshId = window.setInterval(() => {
+      if (document.hidden) {
+        return;
+      }
+      if (getRouteFromLocation() !== "home") {
+        return;
+      }
+      refreshStreamPlayerEmbed();
+    }, STREAM_PLAYER_AUTO_REFRESH_MS);
+  }
+
+  function syncStreamPlayerAutoRefresh(isLive) {
+    const shouldAutoRefresh = Boolean(isLive) && getRouteFromLocation() === "home";
+    if (shouldAutoRefresh) {
+      startStreamPlayerAutoRefresh();
+      return;
+    }
+    stopStreamPlayerAutoRefresh();
+  }
+
   async function updateKickFollowersBadge(force = false) {
     const hasFollowersBadge = Boolean(streamIntroFollowersStatEl && streamIntroFollowersCountEl && streamIntroFollowersTextEl);
     const hasSubsBadge = Boolean(streamIntroSubsStatEl && streamIntroSubsCountEl && streamIntroSubsTextEl);
-    if (!hasFollowersBadge && !hasSubsBadge) {
+    const hasStreamPlayer = Boolean(streamPlayerEl);
+    if (!hasFollowersBadge && !hasSubsBadge && !hasStreamPlayer) {
       return;
     }
     if (kickFollowersPollBusy && !force) {
@@ -4067,6 +4488,20 @@
           streamIntroSubsStatEl.dataset.ready = "1";
         });
       pendingTasks.push(subsTask);
+    }
+
+    if (hasStreamPlayer) {
+      const streamLiveTask = Promise.resolve()
+        .then(() => getSharedChannelPayload())
+        .then((channelPayload) => {
+          lastKickChannelLiveState = isKickChannelLive(channelPayload);
+          syncStreamPlayerAutoRefresh(lastKickChannelLiveState);
+        })
+        .catch(() => {
+          lastKickChannelLiveState = false;
+          syncStreamPlayerAutoRefresh(false);
+        });
+      pendingTasks.push(streamLiveTask);
     }
 
     try {
@@ -6362,28 +6797,40 @@
     return days > 0 ? `${days}d ${hms}` : hms;
   }
 
-  function computeLicznikDisplay(modeValue, targetDateMs, nowMs) {
+  function computeLicznikDisplay(modeValue, targetDateMs, nowMs, endDateMs = Number.NaN) {
     const mode = normalizeLicznikMode(modeValue);
 
     if (mode === "until") {
-      const remainingMs = Math.max(0, targetDateMs - nowMs);
+      const remainingSeconds = Math.max(0, Math.ceil((targetDateMs - nowMs) / 1000));
+      const remainingMs = remainingSeconds * 1000;
       return {
         value: formatLicznikDuration(remainingMs),
-        state: remainingMs > 0 ? "DO STARTU" : "START",
+        state: remainingMs > 0 ? "DO STARTU" : "ZAKOŃCZONO",
         isDone: remainingMs <= 0
       };
     }
 
+    const hasEndDate = Number.isFinite(endDateMs) && endDateMs > targetDateMs;
     if (nowMs >= targetDateMs) {
+      if (hasEndDate && nowMs >= endDateMs) {
+        const totalSecondsAtEnd = Math.max(0, Math.floor((endDateMs - targetDateMs) / 1000));
+        return {
+          value: formatLicznikDuration(totalSecondsAtEnd * 1000),
+          state: "ZAKOŃCZONO",
+          isDone: true
+        };
+      }
+      const elapsedSeconds = Math.max(0, Math.floor((nowMs - targetDateMs) / 1000));
       return {
-        value: formatLicznikDuration(nowMs - targetDateMs),
+        value: formatLicznikDuration(elapsedSeconds * 1000),
         state: "OD STARTU",
         isDone: false
       };
     }
 
+    const toStartSeconds = Math.max(0, Math.ceil((targetDateMs - nowMs) / 1000));
     return {
-      value: formatLicznikDuration(targetDateMs - nowMs),
+      value: formatLicznikDuration(toStartSeconds * 1000),
       state: "DO STARTU",
       isDone: false
     };
@@ -6403,10 +6850,14 @@
     cards.forEach((card) => {
       const mode = String(card.getAttribute("data-licznik-mode") || "since").trim().toLowerCase();
       const targetText = String(card.getAttribute("data-licznik-date") || "").trim();
+      const endDateText = String(card.getAttribute("data-licznik-end-date") || "").trim();
       const valueEl = card.querySelector("[data-licznik-value]");
       const stateEl = card.querySelector("[data-licznik-state]");
 
-      const parsedDateMs = Date.parse(targetText);
+      const parsedDate = parseLicznikDateInputValue(targetText);
+      const parsedEndDate = parseLicznikDateInputValue(endDateText);
+      const parsedDateMs = parsedDate ? parsedDate.getTime() : Number.NaN;
+      const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
       if (!Number.isFinite(parsedDateMs)) {
         if (valueEl) {
           valueEl.textContent = "--";
@@ -6417,7 +6868,7 @@
         return;
       }
 
-      const display = computeLicznikDisplay(mode, parsedDateMs, nowMs);
+      const display = computeLicznikDisplay(mode, parsedDateMs, nowMs, parsedEndDateMs);
       if (valueEl) {
         valueEl.textContent = display.value;
       }
@@ -6433,15 +6884,17 @@
     if (licznikiTickerId) {
       return;
     }
-    licznikiTickerId = window.setInterval(() => {
-      if (document.hidden) {
-        return;
-      }
-      if (getRouteFromLocation() !== "liczniki") {
-        return;
-      }
-      renderLicznikiPanel();
-    }, 1000);
+    const scheduleNextTick = () => {
+      const nextDelayMs = Math.max(20, 1000 - (Date.now() % 1000));
+      licznikiTickerId = window.setTimeout(() => {
+        if (!document.hidden && getRouteFromLocation() === "liczniki") {
+          renderLicznikiPanel();
+        }
+        scheduleNextTick();
+      }, nextDelayMs);
+    };
+
+    scheduleNextTick();
   }
 
   function setActiveNav(routeName) {
@@ -6521,6 +6974,7 @@
       void updateKickFollowersBadge(true);
       startFriendsLivePolling();
       void updateFriendsLiveBadges(true);
+      syncStreamPlayerAutoRefresh(lastKickChannelLiveState);
     }
 
     if (route === "clips") {
@@ -6530,6 +6984,10 @@
     if (route === "liczniki") {
       renderLicznikiPanel();
       startLicznikiTicker();
+    }
+
+    if (route !== "home") {
+      stopStreamPlayerAutoRefresh();
     }
   }
 

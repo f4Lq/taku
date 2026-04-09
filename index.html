@@ -52,7 +52,6 @@
         <span class="route-glow route-glow-green" aria-hidden="true"></span>
         <div class="route-copy">
           <span id="routeBadge" class="route-badge">WKRÓTCE...</span>
-          <p class="route-subtext">Przyciski od IG i TikTok taku i 77RP</p>
           <p class="route-subtext">Podstrona z changelogiem</p>
           <p class="route-subtext"></p>
 
@@ -66,18 +65,18 @@
       </header>
 
       <div id="licznikiGrid" class="liczniki-grid">
-        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="since" data-licznik-date="2025-01-01T00:00:00+01:00" data-licznik-image="/img/77logo.webp">
+        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="since" data-licznik-date="2023-07-07T00:00:00" data-licznik-image="/img/77logo.webp">
           <span class="liczniki-card-media" aria-hidden="true">
             <img class="liczniki-card-image" src="/img/77logo.webp" alt="">
           </span>
           <div class="liczniki-card-content">
             <p class="kary-card-state" data-licznik-state>OD STARTU</p>
-            <h3>77RP 3.0</h3>
+            <h3>77RP WL:ON 3.0</h3>
             <span class="kary-counter-pill" data-licznik-value>0</span>
           </div>
         </article>
 
-        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="since" data-licznik-date="2025-12-17T18:00:00+02:00" data-licznik-image="/img/77logo.webp">
+        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="since" data-licznik-date="2025-12-17T18:00:00" data-licznik-image="/img/77logo.webp">
           <span class="liczniki-card-media" aria-hidden="true">
             <img class="liczniki-card-image" src="/img/77logo.webp" alt="">
           </span>
@@ -88,7 +87,7 @@
           </div>
         </article>
 
-        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="until" data-licznik-date="2026-11-19T00:00:00+01:00" data-licznik-image="/img/logogta6.png">
+        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="until" data-licznik-date="2026-11-19T00:00:00" data-licznik-image="/img/logogta6.png">
           <span class="liczniki-card-media" aria-hidden="true">
             <img class="liczniki-card-image" src="/img/logogta6.png" alt="">
           </span>
@@ -159,8 +158,8 @@
 
         <nav class="admin-tabs" aria-label="Zakładki panelu">
           <button class="admin-tab-btn is-active" type="button" data-tab="members">Członkowie CCI</button>
-          <button class="admin-tab-btn" type="button" data-tab="accounts">Panel Admina</button>
           <button class="admin-tab-btn" type="button" data-tab="liczniki">Liczniki</button>
+          <button class="admin-tab-btn" type="button" data-tab="accounts">Panel Admina</button>
           <button class="admin-tab-btn" type="button" data-tab="bindings">Powiązania</button>
         </nav>
 
@@ -287,6 +286,65 @@
                 </div>
               </div>
             </label>
+            <label id="adminLicznikEndDateField" class="admin-field admin-datetime-field" data-licznik-end-field hidden>
+              <span class="admin-field-label">Data zakończenia (opcjonalnie)</span>
+              <span class="admin-datetime-row">
+                <input
+                  class="admin-input admin-datetime-display"
+                  type="text"
+                  name="licznikEndDateDisplay"
+                  placeholder="Data zakończenia (opcjonalnie) - dd.mm.rrrr --:--"
+                  readonly
+                >
+                <input type="hidden" name="licznikEndDate">
+                <button class="admin-row-btn admin-datetime-open" type="button" data-licznik-end-date-open>Wybierz</button>
+              </span>
+              <div id="adminLicznikEndDatePicker" class="admin-date-picker" hidden>
+                <div class="admin-date-picker-nav">
+                  <button class="admin-date-picker-nav-btn" type="button" data-licznik-end-picker-prev aria-label="Poprzedni miesiąc">&lt;&lt;</button>
+                  <strong class="admin-date-picker-month" data-licznik-end-picker-month>Kwiecień</strong>
+                  <button class="admin-date-picker-nav-btn" type="button" data-licznik-end-picker-next aria-label="Następny miesiąc">&gt;&gt;</button>
+                </div>
+                <div class="admin-date-picker-year-controls">
+                  <button class="admin-date-picker-year-btn" type="button" data-licznik-end-picker-year-prev aria-label="Poprzedni rok">&lt;&lt;</button>
+                  <input
+                    class="admin-date-picker-year-input"
+                    type="number"
+                    min="1970"
+                    max="2100"
+                    step="1"
+                    value="2026"
+                    data-licznik-end-picker-year-input
+                    aria-label="Rok"
+                  >
+                  <button class="admin-date-picker-year-btn" type="button" data-licznik-end-picker-year-next aria-label="Następny rok">&gt;&gt;</button>
+                </div>
+                <div class="admin-date-picker-weekdays" aria-hidden="true">
+                  <span>Pon</span>
+                  <span>Wt</span>
+                  <span>Śr</span>
+                  <span>Czw</span>
+                  <span>Pt</span>
+                  <span>Sob</span>
+                  <span>Niedz</span>
+                </div>
+                <div class="admin-date-picker-grid" data-licznik-end-picker-grid></div>
+                <div class="admin-date-picker-time">
+                  <label>
+                    <span>Godzina</span>
+                    <input class="admin-date-picker-time-input" type="number" min="0" max="23" step="1" value="0" data-licznik-end-picker-hour>
+                  </label>
+                  <label>
+                    <span>Minuty</span>
+                    <input class="admin-date-picker-time-input" type="number" min="0" max="59" step="1" value="0" data-licznik-end-picker-minute>
+                  </label>
+                </div>
+                <div class="admin-date-picker-actions">
+                  <button class="admin-date-picker-action" type="button" data-licznik-end-picker-now>Teraz</button>
+                  <button class="admin-date-picker-action admin-date-picker-action-primary" type="button" data-licznik-end-picker-apply>Ustaw</button>
+                </div>
+              </div>
+            </label>
             <label class="admin-field">
               <span class="admin-field-label">Grafika (URL)</span>
               <input class="admin-input" type="url" name="licznikImageUrl" placeholder="https://... (opcjonalnie)">
@@ -304,7 +362,8 @@
                 <tr>
                   <th>Nazwa</th>
                   <th>Tryb</th>
-                  <th>Data</th>
+                  <th>Data startu</th>
+                  <th>Data zakończenia</th>
                   <th>Grafika</th>
                   <th>Akcje</th>
                 </tr>
@@ -607,7 +666,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="/js/discord.js?v=20260408-kick-slug-fix-1"></script>
-  <script src="/js/script.js?v=20260408-admin-redis-immediate-sync-1"></script>
+  <script src="/js/script.js?v=20260409-stream-autorefresh-live-1"></script>
 </body>
 </html>
 
