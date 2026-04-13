@@ -2438,7 +2438,16 @@ body.route-admin .stream-shell{
   --cta-hover-border: rgba(255, 223, 170, 0.98);
   --cta-hover-glow: rgba(255, 196, 122, 0.28);
 }
-
+.stream-cta-btn-7more7{
+  --cta-border: rgba(245, 245, 245, 0.92);
+  --cta-text: #f5f5f5;
+  --cta-base-1: rgba(0, 0, 0, 0.94);
+  --cta-base-2: rgba(38, 38, 38, 0.9);
+  --cta-highlight: rgba(255, 255, 255, 0.2);
+  --cta-shadow-inner: rgba(255, 255, 255, 0.14);
+  --cta-hover-border: rgba(255, 255, 255, 1);
+  --cta-hover-glow: rgba(255, 255, 255, 0.24);
+}
 .stream-cta-btn-dc{
   --cta-border: rgba(244, 144, 255, 0.65);
   --cta-text: #e6a8ff;
@@ -2537,7 +2546,14 @@ body.route-admin .stream-shell{
   flex: 0 0 18px;
   border-radius: 3px;
 }
-
+.stream-cta-btn-7more7 img{
+  width: 18px;
+  height: 18px;
+  display: block;
+  object-fit: contain;
+  flex: 0 0 18px;
+  border-radius: 3px;
+}
 .stream-cta-btn-wl-on img,
 .stream-cta-btn-wl-off img{
   width: 20px;
@@ -5136,3 +5152,5 @@ body.route-liczniki .liczniki-card.is-done .kary-counter-pill{
     opacity: 0.44;
   }
 }
+
+
