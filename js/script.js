@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   "use strict";
 
   const IS_FILE_PROTOCOL = window.location.protocol === "file:";
@@ -98,6 +98,15 @@
   const adminLicznikFormEl = document.getElementById("adminLicznikForm");
   const adminLicznikiTableBodyEl = document.getElementById("adminLicznikiTableBody");
   const adminLicznikStatusEl = document.getElementById("adminLicznikStatus");
+  const adminLicznikFinishPickerModalEl = document.getElementById("adminLicznikFinishPickerModal");
+  const adminLicznikFinishInputEl = document.getElementById("adminLicznikFinishInput");
+  const adminLicznikFinishPickerStatusEl = document.getElementById("adminLicznikFinishPickerStatus");
+  const adminLicznikFinishPickerCancelBtnEl = document.getElementById("adminLicznikFinishPickerCancelBtn");
+  const adminLicznikFinishPickerChooseBtnEl = document.getElementById("adminLicznikFinishPickerChooseBtn");
+  const adminLicznikFinishConfirmModalEl = document.getElementById("adminLicznikFinishConfirmModal");
+  const adminLicznikFinishConfirmTextEl = document.getElementById("adminLicznikFinishConfirmText");
+  const adminLicznikFinishConfirmCancelBtnEl = document.getElementById("adminLicznikFinishConfirmCancelBtn");
+  const adminLicznikFinishConfirmApproveBtnEl = document.getElementById("adminLicznikFinishConfirmApproveBtn");
   const licznikiGridEl = document.getElementById("licznikiGrid");
   const statusEl = document.getElementById("status");
   const clipsEl = document.getElementById("clips");
@@ -139,7 +148,7 @@
   const KICK_OAUTH_PRIMARY_ORIGIN = "https://taku-live.pl";
   const KICK_OAUTH_ALLOWED_HOSTS = new Set(["taku-live.pl", "www.taku-live.pl"]);
   const KICK_SUBS_LAST_COUNT_STORAGE_KEY = `${STORAGE_NAMESPACE}:kick:last-subs-goal:${CHANNEL_SLUG}`;
-  const CLIPS_MAX_ITEMS = 200; // liczba ładowania klipów w /klipy
+  const CLIPS_MAX_ITEMS = 200; // liczba klipów do załadowania w /klipy
   const CLIPS_FAST_LOAD_ITEMS = 60;
   const CHANNEL_AVATAR_FALLBACK = String(
     (document.body && document.body.getAttribute("data-channel-avatar-fallback")) ||
@@ -233,6 +242,7 @@
   let draggingMemberRow = null;
   let draggingLicznikId = "";
   let draggingLicznikRow = null;
+  let pendingLicznikFinishContext = null;
   let licznikiTickerId = 0;
   const downloadInProgress = new Set();
   const friendsLiveStateBySlug = new Map();
@@ -324,6 +334,45 @@
     panelEl.style.display = isActive ? "" : "none";
   }
 
+  function canAccessAdminTab(tabName) {
+    const clean = String(tabName || "").trim().toLowerCase();
+    if (clean === "accounts") {
+      return hasPanelAdminAccess();
+    }
+    if (clean === "bindings") {
+      return hasBindingsTabAccess();
+    }
+    if (clean === "liczniki") {
+      return hasLicznikiTabAccess();
+    }
+    return hasMembersTabAccess();
+  }
+
+  function getFirstAccessibleAdminTab(preferredTab = "") {
+    const candidates = [preferredTab, "members", "liczniki", "accounts", "bindings"]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter((value, index, array) => value && array.indexOf(value) === index);
+    const firstAllowed = candidates.find((tabName) => canAccessAdminTab(tabName));
+    return firstAllowed || "members";
+  }
+
+  function notifyAdminTabAccessDenied(tabName) {
+    const clean = String(tabName || "").trim().toLowerCase();
+    if (clean === "accounts") {
+      setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+      return;
+    }
+    if (clean === "bindings") {
+      setAdminAccountStatus("Brak permisji do zakładki Powiązania.", "error");
+      return;
+    }
+    if (clean === "liczniki") {
+      setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+      return;
+    }
+    setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+  }
+
   function setActiveAdminTab(tabName, options = {}) {
     const persist = options && options.persist !== false;
     const clean = String(tabName || "").trim().toLowerCase();
@@ -331,6 +380,11 @@
       clean === "members" || clean === "accounts" || clean === "liczniki" || clean === "bindings"
         ? clean
         : "members";
+
+    if (!canAccessAdminTab(nextTab)) {
+      notifyAdminTabAccessDenied(nextTab);
+      nextTab = getFirstAccessibleAdminTab(nextTab);
+    }
 
     if (nextTab === "accounts" && !hasPanelAdminAccess()) {
       nextTab = "members";
@@ -353,6 +407,9 @@
     setAdminTabPanelState(adminAccountsTabEl, nextTab === "accounts");
     setAdminTabPanelState(adminLicznikiTabEl, nextTab === "liczniki");
     setAdminTabPanelState(adminBindingsTabEl, nextTab === "bindings");
+    if (nextTab !== "liczniki") {
+      closeAdminLicznikFinishModals();
+    }
 
     if (nextTab === "bindings") {
       void fetchKickOAuthStatus(true);
@@ -423,6 +480,10 @@
     adminLicznikStatusEl.textContent = String(text || "");
     adminLicznikStatusEl.classList.toggle("is-error", type === "error");
     adminLicznikStatusEl.classList.toggle("is-success", type === "success");
+  }
+
+  function setAdminLicznikFinishPickerStatus(text, type = "info") {
+    setPanelStatus(adminLicznikFinishPickerStatusEl, text, type);
   }
 
   function setActiveAdminSyncStatus(text, type = "info") {
@@ -916,6 +977,22 @@
       return "Brak";
     }
     return formatLicznikDateLabel(parsedEndDate.toISOString());
+  }
+
+  function isLicznikFinished(item, nowCivilMs = getLicznikCivilMs(new Date())) {
+    const safeItem = item && typeof item === "object" ? item : {};
+    if (normalizeLicznikMode(safeItem.mode) !== "since" || !Number.isFinite(nowCivilMs)) {
+      return false;
+    }
+
+    const parsedTargetDate = parseLicznikDateInputValue(String(safeItem.targetDate || "").trim());
+    const parsedEndDate = parseLicznikDateInputValue(String(safeItem.endDate || "").trim());
+    const targetDateMs = getLicznikCivilMs(parsedTargetDate);
+    const endDateMs = getLicznikCivilMs(parsedEndDate);
+    if (!Number.isFinite(targetDateMs) || !Number.isFinite(endDateMs) || endDateMs <= targetDateMs) {
+      return false;
+    }
+    return nowCivilMs >= endDateMs;
   }
 
   function toLicznikDateInputValue(dateValue) {
@@ -1441,14 +1518,6 @@
       pickerAttrPrefix: "licznik-picker",
       presetSelectSelector: 'select[name="licznikDatePreset"]'
     });
-
-    bindAdminLicznikSingleDateControl({
-      dateInputSelector: 'input[name="licznikEndDate"]',
-      dateDisplaySelector: 'input[name="licznikEndDateDisplay"]',
-      openButtonSelector: "[data-licznik-end-date-open]",
-      pickerId: "adminLicznikEndDatePicker",
-      pickerAttrPrefix: "licznik-end-picker"
-    });
   }
 
   function renderPublicLicznikiCards() {
@@ -1528,8 +1597,12 @@
       return;
     }
 
+    const nowCivilMs = getLicznikCivilMs(new Date());
     licznikiItems.forEach((item) => {
       const imageUrl = sanitizeLicznikImageUrl(item.imageUrl) || sanitizeLicznikImageUrl(getDefaultLicznikImageByTitle(item.title));
+      const mode = normalizeLicznikMode(item.mode);
+      const isFinished = isLicznikFinished(item, nowCivilMs);
+      const canScheduleFinish = mode === "since" && !isFinished;
       const row = document.createElement("tr");
       row.className = "admin-licznik-row";
       row.dataset.licznikId = item.id;
@@ -1540,9 +1613,13 @@
             type="button"
             draggable="true"
             data-licznik-drag-handle="${escapeHtmlText(item.id)}"
-            title="Przeciągnij, aby ustawić kolejność"
-            aria-label="Przeciągnij, aby ustawić kolejność"
-          >⇅</button>
+            title="Przeciągnij, aby ustawić kolejność liczników"
+            aria-label="Przeciągnij, aby ustawić kolejność liczników"
+          >
+            <svg class="admin-drag-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3L9.4 5.6M12 3L14.6 5.6M12 21L9.4 18.4M12 21L14.6 18.4M3 12L5.6 9.4M3 12L5.6 14.6M21 12L18.4 9.4M21 12L18.4 14.6M12 5.6V18.4M5.6 12H18.4"></path>
+            </svg>
+          </button>
           ${escapeHtmlText(item.title)}
         </td>
         <td>${escapeHtmlText(formatLicznikModeLabel(item.mode))}</td>
@@ -1557,12 +1634,253 @@
         </td>
         <td>
           <span class="admin-account-actions">
+            ${
+              isFinished
+                ? `
+                  <button class="admin-row-btn admin-row-btn-resume" type="button" data-licznik-resume="${escapeHtmlText(item.id)}">Wznów</button>
+                `
+                : `
+                  <button
+                    class="admin-row-btn admin-row-btn-finish"
+                    type="button"
+                    data-licznik-finish="${escapeHtmlText(item.id)}"
+                    ${canScheduleFinish ? "" : "disabled"}
+                  >Zakończ</button>
+                `
+            }
             <button class="admin-row-btn" type="button" data-licznik-edit="${escapeHtmlText(item.id)}">Edytuj</button>
             <button class="admin-row-btn admin-row-btn-danger" type="button" data-licznik-remove="${escapeHtmlText(item.id)}">Usuń</button>
           </span>
         </td>
       `;
       adminLicznikiTableBodyEl.appendChild(row);
+    });
+  }
+
+  function closeAdminLicznikFinishPickerModal() {
+    if (adminLicznikFinishPickerModalEl) {
+      adminLicznikFinishPickerModalEl.hidden = true;
+    }
+    setAdminLicznikFinishPickerStatus("", "info");
+  }
+
+  function closeAdminLicznikFinishConfirmModal() {
+    if (adminLicznikFinishConfirmModalEl) {
+      adminLicznikFinishConfirmModalEl.hidden = true;
+    }
+  }
+
+  function closeAdminLicznikFinishModals(options = {}) {
+    const clearContext = options && options.clearContext === false ? false : true;
+    closeAdminLicznikFinishPickerModal();
+    closeAdminLicznikFinishConfirmModal();
+    if (clearContext) {
+      pendingLicznikFinishContext = null;
+    }
+  }
+
+  function openAdminLicznikFinishPickerModal(licznikId) {
+    const cleanId = String(licznikId || "").trim();
+    if (!cleanId || !adminLicznikFinishPickerModalEl || !adminLicznikFinishInputEl) {
+      return;
+    }
+
+    const licznik = licznikiItems.find((item) => String(item && item.id || "").trim() === cleanId);
+    if (!licznik) {
+      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
+      return;
+    }
+    if (normalizeLicznikMode(licznik.mode) !== "since") {
+      setAdminLicznikStatus("Opcja zakończenia działa tylko dla liczników w trybie Od daty.", "error");
+      return;
+    }
+
+    const parsedTargetDate = parseLicznikDateInputValue(String(licznik.targetDate || "").trim());
+    const targetDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
+    if (!Number.isFinite(targetDateMs)) {
+      setAdminLicznikStatus("Ten licznik ma nieprawidłową datę startu.", "error");
+      return;
+    }
+
+    const parsedExistingEndDate = parseLicznikDateInputValue(String(licznik.endDate || "").trim());
+    const existingEndDateMs = parsedExistingEndDate ? parsedExistingEndDate.getTime() : Number.NaN;
+    const minEndDateMs = targetDateMs + 60 * 1000;
+    const defaultEndDateMs =
+      Number.isFinite(existingEndDateMs) && existingEndDateMs > targetDateMs
+        ? existingEndDateMs
+        : Math.max(minEndDateMs, Date.now() + 60 * 1000);
+
+    const minValue = toLicznikDateInputValue(new Date(minEndDateMs).toISOString());
+    const defaultValue = toLicznikDateInputValue(new Date(defaultEndDateMs).toISOString()) || minValue;
+    if (minValue) {
+      adminLicznikFinishInputEl.setAttribute("min", minValue);
+    } else {
+      adminLicznikFinishInputEl.removeAttribute("min");
+    }
+    adminLicznikFinishInputEl.value = defaultValue;
+
+    pendingLicznikFinishContext = {
+      licznikId: cleanId,
+      selectedEndDateIso: ""
+    };
+    setAdminLicznikFinishPickerStatus("", "info");
+    closeAdminLicznikFinishConfirmModal();
+    adminLicznikFinishPickerModalEl.hidden = false;
+    window.requestAnimationFrame(() => {
+      adminLicznikFinishInputEl.focus();
+      adminLicznikFinishInputEl.select();
+    });
+  }
+
+  function confirmAdminLicznikFinishSelection() {
+    if (!pendingLicznikFinishContext || !adminLicznikFinishInputEl) {
+      return;
+    }
+
+    const licznikId = String(pendingLicznikFinishContext.licznikId || "").trim();
+    const licznik = licznikiItems.find((item) => String(item && item.id || "").trim() === licznikId);
+    if (!licznik) {
+      closeAdminLicznikFinishModals();
+      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
+      return;
+    }
+
+    const targetDate = parseLicznikDateInputValue(String(licznik.targetDate || "").trim());
+    const targetDateMs = targetDate ? targetDate.getTime() : Number.NaN;
+    const selectedRawValue = String(adminLicznikFinishInputEl.value || "").trim();
+    const selectedDate = parseLicznikDateInputValue(selectedRawValue);
+    const selectedDateMs = selectedDate ? selectedDate.getTime() : Number.NaN;
+    if (!selectedDate || !Number.isFinite(selectedDateMs)) {
+      setAdminLicznikFinishPickerStatus("Wybierz poprawną datę i godzinę zakończenia.", "error");
+      return;
+    }
+    if (!Number.isFinite(targetDateMs) || selectedDateMs <= targetDateMs) {
+      setAdminLicznikFinishPickerStatus("Data zakończenia musi być późniejsza niż data startu licznika.", "error");
+      return;
+    }
+
+    const selectedEndDateIso = selectedDate.toISOString();
+    pendingLicznikFinishContext.selectedEndDateIso = selectedEndDateIso;
+    if (adminLicznikFinishConfirmTextEl) {
+      adminLicznikFinishConfirmTextEl.textContent = `Czy napewno chcesz zakończyć odliczanie wtedy ${formatLicznikDateLabel(selectedEndDateIso)}?`;
+    }
+
+    closeAdminLicznikFinishPickerModal();
+    if (adminLicznikFinishConfirmModalEl) {
+      adminLicznikFinishConfirmModalEl.hidden = false;
+      window.requestAnimationFrame(() => {
+        if (adminLicznikFinishConfirmApproveBtnEl) {
+          adminLicznikFinishConfirmApproveBtnEl.focus();
+        }
+      });
+    }
+  }
+
+  function applyAdminLicznikFinishSelection() {
+    if (!pendingLicznikFinishContext) {
+      return;
+    }
+
+    const licznikId = String(pendingLicznikFinishContext.licznikId || "").trim();
+    const selectedEndDateIso = String(pendingLicznikFinishContext.selectedEndDateIso || "").trim();
+    const index = licznikiItems.findIndex((item) => String(item && item.id || "").trim() === licznikId);
+    if (index === -1) {
+      closeAdminLicznikFinishModals();
+      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
+      return;
+    }
+
+    const beforeLicznik = { ...licznikiItems[index] };
+    if (normalizeLicznikMode(beforeLicznik.mode) !== "since") {
+      closeAdminLicznikFinishModals();
+      setAdminLicznikStatus("Opcja zakończenia działa tylko dla liczników w trybie Od daty.", "error");
+      return;
+    }
+
+    const targetDate = parseLicznikDateInputValue(String(beforeLicznik.targetDate || "").trim());
+    const targetDateMs = targetDate ? targetDate.getTime() : Number.NaN;
+    const selectedDate = parseLicznikDateInputValue(selectedEndDateIso);
+    const selectedDateMs = selectedDate ? selectedDate.getTime() : Number.NaN;
+    if (!selectedDate || !Number.isFinite(selectedDateMs)) {
+      closeAdminLicznikFinishModals();
+      setAdminLicznikStatus("Wybrano nieprawidłową datę zakończenia odliczania.", "error");
+      return;
+    }
+    if (!Number.isFinite(targetDateMs) || selectedDateMs <= targetDateMs) {
+      closeAdminLicznikFinishModals();
+      setAdminLicznikStatus("Data zakończenia musi być późniejsza niż data startu licznika.", "error");
+      return;
+    }
+
+    licznikiItems[index] = {
+      ...licznikiItems[index],
+      endDate: selectedDate.toISOString()
+    };
+
+    saveLicznikiItems();
+    renderPublicLicznikiCards();
+    renderAdminLicznikiTable();
+    renderLicznikiPanel();
+    closeAdminLicznikFinishModals();
+    setAdminLicznikStatus(
+      `Ustawiono zakończenie odliczania na ${formatLicznikDateLabel(licznikiItems[index].endDate)}.`,
+      "success"
+    );
+    sendAdminAuditEvent("admin_licznik_finish_scheduled", {
+      licznikId,
+      before: buildLicznikAuditSnapshot(beforeLicznik),
+      after: buildLicznikAuditSnapshot(licznikiItems[index])
+    });
+  }
+
+  function bindAdminLicznikFinishModalControls() {
+    if (!adminLicznikFinishPickerModalEl || !adminLicznikFinishConfirmModalEl) {
+      return;
+    }
+
+    if (adminLicznikFinishPickerCancelBtnEl) {
+      adminLicznikFinishPickerCancelBtnEl.addEventListener("click", () => {
+        closeAdminLicznikFinishModals();
+      });
+    }
+    if (adminLicznikFinishPickerChooseBtnEl) {
+      adminLicznikFinishPickerChooseBtnEl.addEventListener("click", () => {
+        confirmAdminLicznikFinishSelection();
+      });
+    }
+    if (adminLicznikFinishConfirmCancelBtnEl) {
+      adminLicznikFinishConfirmCancelBtnEl.addEventListener("click", () => {
+        closeAdminLicznikFinishModals();
+      });
+    }
+    if (adminLicznikFinishConfirmApproveBtnEl) {
+      adminLicznikFinishConfirmApproveBtnEl.addEventListener("click", () => {
+        applyAdminLicznikFinishSelection();
+      });
+    }
+
+    adminLicznikFinishPickerModalEl.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.hasAttribute("data-admin-modal-close")) {
+        closeAdminLicznikFinishModals();
+      }
+    });
+    adminLicznikFinishConfirmModalEl.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.hasAttribute("data-admin-modal-close")) {
+        closeAdminLicznikFinishModals();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      const pickerOpen = Boolean(adminLicznikFinishPickerModalEl && !adminLicznikFinishPickerModalEl.hidden);
+      const confirmOpen = Boolean(adminLicznikFinishConfirmModalEl && !adminLicznikFinishConfirmModalEl.hidden);
+      if (!pickerOpen && !confirmOpen) {
+        return;
+      }
+      event.preventDefault();
+      closeAdminLicznikFinishModals();
     });
   }
 
@@ -1634,75 +1952,33 @@
     }
   }
 
-  function syncAdminLicznikEndDateFieldVisibility(options = {}) {
-    if (!adminLicznikFormEl) {
-      return;
-    }
-
-    const clearWhenHidden = options && options.clearWhenHidden === false ? false : true;
-    const modeInput = adminLicznikFormEl.querySelector('select[name="licznikMode"]');
-    const endDateField = adminLicznikFormEl.querySelector("[data-licznik-end-field]");
-    const endDateInput = adminLicznikFormEl.querySelector('input[name="licznikEndDate"]');
-    const endDateDisplayInput = adminLicznikFormEl.querySelector('input[name="licznikEndDateDisplay"]');
-    const endDateOpenBtn = adminLicznikFormEl.querySelector("[data-licznik-end-date-open]");
-    const endDatePickerEl = document.getElementById("adminLicznikEndDatePicker");
-    const mode = normalizeLicznikMode(modeInput ? modeInput.value : "since");
-    const shouldShow = mode === "since";
-
-    if (endDateField) {
-      endDateField.hidden = !shouldShow;
-    }
-    if (endDateInput) {
-      endDateInput.disabled = !shouldShow;
-      if (!shouldShow && clearWhenHidden) {
-        endDateInput.value = "";
-      }
-    }
-    if (endDateDisplayInput) {
-      endDateDisplayInput.disabled = !shouldShow;
-      if (!shouldShow && clearWhenHidden) {
-        endDateDisplayInput.value = "";
-      }
-    }
-    if (endDateOpenBtn) {
-      endDateOpenBtn.disabled = !shouldShow;
-    }
-    if (!shouldShow && endDatePickerEl) {
-      endDatePickerEl.hidden = true;
-    }
-  }
-
   function bindAdminLicznikiFeature() {
     if (adminLicznikiBound) {
       return;
     }
     adminLicznikiBound = true;
     bindAdminLicznikDateControls();
-    syncAdminLicznikEndDateFieldVisibility();
+    bindAdminLicznikFinishModalControls();
 
     if (adminLicznikFormEl) {
-      const modeInput = adminLicznikFormEl.querySelector('select[name="licznikMode"]');
-      if (modeInput) {
-        modeInput.addEventListener("change", () => {
-          syncAdminLicznikEndDateFieldVisibility();
-        });
-      }
-
-      adminLicznikFormEl.addEventListener("reset", () => {
-        window.setTimeout(() => {
-          syncAdminLicznikEndDateFieldVisibility();
-        }, 0);
-      });
-
       adminLicznikFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
+
+        if (!hasLicznikiTabAccess()) {
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          sendAdminAuditEvent("admin_liczniki_access_denied", {
+            operation: "submit_licznik_form"
+          });
+          return;
+        }
 
         const formData = new FormData(adminLicznikFormEl);
         const title = String(formData.get("licznikTitle") || "").trim();
         const mode = normalizeLicznikMode(formData.get("licznikMode"));
         const dateInputRaw = String(formData.get("licznikDate") || "").trim();
-        const endDateInputRaw = String(formData.get("licznikEndDate") || "").trim();
         const imageUrlInput = sanitizeLicznikImageUrl(formData.get("licznikImageUrl"));
+        let auditAction = "";
+        let auditDetails = {};
         const parsedTargetDate = parseLicznikDateInputValue(dateInputRaw);
         const parsedDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
         if (!title || !parsedTargetDate || !Number.isFinite(parsedDateMs)) {
@@ -1711,18 +1987,12 @@
         }
         const targetDate = parsedTargetDate.toISOString();
         let endDate = "";
-        if (mode === "since" && endDateInputRaw) {
-          const parsedEndDate = parseLicznikDateInputValue(endDateInputRaw);
-          const parsedEndDateMs = parsedEndDate ? parsedEndDate.getTime() : Number.NaN;
-          if (!parsedEndDate || !Number.isFinite(parsedEndDateMs)) {
-            setAdminLicznikStatus("Podaj poprawną datę zakończenia odliczania.", "error");
-            return;
-          }
-          if (parsedEndDateMs <= parsedDateMs) {
-            setAdminLicznikStatus("Data zakończenia musi być późniejsza niż data startu.", "error");
-            return;
-          }
-          endDate = parsedEndDate.toISOString();
+        if (editingLicznikId) {
+          const existingLicznik = licznikiItems.find((item) => item.id === editingLicznikId);
+          endDate = String(existingLicznik && existingLicznik.endDate || "").trim();
+        }
+        if (mode !== "since") {
+          endDate = "";
         }
         const imageFileInput = adminLicznikFormEl.querySelector('input[name="licznikImageFile"]');
         const selectedImageFile =
@@ -1754,6 +2024,7 @@
             setAdminLicznikStatus("Nie znaleziono licznika do edycji.", "error");
             return;
           }
+          const beforeLicznik = { ...licznikiItems[index] };
           licznikiItems[index] = {
             ...licznikiItems[index],
             title,
@@ -1762,16 +2033,28 @@
             endDate,
             imageUrl
           };
+          auditAction = "admin_licznik_updated";
+          auditDetails = {
+            licznikId: String(beforeLicznik.id || "").trim(),
+            before: buildLicznikAuditSnapshot(beforeLicznik),
+            after: buildLicznikAuditSnapshot(licznikiItems[index])
+          };
           setAdminLicznikStatus("Zaktualizowano licznik.", "success");
         } else {
-          licznikiItems.push({
+          const createdLicznik = {
             id: createLicznikId(title),
             title,
             mode,
             targetDate,
             endDate,
             imageUrl
-          });
+          };
+          licznikiItems.push(createdLicznik);
+          auditAction = "admin_licznik_added";
+          auditDetails = {
+            licznik: buildLicznikAuditSnapshot(createdLicznik),
+            licznikiCount: licznikiItems.length
+          };
           setAdminLicznikStatus("Dodano licznik.", "success");
         }
 
@@ -1781,13 +2064,22 @@
         renderLicznikiPanel();
         setLicznikFormEditingState("");
         adminLicznikFormEl.reset();
+        sendAdminAuditEvent(auditAction || "admin_licznik_saved", auditDetails);
       });
     }
 
     if (adminLicznikiTableBodyEl) {
       adminLicznikiTableBodyEl.addEventListener("click", (event) => {
+        if (!hasLicznikiTabAccess()) {
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          sendAdminAuditEvent("admin_liczniki_access_denied", {
+            operation: "click_liczniki_table"
+          });
+          return;
+        }
+
         const target = event.target.closest(
-          "button[data-licznik-edit], button[data-licznik-remove], button[data-licznik-drag-handle]"
+          "button[data-licznik-edit], button[data-licznik-remove], button[data-licznik-drag-handle], button[data-licznik-finish], button[data-licznik-resume]"
         );
         if (!target) {
           return;
@@ -1796,6 +2088,48 @@
         const dragHandleId = String(target.getAttribute("data-licznik-drag-handle") || "").trim();
         if (dragHandleId) {
           setAdminLicznikStatus("Przeciągnij uchwyt, aby ustawić kolejność liczników.", "info");
+          return;
+        }
+
+        const resumeId = String(target.getAttribute("data-licznik-resume") || "").trim();
+        if (resumeId) {
+          const licznikId = resumeId;
+          const index = licznikiItems.findIndex((item) => String(item && item.id || "").trim() === licznikId);
+          if (index === -1) {
+            setAdminLicznikStatus("Nie znaleziono licznika do wznowienia.", "error");
+            return;
+          }
+
+          const beforeLicznik = { ...licznikiItems[index] };
+          if (!isLicznikFinished(beforeLicznik)) {
+            setAdminLicznikStatus("Ten licznik nie jest jeszcze zakończony.", "error");
+            return;
+          }
+
+          licznikiItems[index] = {
+            ...licznikiItems[index],
+            endDate: ""
+          };
+          if (pendingLicznikFinishContext && String(pendingLicznikFinishContext.licznikId || "").trim() === licznikId) {
+            closeAdminLicznikFinishModals();
+          }
+
+          saveLicznikiItems();
+          renderPublicLicznikiCards();
+          renderAdminLicznikiTable();
+          renderLicznikiPanel();
+          setAdminLicznikStatus(`Wznowiono odliczanie licznika: ${beforeLicznik.title}.`, "success");
+          sendAdminAuditEvent("admin_licznik_finish_resumed", {
+            licznikId,
+            before: buildLicznikAuditSnapshot(beforeLicznik),
+            after: buildLicznikAuditSnapshot(licznikiItems[index])
+          });
+          return;
+        }
+
+        const finishId = String(target.getAttribute("data-licznik-finish") || "").trim();
+        if (finishId) {
+          openAdminLicznikFinishPickerModal(finishId);
           return;
         }
 
@@ -1812,7 +2146,6 @@
           const modeInput = adminLicznikFormEl.querySelector('select[name="licznikMode"]');
           const presetInput = adminLicznikFormEl.querySelector('select[name="licznikDatePreset"]');
           const dateInput = adminLicznikFormEl.querySelector('input[name="licznikDate"]');
-          const endDateInput = adminLicznikFormEl.querySelector('input[name="licznikEndDate"]');
           const imageUrlInput = adminLicznikFormEl.querySelector('input[name="licznikImageUrl"]');
           const imageFileInput = adminLicznikFormEl.querySelector('input[name="licznikImageFile"]');
           if (titleInput) {
@@ -1821,17 +2154,12 @@
           if (modeInput) {
             modeInput.value = normalizeLicznikMode(licznik.mode);
           }
-          syncAdminLicznikEndDateFieldVisibility({ clearWhenHidden: false });
           if (presetInput) {
             presetInput.value = "";
           }
           if (dateInput) {
             dateInput.value = toLicznikDateInputValue(licznik.targetDate);
             dateInput.dispatchEvent(new Event("change"));
-          }
-          if (endDateInput) {
-            endDateInput.value = toLicznikDateInputValue(licznik.endDate);
-            endDateInput.dispatchEvent(new Event("change"));
           }
           if (imageUrlInput) {
             imageUrlInput.value = sanitizeLicznikImageUrl(licznik.imageUrl);
@@ -1851,11 +2179,15 @@
         }
 
         const licznikId = removeId;
+        const removedLicznik = licznikiItems.find((item) => item.id === licznikId) || null;
         const beforeCount = licznikiItems.length;
         licznikiItems = licznikiItems.filter((item) => item.id !== licznikId);
         if (licznikiItems.length === beforeCount) {
           setAdminLicznikStatus("Nie znaleziono licznika do usunięcia.", "error");
           return;
+        }
+        if (pendingLicznikFinishContext && String(pendingLicznikFinishContext.licznikId || "").trim() === licznikId) {
+          closeAdminLicznikFinishModals();
         }
 
         saveLicznikiItems();
@@ -1869,10 +2201,24 @@
             adminLicznikFormEl.reset();
           }
         }
+        sendAdminAuditEvent("admin_licznik_removed", {
+          licznikId,
+          licznik: buildLicznikAuditSnapshot(removedLicznik),
+          licznikiCount: licznikiItems.length
+        });
         setAdminLicznikStatus("Usunięto licznik.", "success");
       });
 
       adminLicznikiTableBodyEl.addEventListener("dragstart", (event) => {
+        if (!hasLicznikiTabAccess()) {
+          event.preventDefault();
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          sendAdminAuditEvent("admin_liczniki_access_denied", {
+            operation: "dragstart_liczniki_table"
+          });
+          return;
+        }
+
         const handle = event.target.closest("[data-licznik-drag-handle]");
         if (!handle) {
           event.preventDefault();
@@ -1903,6 +2249,10 @@
       });
 
       adminLicznikiTableBodyEl.addEventListener("dragover", (event) => {
+        if (!hasLicznikiTabAccess()) {
+          return;
+        }
+
         if (!draggingLicznikRow || !draggingLicznikId) {
           return;
         }
@@ -1924,6 +2274,16 @@
       });
 
       adminLicznikiTableBodyEl.addEventListener("drop", (event) => {
+        if (!hasLicznikiTabAccess()) {
+          event.preventDefault();
+          resetLicznikDragState();
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          sendAdminAuditEvent("admin_liczniki_access_denied", {
+            operation: "drop_liczniki_table"
+          });
+          return;
+        }
+
         if (!draggingLicznikRow || !draggingLicznikId) {
           return;
         }
@@ -1939,6 +2299,10 @@
         renderPublicLicznikiCards();
         renderAdminLicznikiTable();
         renderLicznikiPanel();
+        sendAdminAuditEvent("admin_liczniki_reordered", {
+          orderedLicznikIds: licznikiItems.map((item) => String(item.id || "").trim()).filter(Boolean),
+          licznikiCount: licznikiItems.length
+        });
         setAdminLicznikStatus("Zmieniono kolejność liczników.", "success");
       });
 
@@ -2014,9 +2378,13 @@
               type="button"
               draggable="true"
               data-member-drag-handle="${escapeHtmlText(member.id)}"
-              title="Przeciągnij, aby ustawić kolejność"
-              aria-label="Przeciągnij, aby ustawić kolejność"
-            >⇅</button>
+              title="Przeciągnij, aby ustawić kolejność członków CCI"
+              aria-label="Przeciągnij, aby ustawić kolejność członków CCI"
+            >
+              <svg class="admin-drag-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 3L9.4 5.6M12 3L14.6 5.6M12 21L9.4 18.4M12 21L14.6 18.4M3 12L5.6 9.4M3 12L5.6 14.6M21 12L18.4 9.4M21 12L18.4 14.6M12 5.6V18.4M5.6 12H18.4"></path>
+              </svg>
+            </button>
             <img class="admin-member-avatar" src="${escapeHtmlText(memberAvatar)}" alt="">
             <span class="admin-member-name-text">${escapeHtmlText(member.name)}</span>
           </span>
@@ -2054,7 +2422,7 @@
     }
     const submitBtn = adminMemberFormEl.querySelector('button[type="submit"]');
     if (submitBtn) {
-      submitBtn.textContent = editingMemberId ? "Zapisz zmiany" : "Dodaj Członka CCI";
+      submitBtn.textContent = editingMemberId ? "Zapisz zmiany" : "Dodaj członka CCI";
     }
   }
 
@@ -2127,11 +2495,21 @@
       adminMemberFormEl.addEventListener("submit", (event) => {
         event.preventDefault();
 
+        if (!hasMembersTabAccess()) {
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          sendAdminAuditEvent("admin_members_access_denied", {
+            operation: "submit_member_form"
+          });
+          return;
+        }
+
         const formData = new FormData(adminMemberFormEl);
         const name = String(formData.get("memberName") || "").trim();
         const url = sanitizeMemberUrl(formData.get("memberKick") || "");
         const avatarInput = String(formData.get("memberAvatar") || "").trim();
         const avatar = normalizeMemberAvatar(avatarInput);
+        let auditAction = "";
+        let auditDetails = {};
 
         if (!name || !url) {
           setAdminMemberStatus("Podaj nazwę i profil Kick.", "error");
@@ -2145,20 +2523,33 @@
             setAdminMemberStatus("Nie znaleziono członka do edycji.", "error");
             return;
           }
+          const beforeMember = { ...cciMembers[index] };
           cciMembers[index] = {
             ...cciMembers[index],
             name,
             url,
             avatar
           };
+          auditAction = "admin_member_updated";
+          auditDetails = {
+            memberId: String(beforeMember.id || "").trim(),
+            before: buildMemberAuditSnapshot(beforeMember),
+            after: buildMemberAuditSnapshot(cciMembers[index])
+          };
           setAdminMemberStatus("Zaktualizowano członka CCI.", "success");
         } else {
-          cciMembers.push({
+          const createdMember = {
             id: createMemberId(getKickSlugFromUrl(url)),
             name,
             url,
             avatar
-          });
+          };
+          cciMembers.push(createdMember);
+          auditAction = "admin_member_added";
+          auditDetails = {
+            member: buildMemberAuditSnapshot(createdMember),
+            membersCount: cciMembers.length
+          };
           setAdminMemberStatus("Dodano nowego członka CCI.", "success");
         }
 
@@ -2168,11 +2559,20 @@
         setMemberFormEditingState("");
         adminMemberFormEl.reset();
         void updateFriendsLiveBadges(true);
+        sendAdminAuditEvent(auditAction || "admin_member_saved", auditDetails);
       });
     }
 
     if (adminMembersTableBodyEl) {
       adminMembersTableBodyEl.addEventListener("click", (event) => {
+        if (!hasMembersTabAccess()) {
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          sendAdminAuditEvent("admin_members_access_denied", {
+            operation: "click_members_table"
+          });
+          return;
+        }
+
         const target = event.target.closest("button[data-member-edit], button[data-member-remove], button[data-member-drag-handle]");
         if (!target) {
           return;
@@ -2212,6 +2612,7 @@
 
         const removeId = String(target.getAttribute("data-member-remove") || "").trim();
         if (removeId) {
+          const removedMember = cciMembers.find((member) => member.id === removeId) || null;
           const beforeCount = cciMembers.length;
           cciMembers = cciMembers.filter((member) => member.id !== removeId);
           if (cciMembers.length === beforeCount) {
@@ -2229,11 +2630,25 @@
           }
           setAdminMemberStatus("Usunięto członka CCI.", "success");
           void updateFriendsLiveBadges(true);
+          sendAdminAuditEvent("admin_member_removed", {
+            memberId: removeId,
+            member: buildMemberAuditSnapshot(removedMember),
+            membersCount: cciMembers.length
+          });
           return;
         }
       });
 
       adminMembersTableBodyEl.addEventListener("dragstart", (event) => {
+        if (!hasMembersTabAccess()) {
+          event.preventDefault();
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          sendAdminAuditEvent("admin_members_access_denied", {
+            operation: "dragstart_members_table"
+          });
+          return;
+        }
+
         const handle = event.target.closest("[data-member-drag-handle]");
         if (!handle) {
           event.preventDefault();
@@ -2264,6 +2679,10 @@
       });
 
       adminMembersTableBodyEl.addEventListener("dragover", (event) => {
+        if (!hasMembersTabAccess()) {
+          return;
+        }
+
         if (!draggingMemberRow || !draggingMemberId) {
           return;
         }
@@ -2285,6 +2704,16 @@
       });
 
       adminMembersTableBodyEl.addEventListener("drop", (event) => {
+        if (!hasMembersTabAccess()) {
+          event.preventDefault();
+          resetMemberDragState();
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          sendAdminAuditEvent("admin_members_access_denied", {
+            operation: "drop_members_table"
+          });
+          return;
+        }
+
         if (!draggingMemberRow || !draggingMemberId) {
           return;
         }
@@ -2301,6 +2730,10 @@
         renderAdminMembersTable();
         setAdminMemberStatus("Zmieniono kolejność członków CCI.", "success");
         void updateFriendsLiveBadges(true);
+        sendAdminAuditEvent("admin_members_reordered", {
+          orderedMemberIds: cciMembers.map((member) => String(member.id || "").trim()).filter(Boolean),
+          membersCount: cciMembers.length
+        });
       });
 
       adminMembersTableBodyEl.addEventListener("dragend", () => {
@@ -2320,7 +2753,7 @@
     if (!accounts.length) {
       adminAccountsTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="8" class="admin-table-empty">Brak kont administracyjnych.</td>
+          <td colspan="10" class="admin-table-empty">Brak kont administracyjnych.</td>
         </tr>
       `;
       return;
@@ -2332,6 +2765,8 @@
       const discordName = String(account.discordName || "").trim();
       const visiblePassword = !account.isRoot && visibleAdminPasswords.has(accountId);
       const permissionsEnabledCount =
+        (account.canAccessMembers ? 1 : 0) +
+        (account.canAccessLiczniki ? 1 : 0) +
         (account.canAccessAdmin ? 1 : 0) +
         (account.canAccessBindings ? 1 : 0);
       const row = document.createElement("tr");
@@ -2347,6 +2782,8 @@
               : `<button class="admin-row-btn" type="button" data-account-toggle="${escapeHtmlText(accountId)}">${visiblePassword ? "Ukryj" : "Pokaż"}</button>`
           }
         </td>
+        <td>${account.canAccessMembers ? "Tak" : "Nie"}</td>
+        <td>${account.canAccessLiczniki ? "Tak" : "Nie"}</td>
         <td>${account.canAccessAdmin ? "Tak" : "Nie"}</td>
         <td>${account.canAccessBindings ? "Tak" : "Nie"}</td>
         <td>
@@ -2357,9 +2794,33 @@
                 <div class="admin-account-actions">
                   <details class="admin-permissions-details">
                     <summary class="admin-row-btn admin-permissions-summary">
-                      Permisje (${permissionsEnabledCount}/2)
+                      Permisje (${permissionsEnabledCount}/4)
                     </summary>
                     <ul class="admin-permissions-list">
+                      <li class="admin-permission-item">
+                        <label>
+                          <span>Członkowie CCI</span>
+                          <input
+                            class="admin-access-checkbox"
+                            type="checkbox"
+                            data-account-permission-checkbox="members"
+                            data-account-id="${escapeHtmlText(accountId)}"
+                            ${account.canAccessMembers ? "checked" : ""}
+                          >
+                        </label>
+                      </li>
+                      <li class="admin-permission-item">
+                        <label>
+                          <span>Liczniki</span>
+                          <input
+                            class="admin-access-checkbox"
+                            type="checkbox"
+                            data-account-permission-checkbox="liczniki"
+                            data-account-id="${escapeHtmlText(accountId)}"
+                            ${account.canAccessLiczniki ? "checked" : ""}
+                          >
+                        </label>
+                      </li>
                       <li class="admin-permission-item">
                         <label>
                           <span>Panel Admina</span>
@@ -2405,9 +2866,14 @@
     if (adminAccountFormEl) {
       adminAccountFormEl.addEventListener("submit", (event) => {
         event.preventDefault();
+        let auditAction = "";
+        let auditDetails = {};
 
         if (!hasPanelAdminAccess()) {
           setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+          sendAdminAuditEvent("admin_accounts_access_denied", {
+            operation: "submit_account_form"
+          });
           return;
         }
 
@@ -2415,6 +2881,8 @@
         const login = String(formData.get("accountLogin") || "").trim();
         const password = String(formData.get("accountPassword") || "").trim();
         const discordUserId = normalizeDiscordUserId(formData.get("accountDiscordId"));
+        const canAccessMembers = formData.get("accountAccessMembers") === "on";
+        const canAccessLiczniki = formData.get("accountAccessLiczniki") === "on";
         const canAccessAdmin = formData.get("accountAccessAdmin") === "on";
         const canAccessBindings = formData.get("accountAccessBindings") === "on";
         const isDiscordAccount = Boolean(discordUserId);
@@ -2425,7 +2893,7 @@
         }
 
         if (!password && !discordUserId) {
-          setAdminAccountStatus("Podaj hasło dla konta lokalnego.", "error");
+          setAdminAccountStatus("Podaj haslo dla konta lokalnego.", "error");
           return;
         }
 
@@ -2439,41 +2907,57 @@
 
         if (existingIndex !== -1) {
           if (adminAccounts[existingIndex].isRoot) {
-            setAdminAccountStatus("Tego konta nie można edytować.", "error");
+            setAdminAccountStatus("Tego konta nie mozna edytowac.", "error");
             return;
           }
 
+          const beforeAccount = { ...adminAccounts[existingIndex] };
           adminAccounts[existingIndex] = {
             ...adminAccounts[existingIndex],
             login: normalizedLogin,
             password: normalizedPassword,
             discordUserId: discordUserId || "",
             discordName: String(adminAccounts[existingIndex].discordName || ""),
+            canAccessMembers,
+            canAccessLiczniki,
             canAccessAdmin,
             canAccessBindings,
             isDiscordAccount
           };
+          auditAction = "admin_account_updated";
+          auditDetails = {
+            before: buildAdminAccountAuditSnapshot(beforeAccount),
+            after: buildAdminAccountAuditSnapshot(adminAccounts[existingIndex])
+          };
           setAdminAccountStatus("Zaktualizowano konto admina.", "success");
         } else {
-          adminAccounts.push({
+          const createdAccount = {
             id: createAdminAccountId(normalizedLogin),
             login: normalizedLogin,
             password: normalizedPassword,
             discordUserId: discordUserId || "",
             discordName: "",
+            canAccessMembers,
+            canAccessLiczniki,
             canAccessAdmin,
             canAccessBindings,
             isRoot: false,
             isDiscordAccount
-          });
+          };
+          adminAccounts.push(createdAccount);
+          auditAction = "admin_account_added";
+          auditDetails = {
+            account: buildAdminAccountAuditSnapshot(createdAccount)
+          };
           setAdminAccountStatus("Dodano nowe konto admina.", "success");
         }
 
         saveAdminAccounts();
         renderAdminAccountsTable();
         adminAccountFormEl.reset();
-        if (!hasPanelAdminAccess()) {
-          setActiveAdminTab("members");
+        sendAdminAuditEvent(auditAction || "admin_account_saved", auditDetails);
+        if (!canAccessAdminTab(activeAdminTab)) {
+          setActiveAdminTab(getFirstAccessibleAdminTab(activeAdminTab));
         }
       });
     }
@@ -2482,6 +2966,9 @@
       adminAccountsTableBodyEl.addEventListener("click", (event) => {
         if (!hasPanelAdminAccess()) {
           setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+          sendAdminAuditEvent("admin_accounts_access_denied", {
+            operation: "click_accounts_table"
+          });
           return;
         }
 
@@ -2498,6 +2985,10 @@
             visibleAdminPasswords.add(accountId);
           }
           renderAdminAccountsTable();
+          sendAdminAuditEvent("admin_account_password_visibility_toggled", {
+            account: buildAdminAccountAuditSnapshot(account),
+            visible: visibleAdminPasswords.has(accountId)
+          });
           return;
         }
 
@@ -2517,6 +3008,10 @@
         saveAdminAccounts();
         renderAdminAccountsTable();
         setAdminAccountStatus("Usunięto konto admina.", "success");
+        sendAdminAuditEvent("admin_account_removed", {
+          account: buildAdminAccountAuditSnapshot(accountToDelete),
+          accountsCount: adminAccounts.length
+        });
 
         const currentLogin = getCurrentAdminSessionLogin().toLowerCase();
         const currentDiscordId = normalizeDiscordUserId(getActiveDiscordSession()?.id);
@@ -2540,6 +3035,9 @@
         if (!hasPanelAdminAccess()) {
           renderAdminAccountsTable();
           setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+          sendAdminAuditEvent("admin_accounts_access_denied", {
+            operation: "change_permissions"
+          });
           return;
         }
 
@@ -2554,12 +3052,16 @@
         }
 
         const permissionFieldByKey = {
+          members: "canAccessMembers",
+          liczniki: "canAccessLiczniki",
           admin: "canAccessAdmin",
           bindings: "canAccessBindings"
         };
         const successMessageByKey = {
-          admin: permissionCheckbox.checked ? "Nadano permisję do Panelu Admina." : "Odebrano permisję do Panelu Admina.",
-          bindings: permissionCheckbox.checked ? "Nadano permisję do Powiązań." : "Odebrano permisję do Powiązań."
+          members: permissionCheckbox.checked ? "Nadano permisje do Członków CCI." : "Odebrano permisje do Członków CCI.",
+          liczniki: permissionCheckbox.checked ? "Nadano permisje do Liczników." : "Odebrano permisje do Liczników.",
+          admin: permissionCheckbox.checked ? "Nadano permisje do Panelu Admina." : "Odebrano permisje do Panelu Admina.",
+          bindings: permissionCheckbox.checked ? "Nadano permisje do Powiązań." : "Odebrano permisje do Powiązań."
         };
 
         const permissionField = permissionFieldByKey[permissionKey];
@@ -2568,18 +3070,24 @@
           return;
         }
 
+        const previousValue = Boolean(account[permissionField]);
         account[permissionField] = Boolean(permissionCheckbox.checked);
         saveAdminAccounts();
         renderAdminAccountsTable();
         setAdminAccountStatus(successMessageByKey[permissionKey], "success");
+        sendAdminAuditEvent("admin_account_permission_changed", {
+          account: buildAdminAccountAuditSnapshot(account),
+          permissionKey,
+          before: previousValue,
+          enabled: Boolean(permissionCheckbox.checked)
+        });
 
-        if (!hasPanelAdminAccess()) {
-          setActiveAdminTab("members");
+        if (!canAccessAdminTab(activeAdminTab)) {
+          setActiveAdminTab(getFirstAccessibleAdminTab(activeAdminTab));
         }
       });
     }
   }
-
   function getKickSlugFromUrl(rawUrl) {
     const clean = String(rawUrl ?? "").trim();
     if (!clean) {
@@ -3068,8 +3576,8 @@
   }
 
   function normalizeDiscordUserId(value) {
-    if (window.TakuuWebhook && typeof window.TakuuWebhook.normalizeDiscordUserId === "function") {
-      return window.TakuuWebhook.normalizeDiscordUserId(value);
+    if (window.StronaliveWebhook && typeof window.StronaliveWebhook.normalizeDiscordUserId === "function") {
+      return window.StronaliveWebhook.normalizeDiscordUserId(value);
     }
     return String(value || "").replace(/\D+/g, "").trim();
   }
@@ -3078,7 +3586,14 @@
     if (!account || typeof account !== "object") {
       return false;
     }
-    return Boolean(account.isRoot || account.canAccessAdmin || account.canAccessBindings);
+    return Boolean(
+      account.isRoot ||
+      account.canAccessAdmin ||
+      account.canAccessMembers ||
+      account.canAccessLiczniki ||
+      account.canAccessBindings ||
+      account.canAccessStreamObs
+    );
   }
 
   function getRootAdminAccount(discordName = "") {
@@ -3089,6 +3604,8 @@
       discordUserId: ROOT_ADMIN_DISCORD_ID,
       discordName: String(discordName || ""),
       canAccessAdmin: true,
+      canAccessMembers: true,
+      canAccessLiczniki: true,
       canAccessBindings: true,
       isRoot: true,
       isDiscordAccount: false
@@ -3118,6 +3635,10 @@
     const password = String(rawEntry.password || "").trim() || (isDiscordAccount ? "DISCORD_ONLY" : "");
     const discordName = String(rawEntry.discordName || "").trim();
     const canAccessAdmin = Boolean(rawEntry.canAccessAdmin);
+    const canAccessMembers =
+      rawEntry.canAccessMembers == null ? canAccessAdmin : Boolean(rawEntry.canAccessMembers);
+    const canAccessLiczniki =
+      rawEntry.canAccessLiczniki == null ? canAccessAdmin : Boolean(rawEntry.canAccessLiczniki);
     const canAccessBindings =
       rawEntry.canAccessBindings == null ? canAccessAdmin : Boolean(rawEntry.canAccessBindings);
     const isRoot = Boolean(rawEntry.isRoot);
@@ -3132,6 +3653,8 @@
       discordUserId,
       discordName,
       canAccessAdmin,
+      canAccessMembers,
+      canAccessLiczniki,
       canAccessBindings,
       isRoot,
       isDiscordAccount
@@ -3191,10 +3714,117 @@
   }
 
   function getActiveDiscordSession() {
-    if (!window.TakuuWebhook || typeof window.TakuuWebhook.getStoredDiscordSession !== "function") {
+    if (!window.StronaliveWebhook || typeof window.StronaliveWebhook.getStoredDiscordSession !== "function") {
       return null;
     }
-    return window.TakuuWebhook.getStoredDiscordSession();
+    return window.StronaliveWebhook.getStoredDiscordSession();
+  }
+
+  function sanitizeAdminAuditValue(value, depth = 0) {
+    if (value == null) {
+      return "";
+    }
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return value;
+    }
+    if (value instanceof Date) {
+      try {
+        return value.toISOString();
+      } catch (_error) {
+        return "";
+      }
+    }
+    if (depth > 3) {
+      return "[max-depth]";
+    }
+    if (Array.isArray(value)) {
+      return value.slice(0, 20).map((item) => sanitizeAdminAuditValue(item, depth + 1));
+    }
+    if (typeof value === "object") {
+      const output = {};
+      Object.entries(value)
+        .slice(0, 20)
+        .forEach(([key, entryValue]) => {
+          const cleanKey = String(key || "").trim();
+          if (!cleanKey) {
+            return;
+          }
+          output[cleanKey] = sanitizeAdminAuditValue(entryValue, depth + 1);
+        });
+      return output;
+    }
+    return String(value);
+  }
+
+  function buildAdminAccountAuditSnapshot(account) {
+    const source = account && typeof account === "object" ? account : {};
+    return {
+      id: String(source.id || "").trim(),
+      login: String(source.login || "").trim(),
+      discordUserId: normalizeDiscordUserId(source.discordUserId),
+      discordName: String(source.discordName || "").trim(),
+      canAccessAdmin: Boolean(source.canAccessAdmin),
+      canAccessMembers: Boolean(source.canAccessMembers),
+      canAccessLiczniki: Boolean(source.canAccessLiczniki),
+      canAccessBindings: Boolean(source.canAccessBindings),
+      isRoot: Boolean(source.isRoot),
+      isDiscordAccount: Boolean(source.isDiscordAccount)
+    };
+  }
+
+  function buildMemberAuditSnapshot(member) {
+    const source = member && typeof member === "object" ? member : {};
+    return {
+      id: String(source.id || "").trim(),
+      name: String(source.name || "").trim(),
+      url: String(source.url || "").trim(),
+      avatar: String(source.avatar || "").trim()
+    };
+  }
+
+  function buildLicznikAuditSnapshot(item) {
+    const source = item && typeof item === "object" ? item : {};
+    const imageUrl = String(source.imageUrl || "").trim();
+    const imageType = !imageUrl ? "none" : imageUrl.startsWith("data:") ? "inline-data" : "url";
+    return {
+      id: String(source.id || "").trim(),
+      title: String(source.title || "").trim(),
+      mode: normalizeLicznikMode(source.mode),
+      targetDate: String(source.targetDate || "").trim(),
+      endDate: String(source.endDate || "").trim(),
+      imageType,
+      imageUrl: imageType === "url" ? imageUrl : ""
+    };
+  }
+
+  function sendAdminAuditEvent(action, details = {}) {
+    if (!window.StronaliveWebhook || typeof window.StronaliveWebhook.sendAdminAudit !== "function") {
+      return;
+    }
+
+    const sessionLogin = getCurrentAdminSessionLogin();
+    const actor =
+      typeof window.StronaliveWebhook.getActorIdentity === "function"
+        ? window.StronaliveWebhook.getActorIdentity(sessionLogin)
+        : {
+            type: "local",
+            login: sessionLogin || "unknown-admin",
+            label: sessionLogin || "unknown-admin"
+          };
+
+    const payload = {
+      action: String(action || "").trim() || "admin_action",
+      route: getRouteFromLocation(),
+      path: window.location.pathname,
+      location: window.location.href,
+      actor,
+      occurredAt: Date.now(),
+      details: sanitizeAdminAuditValue(details)
+    };
+
+    Promise.resolve(window.StronaliveWebhook.sendAdminAudit(payload)).catch(() => {
+      // Ignore webhook transport failures in UI flow.
+    });
   }
 
   function getCurrentAdminAccount() {
@@ -3224,6 +3854,30 @@
       return false;
     }
     return Boolean(currentAccount.isRoot || currentAccount.canAccessAdmin);
+  }
+
+  function hasMembersAccess() {
+    const currentAccount = getCurrentAdminAccount();
+    if (!currentAccount) {
+      return false;
+    }
+    return Boolean(currentAccount.isRoot || currentAccount.canAccessMembers);
+  }
+
+  function hasMembersTabAccess() {
+    return hasMembersAccess();
+  }
+
+  function hasLicznikiAccess() {
+    const currentAccount = getCurrentAdminAccount();
+    if (!currentAccount) {
+      return false;
+    }
+    return Boolean(currentAccount.isRoot || currentAccount.canAccessLiczniki);
+  }
+
+  function hasLicznikiTabAccess() {
+    return hasLicznikiAccess();
   }
 
   function hasBindingsAccess() {
@@ -3291,7 +3945,7 @@
     const hasSubscribers = Number.isFinite(Number(state.subscribersCount));
 
     if (kickOauthStatusTextEl) {
-      kickOauthStatusTextEl.textContent = linked ? "Powiazane" : "Niepowiazane";
+      kickOauthStatusTextEl.textContent = linked ? "Powiązane" : "Niepowiązane";
     }
     if (kickOauthChannelTextEl) {
       const channelLabel = String(state.channelSlug || state.channelName || "").trim();
@@ -3407,9 +4061,15 @@
     const oauthMessage = String(currentUrl.searchParams.get("kick_oauth_msg") || "").trim();
 
     if (oauthState === "success") {
-      setKickOAuthPanelStatus(oauthMessage || "Konto Kick zostalo pomyslnie powiazane.", "success");
+      setKickOAuthPanelStatus(oauthMessage || "Konto Kick zostało pomyślnie powiązane.", "success");
+      sendAdminAuditEvent("admin_kick_oauth_callback_success", {
+        message: oauthMessage || "konto_kick_powiazane"
+      });
     } else {
-      setKickOAuthPanelStatus(oauthMessage || "Nie udalo sie powiazac konta Kick.", "error");
+      setKickOAuthPanelStatus(oauthMessage || "Nie udało się powiązać konta Kick.", "error");
+      sendAdminAuditEvent("admin_kick_oauth_callback_error", {
+        message: oauthMessage || "kick_oauth_callback_error"
+      });
     }
 
     currentUrl.searchParams.delete("kick_oauth");
@@ -3430,6 +4090,10 @@
   function startKickOAuthConnectionFlow() {
     if (!isKickOAuthDomainRuntimeAllowed()) {
       setKickOAuthPanelStatus("Kick OAuth dziala tylko na domenie taku-live.pl.", "error");
+      sendAdminAuditEvent("admin_kick_oauth_connect_blocked", {
+        reason: "domain_not_allowed",
+        host: window.location.hostname
+      });
       return;
     }
 
@@ -3437,13 +4101,20 @@
     const oauthStartUrl = new URL(LOCAL_KICK_OAUTH_START_ENDPOINT, window.location.origin);
     oauthStartUrl.searchParams.set("redirect", "1");
     oauthStartUrl.searchParams.set("return_to", returnTo);
+    sendAdminAuditEvent("admin_kick_oauth_connect_started", {
+      returnTo,
+      redirectUrl: oauthStartUrl.toString()
+    });
     window.location.href = oauthStartUrl.toString();
   }
 
   async function unlinkKickOAuthConnection() {
     if (IS_FILE_PROTOCOL || typeof fetch !== "function") {
       setKickOAuthPanelStatus("Kick OAuth unlink nie dziala w trybie file://", "error");
-      return;
+      sendAdminAuditEvent("admin_kick_oauth_unlink_failed", {
+        reason: "file_protocol_or_fetch_unavailable"
+      });
+      return { ok: false, reason: "file_protocol_or_fetch_unavailable" };
     }
 
     try {
@@ -3458,17 +4129,28 @@
       if (!response.ok) {
         throw new Error(`HTTP_${response.status}`);
       }
-      setKickOAuthPanelStatus("Polaczenie Kick OAuth zostalo odlaczone.", "success");
+      setKickOAuthPanelStatus("Połączenie Kick OAuth zostało odłączone.", "success");
       cachedKickOAuthStatus = { linked: false, subscribersCount: null };
       updateKickOAuthPanelView(cachedKickOAuthStatus);
       setKickSubsBadgeState({
         count: null,
-        text: "ładowanie danych z Kick...",
+        text: "ladowanie danych z Kick...",
         state: "loading"
       });
       void updateKickFollowersBadge(true);
-    } catch (_error) {
-      setKickOAuthPanelStatus("Nie udalo sie odlaczyc konta Kick.", "error");
+      sendAdminAuditEvent("admin_kick_oauth_unlinked", {
+        linked: false
+      });
+      return { ok: true };
+    } catch (error) {
+      setKickOAuthPanelStatus("Nie udało się odłączyć konta Kick.", "error");
+      sendAdminAuditEvent("admin_kick_oauth_unlink_failed", {
+        error: error instanceof Error ? error.message : "KICK_OAUTH_UNLINK_FAILED"
+      });
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "KICK_OAUTH_UNLINK_FAILED"
+      };
     }
   }
 
@@ -3482,6 +4164,9 @@
       kickOauthConnectBtnEl.addEventListener("click", () => {
         if (!hasBindingsAccess()) {
           setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
+          sendAdminAuditEvent("admin_kick_oauth_access_denied", {
+            operation: "connect"
+          });
           return;
         }
         setKickOAuthPanelStatus("Przekierowanie do logowania Kick...", "info");
@@ -3491,8 +4176,17 @@
 
     if (kickOauthRefreshBtnEl) {
       kickOauthRefreshBtnEl.addEventListener("click", () => {
-        setKickOAuthPanelStatus("Odswiezanie statusu Kick OAuth...", "info");
-        void fetchKickOAuthStatus(true).then(() => {
+        setKickOAuthPanelStatus("Odświeżanie statusu Kick OAuth...", "info");
+        sendAdminAuditEvent("admin_kick_oauth_status_refresh_requested", {
+          force: true
+        });
+        void fetchKickOAuthStatus(true).then((status) => {
+          sendAdminAuditEvent("admin_kick_oauth_status_refreshed", {
+            linked: Boolean(status && status.linked),
+            subscribersCount: Number.isFinite(Number(status && status.subscribersCount))
+              ? Number(status.subscribersCount)
+              : null
+          });
           void updateKickFollowersBadge(true);
         });
       });
@@ -3502,6 +4196,9 @@
       kickOauthUnlinkBtnEl.addEventListener("click", () => {
         if (!hasBindingsAccess()) {
           setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
+          sendAdminAuditEvent("admin_kick_oauth_access_denied", {
+            operation: "unlink"
+          });
           return;
         }
         void unlinkKickOAuthConnection().then(() => {
@@ -3511,7 +4208,6 @@
       });
     }
   }
-
   function tryInlineLocalLoginFallback(login, password) {
     const cleanLogin = String(login || "").trim();
     const cleanPassword = String(password || "").trim();
@@ -3615,8 +4311,8 @@
         } catch (_error) {
           // Ignore storage failures.
         }
-        if (window.TakuuWebhook && typeof window.TakuuWebhook.clearDiscordSession === "function") {
-          window.TakuuWebhook.clearDiscordSession();
+        if (window.StronaliveWebhook && typeof window.StronaliveWebhook.clearDiscordSession === "function") {
+          window.StronaliveWebhook.clearDiscordSession();
         }
       }
       return;
@@ -3696,17 +4392,17 @@
       return false;
     }
 
-    if (!window.TakuuWebhook || typeof window.TakuuWebhook.getStoredDiscordSession !== "function") {
+    if (!window.StronaliveWebhook || typeof window.StronaliveWebhook.getStoredDiscordSession !== "function") {
       return false;
     }
 
-    const session = window.TakuuWebhook.getStoredDiscordSession();
+    const session = window.StronaliveWebhook.getStoredDiscordSession();
     if (!session) {
       return false;
     }
 
-    if (typeof window.TakuuWebhook.canDiscordSessionAccessAdmin === "function") {
-      return Boolean(window.TakuuWebhook.canDiscordSessionAccessAdmin(session, accounts));
+    if (typeof window.StronaliveWebhook.canDiscordSessionAccessAdmin === "function") {
+      return Boolean(window.StronaliveWebhook.canDiscordSessionAccessAdmin(session, accounts));
     }
 
     return true;
@@ -3727,14 +4423,21 @@
   }
 
   function logoutAdmin() {
+    const currentLogin = getCurrentAdminSessionLogin();
+    const currentDiscordId = normalizeDiscordUserId(getActiveDiscordSession()?.id);
+    sendAdminAuditEvent("admin_logout", {
+      login: currentLogin,
+      discordUserId: currentDiscordId
+    });
+
     try {
       window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
     } catch (_error) {
       // Ignore storage failures.
     }
     saveRememberFallback(false);
-    if (window.TakuuWebhook && typeof window.TakuuWebhook.clearDiscordSession === "function") {
-      window.TakuuWebhook.clearDiscordSession();
+    if (window.StronaliveWebhook && typeof window.StronaliveWebhook.clearDiscordSession === "function") {
+      window.StronaliveWebhook.clearDiscordSession();
     }
 
     setInlineLoginStatus(adminLoginStatusEl, "Wylogowano.", "success");
@@ -3743,7 +4446,7 @@
   }
 
   function handleDiscordOAuthCallbackFallback() {
-    if (!window.TakuuWebhook || typeof window.TakuuWebhook.completeDiscordAdminLogin !== "function") {
+    if (!window.StronaliveWebhook || typeof window.StronaliveWebhook.completeDiscordAdminLogin !== "function") {
       return;
     }
 
@@ -3754,7 +4457,7 @@
     }
 
     const accounts = getInlineAdminAccountsFallback();
-    Promise.resolve(window.TakuuWebhook.completeDiscordAdminLogin(accounts))
+    Promise.resolve(window.StronaliveWebhook.completeDiscordAdminLogin(accounts))
       .then((result) => {
         if (!result || result.skipped) {
           return;
@@ -3773,9 +4476,12 @@
         if (!result.ok || !hasAnyAdminAccess) {
           setInlineLoginStatus(
             adminDiscordStatusEl,
-            (result && result.error) || "Brak permisji do Panelu Admina ani Powiązań.",
+            (result && result.error) || "Brak permisji do żadnej zakładki panelu administratora.",
             "error"
           );
+          sendAdminAuditEvent("admin_discord_login_failed", {
+            error: (result && result.error) || "NO_ADMIN_ACCESS"
+          });
           return;
         }
 
@@ -3793,31 +4499,53 @@
         }
 
         setInlineLoginStatus(adminDiscordStatusEl, "Logowanie Discord zakończone pomyślnie.", "success");
+        sendAdminAuditEvent("admin_discord_login_success", {
+          username: String(session.username || "").trim(),
+          discordUserId: normalizeDiscordUserId(session.id),
+          accountCreated: Boolean(result.accountCreated),
+          hasAnyAdminAccess
+        });
         navigateToRouteAfterAuth(getAdminRoutePathFallback(), "admin");
       })
-      .catch(() => {
+      .catch((error) => {
         setInlineLoginStatus(adminDiscordStatusEl, "Nie udało się zakończyć logowania Discord.", "error");
+        sendAdminAuditEvent("admin_discord_login_failed", {
+          error: error instanceof Error ? error.message : "DISCORD_LOGIN_CALLBACK_FAILED"
+        });
       });
   }
 
   function startDiscordLoginFlow() {
-    if (!window.TakuuWebhook || typeof window.TakuuWebhook.startDiscordLogin !== "function") {
+    if (!window.StronaliveWebhook || typeof window.StronaliveWebhook.startDiscordLogin !== "function") {
       setInlineLoginStatus(adminDiscordStatusEl, "Brak discord.js lub konfiguracji Discord.", "error");
+      sendAdminAuditEvent("admin_discord_login_start_failed", {
+        reason: "missing_discord_api"
+      });
       return;
     }
 
-    if (typeof window.TakuuWebhook.isDiscordLoginAvailable === "function") {
-      const availability = window.TakuuWebhook.isDiscordLoginAvailable();
+    if (typeof window.StronaliveWebhook.isDiscordLoginAvailable === "function") {
+      const availability = window.StronaliveWebhook.isDiscordLoginAvailable();
       if (!availability.ok) {
         setInlineLoginStatus(adminDiscordStatusEl, availability.error || "Logowanie Discord jest niedostępne.", "error");
+        sendAdminAuditEvent("admin_discord_login_start_failed", {
+          reason: availability.error || "DISCORD_LOGIN_UNAVAILABLE"
+        });
         return;
       }
     }
 
-    saveRememberFallback(Boolean(adminRememberMeEl && adminRememberMeEl.checked));
+    const rememberMe = Boolean(adminRememberMeEl && adminRememberMeEl.checked);
+    saveRememberFallback(rememberMe);
     setInlineLoginStatus(adminDiscordStatusEl, "Przekierowanie do logowania Discord...", "success");
-    Promise.resolve(window.TakuuWebhook.startDiscordLogin()).catch(() => {
+    sendAdminAuditEvent("admin_discord_login_started", {
+      rememberMe
+    });
+    Promise.resolve(window.StronaliveWebhook.startDiscordLogin()).catch((error) => {
       setInlineLoginStatus(adminDiscordStatusEl, "Nie udało się uruchomić logowania Discord.", "error");
+      sendAdminAuditEvent("admin_discord_login_start_failed", {
+        error: error instanceof Error ? error.message : "DISCORD_LOGIN_START_FAILED"
+      });
     });
   }
 
@@ -3866,7 +4594,10 @@
               adminLoginPasswordEl.value = "";
               adminLoginPasswordEl.focus();
             }
-            setInlineLoginStatus(adminLoginStatusEl, "Nieprawidłowy login lub hasło.", "error");
+            setInlineLoginStatus(adminLoginStatusEl, "Nieprawidlowy login lub haslo.", "error");
+            sendAdminAuditEvent("admin_local_login_failed", {
+              login
+            });
             return;
           }
 
@@ -3881,6 +4612,11 @@
           adminLoginFormEl.reset();
           setInlineLoginStatus(adminLoginStatusEl, "Zalogowano pomyślnie.", "success");
           setInlineLoginStatus(adminDiscordStatusEl, "", "info");
+          sendAdminAuditEvent("admin_local_login_success", {
+            login: String(matched.login || login).trim(),
+            isRoot: Boolean(matched.isRoot),
+            isDiscordAccount: Boolean(matched.isDiscordAccount)
+          });
           navigateToRouteAfterAuth(getAdminRoutePathFallback(), "admin");
         },
         true
@@ -3888,11 +4624,11 @@
     }
 
     if (adminDiscordLoginBtnEl) {
-      if (!window.TakuuWebhook || typeof window.TakuuWebhook.startDiscordLogin !== "function") {
+      if (!window.StronaliveWebhook || typeof window.StronaliveWebhook.startDiscordLogin !== "function") {
         adminDiscordLoginBtnEl.disabled = true;
         setInlineLoginStatus(adminDiscordStatusEl, "Brak discord.js lub konfiguracji Discord.", "error");
-      } else if (typeof window.TakuuWebhook.isDiscordLoginAvailable === "function") {
-        const availability = window.TakuuWebhook.isDiscordLoginAvailable();
+      } else if (typeof window.StronaliveWebhook.isDiscordLoginAvailable === "function") {
+        const availability = window.StronaliveWebhook.isDiscordLoginAvailable();
         if (!availability.ok) {
           adminDiscordLoginBtnEl.disabled = true;
           setInlineLoginStatus(
@@ -3916,7 +4652,6 @@
       logoutHandlerBound = true;
     }
   }
-
   function resolveRouteByAuth(routeName) {
     if (routeName === "admin" && !hasValidAdminSession()) {
       return "login";
@@ -4291,7 +5026,7 @@
     return readKickNumericCandidates(channelData, goalPaths);
   }
 
-  function setKickSubsBadgeState({ count = null, text = "subów na Kicku", state = "ready" } = {}) {
+  function setKickSubsBadgeState({ count = null, text = "subskrybentów na Kicku", state = "ready" } = {}) {
     if (!streamIntroSubsStatEl || !streamIntroSubsCountEl || !streamIntroSubsTextEl) {
       return;
     }
@@ -4414,14 +5149,14 @@
     if (!hasFollowersRenderedOnce && hasFollowersBadge) {
       setKickFollowersBadgeState({
         count: null,
-        text: "ładowanie danych z Kick...",
+        text: "Ładowanie danych z Kick...",
         state: "loading"
       });
     }
     if (!hasSubsRenderedOnce && hasSubsBadge) {
       setKickSubsBadgeState({
         count: null,
-        text: "ładowanie danych z Kick...",
+        text: "Ładowanie danych z Kick...",
         state: "loading"
       });
     }
@@ -4472,7 +5207,7 @@
             saveLastKnownKickSubsCount(subscribersCount);
             setKickSubsBadgeState({
               count: subscribersCount,
-              text: "subów na Kicku",
+              text: "suby na Kicku",
               state: "ready"
             });
             return;
@@ -4481,7 +5216,7 @@
           const fallbackCount = getLastKnownKickSubsCount();
           setKickSubsBadgeState({
             count: Number.isFinite(fallbackCount) ? fallbackCount : null,
-            text: "subów na Kicku",
+            text: "suby na Kicku",
             state: Number.isFinite(fallbackCount) ? "ready" : "error"
           });
         })
@@ -4490,7 +5225,7 @@
           if (Number.isFinite(fallbackCount)) {
             setKickSubsBadgeState({
               count: fallbackCount,
-              text: "subów na Kicku",
+              text: "suby na Kicku",
               state: "ready"
             });
             return;
@@ -6278,7 +7013,7 @@
         syncClipViewerControls(viewer);
       } catch (_error) {
         if (currentOpenSeq === clipViewerOpenSeq) {
-          setStatus("Nie udalo sie odtworzyc klipu w podgladzie.", true);
+          setStatus("Nie udało się odtworzyć klipu w podglądzie.", true);
         }
         syncClipViewerControls(viewer);
       }
@@ -6465,7 +7200,7 @@
             try {
               await downloadClipBestQuality(clipData, downloadBtn);
             } catch (_error) {
-              setStatus("Nie udalo sie pobrac klipu w najlepszej jakosci.", true);
+              setStatus("Nie udało się pobrać klipu w najlepszej jakości.", true);
             }
           });
         }
@@ -6598,7 +7333,7 @@
             <a class="clip-title" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clip.title)}</a>
             <p class="clip-meta">
               <span class="clip-meta-category">${escapeHtml(categoryLabel)}</span>
-              ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">·</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
+              ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">•</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
             </p>
             ${authorUrl
               ? `<a class="clip-author" href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(authorName)}</a>`
@@ -6981,6 +7716,9 @@
     setVisible(routePlaceholderEl, route === "soon");
     setVisible(adminPanelEl, route === "login");
     setVisible(adminDashboardEl, route === "admin");
+    if (route !== "admin") {
+      closeAdminLicznikFinishModals();
+    }
 
     if (routeBadgeEl && route === "soon") {
       routeBadgeEl.textContent = "WKROTCE...";
@@ -7100,3 +7838,5 @@
     init();
   }
 })();
+
+

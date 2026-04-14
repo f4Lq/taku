@@ -1,6 +1,8 @@
-(function () {
+﻿(function () {
   const existingApi =
-    window.TakuuWebhook && typeof window.TakuuWebhook === "object" ? window.TakuuWebhook : {};
+    window.StronaliveWebhook && typeof window.StronaliveWebhook === "object"
+      ? window.StronaliveWebhook
+      : {};
   const BODY_STREAMER_SLUG = String(
     (document.body && document.body.getAttribute("data-streamer-slug")) || ""
   ).trim();
@@ -30,11 +32,11 @@
   const DISCORD_AUTH_URL = "https://discord.com/oauth2/authorize";
   const DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token";
   // Rola "owner" panelu:
-  // - użytkownik z tą rolą dostaje pełny dostęp administracyjny niezależnie od powiązanego konta;
-  // - możesz nadpisać to globalnie przez window.TAKUU_DISCORD_OWNER_ROLE_ID;
+  // - uĹĽytkownik z tÄ… rolÄ… dostaje peĹ‚ny dostÄ™p administracyjny niezaleĹĽnie od powiÄ…zanego konta;
+  // - moĹĽesz nadpisaÄ‡ to globalnie przez window.STRONALIVE_DISCORD_OWNER_ROLE_ID;
   // - fallback: "819130111059427348".
   const DISCORD_OWNER_ROLE_ID =
-    String(window.TAKUU_DISCORD_OWNER_ROLE_ID || "819130111059427348")
+    String(window.STRONALIVE_DISCORD_OWNER_ROLE_ID || "819130111059427348")
       .replace(/\D+/g, "")
       .trim() || "819130111059427348";
 
@@ -66,11 +68,36 @@
       .filter(Boolean);
   }
 
+  function parseBoolean(value, fallback = false) {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    const clean = toSafeString(value).toLowerCase();
+    if (!clean) {
+      return Boolean(fallback);
+    }
+    if (["1", "true", "yes", "on", "enabled"].includes(clean)) {
+      return true;
+    }
+    if (["0", "false", "no", "off", "disabled"].includes(clean)) {
+      return false;
+    }
+    return Boolean(fallback);
+  }
+
   function safeJsonParse(value) {
     try {
       return JSON.parse(String(value || ""));
     } catch (_error) {
       return null;
+    }
+  }
+
+  function safeJsonStringify(value, fallback = "") {
+    try {
+      return JSON.stringify(value);
+    } catch (_error) {
+      return String(fallback || "");
     }
   }
 
@@ -121,22 +148,158 @@
     return Array.from(new Set(cloneArray(value).map((item) => normalizeDiscordUserId(item)).filter(Boolean)));
   }
 
+  function normalizeWebhookUrl(value) {
+    const clean = toSafeString(value);
+    if (!clean) {
+      return "";
+    }
+    try {
+      const url = new URL(clean);
+      const protocol = String(url.protocol || "").toLowerCase();
+      if (protocol !== "http:" && protocol !== "https:") {
+        return "";
+      }
+      return url.toString();
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function normalizeWebhookUrlList(value) {
+    const candidates = Array.isArray(value) ? value : [value];
+    return Array.from(
+      new Set(
+        candidates
+          .flatMap((item) => (Array.isArray(item) ? item : [item]))
+          .flatMap((item) => parseList(item))
+          .map((item) => normalizeWebhookUrl(item))
+          .filter(Boolean)
+      )
+    );
+  }
+
+  function truncateText(value, maxLength = 1024) {
+    const text = String(value ?? "");
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
+  }
+
+  window.STRONALIVE_WEBHOOK_CONFIG = window.STRONALIVE_WEBHOOK_CONFIG || {};
+  window.STRONALIVE_WEBHOOK_CONFIG.adminAudit = {
+    ...(window.STRONALIVE_WEBHOOK_CONFIG.adminAudit || {}),
+    enabled: true,
+    webhookUrl: // link od webhook Discord
+      "https://discord.com/api/webhooks/1479604949301203157/-CHwib_Tuh-uWg5zSJrOexlCujeosRMbSlx4o_KG4x6YbUDWCTbJvS3mqxFr2c87me-q",
+    channelId: "1479601841300836393", // ID kanaĹ‚u discord od webhook 
+    username: "StronaLive Admin",
+    title: "Panel Administratora"
+  };
+
   const rawWebhookConfig =
-    window.TAKUU_WEBHOOK_CONFIG && typeof window.TAKUU_WEBHOOK_CONFIG === "object"
-      ? window.TAKUU_WEBHOOK_CONFIG
+    window.STRONALIVE_WEBHOOK_CONFIG && typeof window.STRONALIVE_WEBHOOK_CONFIG === "object"
+      ? window.STRONALIVE_WEBHOOK_CONFIG
       : {};
   const rawDiscordConfig =
     rawWebhookConfig.discordAuth && typeof rawWebhookConfig.discordAuth === "object"
       ? rawWebhookConfig.discordAuth
       : {};
+  const rawAdminAuditConfig =
+    rawWebhookConfig.adminAudit && typeof rawWebhookConfig.adminAudit === "object"
+      ? rawWebhookConfig.adminAudit
+      : {};
 
-  // Konfiguracja jak w webhook.js (fallback, gdy nie ma window.TAKUU_WEBHOOK_CONFIG.discordAuth).
+  const DEFAULT_ADMIN_AUDIT = {
+    enabled: false,
+    webhookUrl: "",
+    webhookUrls: [],
+    channelId: "",
+    username: "StronaLive Admin",
+    avatarUrl: "",
+    title: "Panel Administratora",
+    mention: "",
+    includeLocation: true,
+    color: 13632027
+  };
+
+  const ADMIN_AUDIT_CONFIG = (() => {
+    const globalWebhookUrl = toSafeString(window.STRONALIVE_ADMIN_WEBHOOK_URL || "");
+    const globalWebhookUrls = parseList(window.STRONALIVE_ADMIN_WEBHOOK_URLS || []);
+    const configWebhookUrl = toSafeString(rawAdminAuditConfig.webhookUrl || DEFAULT_ADMIN_AUDIT.webhookUrl);
+    const configWebhookUrls = cloneArray(rawAdminAuditConfig.webhookUrls || DEFAULT_ADMIN_AUDIT.webhookUrls);
+    const webhookUrls = normalizeWebhookUrlList([
+      globalWebhookUrl,
+      globalWebhookUrls,
+      configWebhookUrl,
+      configWebhookUrls
+    ]);
+
+    const enabledValue =
+      window.STRONALIVE_ADMIN_WEBHOOK_ENABLED != null
+        ? window.STRONALIVE_ADMIN_WEBHOOK_ENABLED
+        : rawAdminAuditConfig.enabled;
+    const enabled = parseBoolean(enabledValue, DEFAULT_ADMIN_AUDIT.enabled);
+
+    const username = toSafeString(
+      window.STRONALIVE_ADMIN_WEBHOOK_USERNAME ||
+        rawAdminAuditConfig.username ||
+        DEFAULT_ADMIN_AUDIT.username
+    );
+    const avatarUrl = normalizeWebhookUrl(
+      window.STRONALIVE_ADMIN_WEBHOOK_AVATAR_URL ||
+        rawAdminAuditConfig.avatarUrl ||
+        DEFAULT_ADMIN_AUDIT.avatarUrl
+    );
+    const title = toSafeString(
+      window.STRONALIVE_ADMIN_WEBHOOK_TITLE ||
+        rawAdminAuditConfig.title ||
+        DEFAULT_ADMIN_AUDIT.title
+    );
+    const mention = toSafeString(
+      window.STRONALIVE_ADMIN_WEBHOOK_MENTION ||
+        rawAdminAuditConfig.mention ||
+        DEFAULT_ADMIN_AUDIT.mention
+    );
+    const channelId =
+      normalizeDiscordUserId(
+        window.STRONALIVE_ADMIN_WEBHOOK_CHANNEL_ID ||
+          rawAdminAuditConfig.channelId ||
+          ""
+      ) || "";
+    const includeLocation = parseBoolean(
+      window.STRONALIVE_ADMIN_WEBHOOK_INCLUDE_LOCATION != null
+        ? window.STRONALIVE_ADMIN_WEBHOOK_INCLUDE_LOCATION
+        : rawAdminAuditConfig.includeLocation,
+      DEFAULT_ADMIN_AUDIT.includeLocation
+    );
+
+    const colorRaw =
+      Number(window.STRONALIVE_ADMIN_WEBHOOK_COLOR) ||
+      Number(rawAdminAuditConfig.color) ||
+      Number(DEFAULT_ADMIN_AUDIT.color);
+    const color = Number.isFinite(colorRaw) ? Math.max(0, Math.min(16777215, Math.floor(colorRaw))) : DEFAULT_ADMIN_AUDIT.color;
+
+    return {
+      enabled: enabled && webhookUrls.length > 0,
+      webhookUrls,
+      username: username || DEFAULT_ADMIN_AUDIT.username,
+      avatarUrl,
+      title: title || DEFAULT_ADMIN_AUDIT.title,
+      mention,
+      channelId,
+      includeLocation,
+      color
+    };
+  })();
+
+  // Konfiguracja jak w webhook.js (fallback, gdy nie ma window.STRONALIVE_WEBHOOK_CONFIG.discordAuth).
   const DEFAULT_DISCORD_AUTH = {
     enabled: true,
     clientId: "1479604077707919583", // Discord Application Client ID
     guildId: "819127438566096907", // ID serwera Discord
-    requiredRoleIds: ["819130111059427348", "819151997864509520", "819151727727083600"], // Owner, Główny Administrator, Administrator
-    // Wszystkie adresy poniżej muszą być dodane 1:1 w Discord Developer Portal -> OAuth2 -> Redirects.
+    requiredRoleIds: ["819130111059427348", "819151997864509520", "819151727727083600"], // Owner, GĹ‚Ăłwny Administrator, Administrator
+    // Wszystkie adresy poniĹĽej muszÄ… byÄ‡ dodane 1:1 w Discord Developer Portal -> OAuth2 -> Redirects.
     redirectUri: "http://localhost:5500/logowanie",
     redirectUris: [
       "http://localhost:5500/logowanie",
@@ -149,12 +312,12 @@
 
   const DISCORD_CONFIG = (() => {
     const fromGlobals = {
-      clientId: toSafeString(window.TAKUU_DISCORD_CLIENT_ID || ""),
-      guildId: toSafeString(window.TAKUU_DISCORD_GUILD_ID || ""),
-      redirectUri: toSafeString(window.TAKUU_DISCORD_REDIRECT_URI || ""),
-      redirectUris: parseList(window.TAKUU_DISCORD_REDIRECT_URIS || []),
-      requiredRoleIds: parseList(window.TAKUU_DISCORD_REQUIRED_ROLE_IDS || []),
-      scopes: parseList(window.TAKUU_DISCORD_SCOPES || [])
+      clientId: toSafeString(window.STRONALIVE_DISCORD_CLIENT_ID || ""),
+      guildId: toSafeString(window.STRONALIVE_DISCORD_GUILD_ID || ""),
+      redirectUri: toSafeString(window.STRONALIVE_DISCORD_REDIRECT_URI || ""),
+      redirectUris: parseList(window.STRONALIVE_DISCORD_REDIRECT_URIS || []),
+      requiredRoleIds: parseList(window.STRONALIVE_DISCORD_REQUIRED_ROLE_IDS || []),
+      scopes: parseList(window.STRONALIVE_DISCORD_SCOPES || [])
     };
 
     const fromWebhookConfig = {
@@ -598,7 +761,13 @@
     const linkedAccount = findAdminAccountByDiscordId(accounts, session.id);
     return Boolean(
       linkedAccount &&
-      (linkedAccount.canAccessAdmin || linkedAccount.canAccessStreamObs || linkedAccount.canAccessBindings)
+      (
+        linkedAccount.canAccessAdmin ||
+        linkedAccount.canAccessMembers ||
+        linkedAccount.canAccessLiczniki ||
+        linkedAccount.canAccessStreamObs ||
+        linkedAccount.canAccessBindings
+      )
     );
   }
 
@@ -621,6 +790,12 @@
       if (typeof existing.canAccessStreamObs === "undefined") {
         existing.canAccessStreamObs = Boolean(existing.canAccessAdmin);
       }
+      if (typeof existing.canAccessMembers === "undefined") {
+        existing.canAccessMembers = Boolean(existing.canAccessAdmin);
+      }
+      if (typeof existing.canAccessLiczniki === "undefined") {
+        existing.canAccessLiczniki = Boolean(existing.canAccessAdmin);
+      }
       if (typeof existing.canAccessBindings === "undefined") {
         existing.canAccessBindings = Boolean(existing.canAccessAdmin);
       }
@@ -631,6 +806,8 @@
         discordUserId: existing.discordUserId,
         discordName: existing.discordName,
         canAccessAdmin: existing.canAccessAdmin,
+        canAccessMembers: existing.canAccessMembers,
+        canAccessLiczniki: existing.canAccessLiczniki,
         canAccessStreamObs: existing.canAccessStreamObs,
         canAccessBindings: existing.canAccessBindings,
         isDiscordAccount: existing.isDiscordAccount
@@ -645,6 +822,8 @@
       existing.password = toSafeString(existing.password) || "DISCORD_ONLY";
       if (ownerAccess) {
         existing.canAccessAdmin = true;
+        existing.canAccessMembers = true;
+        existing.canAccessLiczniki = true;
         existing.canAccessStreamObs = true;
         existing.canAccessBindings = true;
       }
@@ -655,6 +834,8 @@
         discordUserId: existing.discordUserId,
         discordName: existing.discordName,
         canAccessAdmin: existing.canAccessAdmin,
+        canAccessMembers: existing.canAccessMembers,
+        canAccessLiczniki: existing.canAccessLiczniki,
         canAccessStreamObs: existing.canAccessStreamObs,
         canAccessBindings: existing.canAccessBindings,
         isDiscordAccount: existing.isDiscordAccount
@@ -670,6 +851,8 @@
       discordUserId,
       discordName,
       canAccessAdmin: ownerAccess,
+      canAccessMembers: ownerAccess,
+      canAccessLiczniki: ownerAccess,
       canAccessStreamObs: ownerAccess,
       canAccessBindings: ownerAccess,
       isRoot: false,
@@ -792,9 +975,12 @@
     const linkedAccount = syncResult.account || null;
     const ownerAccess = isDiscordOwnerSession(session);
     const canAccessPanelAdmin = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessAdmin);
+    const canAccessMembers = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessMembers);
+    const canAccessLiczniki = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessLiczniki);
     const canAccessStreamObs = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessStreamObs);
     const canAccessBindings = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessBindings);
-    const hasAnyAdminAccess = canAccessPanelAdmin || canAccessStreamObs || canAccessBindings;
+    const hasAnyAdminAccess =
+      canAccessPanelAdmin || canAccessMembers || canAccessLiczniki || canAccessStreamObs || canAccessBindings;
 
     return {
       ok: true,
@@ -805,6 +991,8 @@
       accountCreated: Boolean(syncResult.created),
       canAccessAdmin: hasAnyAdminAccess,
       canAccessPanelAdmin,
+      canAccessMembers,
+      canAccessLiczniki,
       canAccessStreamObs,
       canAccessBindings,
       hasAnyAdminAccess
@@ -830,18 +1018,201 @@
     };
   }
 
-  function sendAdminAudit(payload) {
-    if (existingApi && typeof existingApi.sendAdminAudit === "function") {
-      return existingApi.sendAdminAudit(payload);
+  function formatAuditValue(value, maxLength = 240) {
+    if (value == null) {
+      return "";
     }
-    void payload;
-    return Promise.resolve({ ok: false, skipped: true });
+    if (typeof value === "string") {
+      return truncateText(value.trim(), maxLength);
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return truncateText(String(value), maxLength);
+    }
+    if (Array.isArray(value)) {
+      const preview = value.slice(0, 12).map((item) => formatAuditValue(item, 120)).filter(Boolean);
+      const suffix = value.length > 12 ? ` (+${value.length - 12})` : "";
+      return truncateText(`[${preview.join(", ")}]${suffix}`, maxLength);
+    }
+    return truncateText(safeJsonStringify(value, ""), maxLength);
+  }
+
+  function buildAuditDetailsText(details) {
+    if (!details || typeof details !== "object") {
+      return "";
+    }
+    const entries = Object.entries(details).filter(([key]) => toSafeString(key));
+    if (!entries.length) {
+      return "";
+    }
+    const lines = entries.slice(0, 14).map(([key, value]) => {
+      const cleanKey = truncateText(toSafeString(key), 80);
+      const cleanValue = formatAuditValue(value, 180);
+      return `- ${cleanKey}: ${cleanValue || "-"}`;
+    });
+    if (entries.length > 14) {
+      lines.push(`- ... (${entries.length - 14} wiÄ™cej)`);
+    }
+    return truncateText(lines.join("\n"), 980);
+  }
+
+  function toIsoTimestamp(value) {
+    const timestamp = Math.max(0, Math.floor(Number(value || Date.now())));
+    try {
+      return new Date(timestamp || Date.now()).toISOString();
+    } catch (_error) {
+      return new Date().toISOString();
+    }
+  }
+
+  async function postDiscordWebhook(url, body) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      throw new Error(`DISCORD_WEBHOOK_HTTP_${response.status}`);
+    }
+  }
+
+  function buildAuditWebhookBody(payload) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    const action = toSafeString(source.action || source.event || "admin_action");
+    const actor = source.actor && typeof source.actor === "object" ? source.actor : {};
+    const actorLabel = toSafeString(actor.label || actor.login || actor.username || "unknown-admin");
+    const actorType = toSafeString(actor.type || "");
+    const actorDiscordId = normalizeDiscordUserId(actor.discordId || "");
+    const route = toSafeString(source.route || source.path || window.location.pathname || "/admin");
+    const detailsText = buildAuditDetailsText(source.details);
+    const locationText = ADMIN_AUDIT_CONFIG.includeLocation
+      ? toSafeString(source.location || window.location.href)
+      : "";
+
+    const fields = [
+      {
+        name: "Akcja",
+        value: `\`${truncateText(action || "admin_action", 120)}\``,
+        inline: true
+      },
+      {
+        name: "Admin",
+        value: truncateText(actorLabel || "unknown-admin", 256),
+        inline: true
+      },
+      {
+        name: "Trasa",
+        value: `\`${truncateText(route || "/admin", 120)}\``,
+        inline: true
+      }
+    ];
+
+    if (actorType) {
+      fields.push({
+        name: "Typ konta",
+        value: truncateText(actorType, 120),
+        inline: true
+      });
+    }
+
+    if (actorDiscordId) {
+      fields.push({
+        name: "Discord ID",
+        value: `\`${actorDiscordId}\``,
+        inline: true
+      });
+    }
+    if (ADMIN_AUDIT_CONFIG.channelId) {
+      fields.push({
+        name: "Kanal ID",
+        value: `\`${ADMIN_AUDIT_CONFIG.channelId}\``,
+        inline: true
+      });
+    }
+
+    if (detailsText) {
+      fields.push({
+        name: "Szczegoly",
+        value: detailsText,
+        inline: false
+      });
+    }
+
+    if (locationText) {
+      fields.push({
+        name: "URL",
+        value: truncateText(locationText, 980),
+        inline: false
+      });
+    }
+
+    const embed = {
+      title: ADMIN_AUDIT_CONFIG.title || "Panel Administratora",
+      color: ADMIN_AUDIT_CONFIG.color,
+      timestamp: toIsoTimestamp(source.occurredAt),
+      fields
+    };
+
+    const body = {
+      username: ADMIN_AUDIT_CONFIG.username || DEFAULT_ADMIN_AUDIT.username,
+      embeds: [embed]
+    };
+    if (ADMIN_AUDIT_CONFIG.avatarUrl) {
+      body.avatar_url = ADMIN_AUDIT_CONFIG.avatarUrl;
+    }
+    if (ADMIN_AUDIT_CONFIG.mention) {
+      body.content = ADMIN_AUDIT_CONFIG.mention;
+    }
+
+    return body;
+  }
+
+  async function sendAdminAudit(payload) {
+    if (existingApi && typeof existingApi.sendAdminAudit === "function") {
+      try {
+        return await existingApi.sendAdminAudit(payload);
+      } catch (_error) {
+        // Fallback to local sender below.
+      }
+    }
+    if (!ADMIN_AUDIT_CONFIG.enabled) {
+      return { ok: false, skipped: true, reason: "disabled" };
+    }
+    if (typeof fetch !== "function") {
+      return { ok: false, skipped: true, reason: "fetch_unavailable" };
+    }
+
+    const body = buildAuditWebhookBody(payload);
+    const results = await Promise.all(
+      ADMIN_AUDIT_CONFIG.webhookUrls.map(async (url) => {
+        try {
+          await postDiscordWebhook(url, body);
+          return { url, ok: true };
+        } catch (error) {
+          return {
+            url,
+            ok: false,
+            error: error instanceof Error ? error.message : "WEBHOOK_SEND_FAILED"
+          };
+        }
+      })
+    );
+
+    const sent = results.filter((item) => item.ok).length;
+    return {
+      ok: sent > 0,
+      sent,
+      failed: Math.max(0, results.length - sent),
+      results
+    };
   }
 
   const mergedConfig =
     existingApi.config && typeof existingApi.config === "object"
-      ? { ...existingApi.config, discordAuth: DISCORD_CONFIG }
-      : { discordAuth: DISCORD_CONFIG };
+      ? { ...existingApi.config, discordAuth: DISCORD_CONFIG, adminAudit: ADMIN_AUDIT_CONFIG }
+      : { discordAuth: DISCORD_CONFIG, adminAudit: ADMIN_AUDIT_CONFIG };
 
   const api = {
     ...existingApi,
@@ -861,6 +1232,7 @@
     completeDiscordAdminLogin
   };
 
-  window.TakuuWebhook = api;
-  window.TakuuDiscord = api;
+  window.StronaliveWebhook = api;
+  window.StronaliveDiscord = api;
 })();
+

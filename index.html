@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
-  <link rel="stylesheet" href="/styles/styles.css?v=20260408-liczniki-mobile-topbar-fix-1">
+  <link rel="stylesheet" href="/styles/styles.css?v=20260413-css-split-1">
   <link rel="shortcut icon" type="x-icon" href="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" />
 </head>
 <body data-streamer-slug="takuu" data-storage-namespace="takuu" data-channel-avatar-fallback="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" data-licznik-77-logo-url="/img/default_profile.png">
@@ -286,65 +286,6 @@
                 </div>
               </div>
             </label>
-            <label id="adminLicznikEndDateField" class="admin-field admin-datetime-field" data-licznik-end-field hidden>
-              <span class="admin-field-label">Data zakończenia (opcjonalnie)</span>
-              <span class="admin-datetime-row">
-                <input
-                  class="admin-input admin-datetime-display"
-                  type="text"
-                  name="licznikEndDateDisplay"
-                  placeholder="Data zakończenia (opcjonalnie) - dd.mm.rrrr --:--"
-                  readonly
-                >
-                <input type="hidden" name="licznikEndDate">
-                <button class="admin-row-btn admin-datetime-open" type="button" data-licznik-end-date-open>Wybierz</button>
-              </span>
-              <div id="adminLicznikEndDatePicker" class="admin-date-picker" hidden>
-                <div class="admin-date-picker-nav">
-                  <button class="admin-date-picker-nav-btn" type="button" data-licznik-end-picker-prev aria-label="Poprzedni miesiąc">&lt;&lt;</button>
-                  <strong class="admin-date-picker-month" data-licznik-end-picker-month>Kwiecień</strong>
-                  <button class="admin-date-picker-nav-btn" type="button" data-licznik-end-picker-next aria-label="Następny miesiąc">&gt;&gt;</button>
-                </div>
-                <div class="admin-date-picker-year-controls">
-                  <button class="admin-date-picker-year-btn" type="button" data-licznik-end-picker-year-prev aria-label="Poprzedni rok">&lt;&lt;</button>
-                  <input
-                    class="admin-date-picker-year-input"
-                    type="number"
-                    min="1970"
-                    max="2100"
-                    step="1"
-                    value="2026"
-                    data-licznik-end-picker-year-input
-                    aria-label="Rok"
-                  >
-                  <button class="admin-date-picker-year-btn" type="button" data-licznik-end-picker-year-next aria-label="Następny rok">&gt;&gt;</button>
-                </div>
-                <div class="admin-date-picker-weekdays" aria-hidden="true">
-                  <span>Pon</span>
-                  <span>Wt</span>
-                  <span>Śr</span>
-                  <span>Czw</span>
-                  <span>Pt</span>
-                  <span>Sob</span>
-                  <span>Niedz</span>
-                </div>
-                <div class="admin-date-picker-grid" data-licznik-end-picker-grid></div>
-                <div class="admin-date-picker-time">
-                  <label>
-                    <span>Godzina</span>
-                    <input class="admin-date-picker-time-input" type="number" min="0" max="23" step="1" value="0" data-licznik-end-picker-hour>
-                  </label>
-                  <label>
-                    <span>Minuty</span>
-                    <input class="admin-date-picker-time-input" type="number" min="0" max="59" step="1" value="0" data-licznik-end-picker-minute>
-                  </label>
-                </div>
-                <div class="admin-date-picker-actions">
-                  <button class="admin-date-picker-action" type="button" data-licznik-end-picker-now>Teraz</button>
-                  <button class="admin-date-picker-action admin-date-picker-action-primary" type="button" data-licznik-end-picker-apply>Ustaw</button>
-                </div>
-              </div>
-            </label>
             <label class="admin-field">
               <span class="admin-field-label">Grafika (URL)</span>
               <input class="admin-input" type="url" name="licznikImageUrl" placeholder="https://... (opcjonalnie)">
@@ -372,6 +313,56 @@
             </table>
           </div>
           <p id="adminLicznikStatus" class="admin-panel-status" aria-live="polite"></p>
+
+          <section id="adminLicznikFinishPickerModal" class="admin-modal" hidden>
+            <div class="admin-modal-backdrop" data-admin-modal-close></div>
+            <div
+              class="admin-modal-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="adminLicznikFinishPickerTitle"
+            >
+              <h4 id="adminLicznikFinishPickerTitle" class="admin-modal-title">Zakończ odliczanie</h4>
+              <p class="admin-modal-text">Wybierz datę i godzinę zakończenia odliczania.</p>
+              <label class="admin-field">
+                <span class="admin-field-label">Data i godzina zakończenia</span>
+                <input
+                  id="adminLicznikFinishInput"
+                  class="admin-input"
+                  type="datetime-local"
+                  step="60"
+                >
+              </label>
+              <p id="adminLicznikFinishPickerStatus" class="admin-panel-status" aria-live="polite"></p>
+              <div class="admin-modal-actions">
+                <button id="adminLicznikFinishPickerCancelBtn" class="admin-row-btn" type="button">Anuluj</button>
+                <button id="adminLicznikFinishPickerChooseBtn" class="admin-row-btn" type="button">Wybierz</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="adminLicznikFinishConfirmModal" class="admin-modal" hidden>
+            <div class="admin-modal-backdrop" data-admin-modal-close></div>
+            <div
+              class="admin-modal-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="adminLicznikFinishConfirmTitle"
+            >
+              <h4 id="adminLicznikFinishConfirmTitle" class="admin-modal-title">Potwierdzenie zakończenia</h4>
+              <p id="adminLicznikFinishConfirmText" class="admin-modal-text">
+                Czy napewno chcesz zakończyć odliczanie wtedy?
+              </p>
+              <div class="admin-modal-actions">
+                <button id="adminLicznikFinishConfirmCancelBtn" class="admin-row-btn" type="button">Anuluj</button>
+                <button
+                  id="adminLicznikFinishConfirmApproveBtn"
+                  class="admin-row-btn admin-date-picker-action-primary"
+                  type="button"
+                >Potwierdź</button>
+              </div>
+            </div>
+          </section>
         </section>
 
         <section id="adminAccountsTab" class="admin-tab-panel" hidden>
@@ -385,6 +376,8 @@
                   <th>Nazwa Discord</th>
                   <th>Hasło</th>
                   <th>Ukryj hasło</th>
+                  <th>Członkowie CCI</th>
+                  <th>Liczniki</th>
                   <th>Panel Admina</th>
                   <th>Powiązania</th>
                   <th>Akcje</th>
@@ -407,6 +400,14 @@
             <label class="admin-field">
               <span class="admin-field-label">Discord ID</span>
               <input class="admin-input" type="text" name="accountDiscordId" placeholder="Discord ID (opcjonalnie, np. 123456789012345678)">
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessMembers">
+              Widzi zakładkę Członkowie CCI
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessLiczniki">
+              Widzi zakładkę Liczniki
             </label>
             <label class="admin-checkbox-line">
               <input type="checkbox" name="accountAccessAdmin">
@@ -667,10 +668,11 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="/js/discord.js?v=20260408-kick-slug-fix-1"></script>
-  <script src="/js/script.js?v=20260409-liczniki-civil-time-1"></script>
+  <script src="/js/discord.js?v=20260413-obfuscation-1"></script>
+  <script src="/js/script.js?v=20260413-obfuscation-1"></script>
 </body>
 </html>
+
 
 
 

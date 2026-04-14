@@ -1,0 +1,97 @@
+﻿/* Auto-split from styles.css: page-soon */
+
+
+.route-badge{
+  border-color: rgba(148, 196, 255, 0.9);
+  color: #dff0ff;
+  background: linear-gradient(120deg, rgba(95, 142, 251, 0.32), rgba(255, 136, 207, 0.26));
+}
+
+
+.route-panel{
+  width: min(1360px, 92vw);
+  margin: 14px auto 0;
+  padding-bottom: 18px;
+}
+
+
+.route-card{
+  min-height: clamp(240px, 38vw, 420px);
+  border: 1px solid #1a2533;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(7, 12, 18, 0.96), rgba(3, 8, 14, 0.98)),
+    radial-gradient(circle at 50% 10%, rgba(34, 49, 66, 0.2), transparent 55%);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.route-glow{
+  position: absolute;
+  top: 18%;
+  width: 86px;
+  height: 36px;
+  border-radius: 999px;
+  filter: blur(12px);
+  opacity: 0.56;
+}
+
+
+.route-glow-red{
+  left: 9%;
+  background: rgba(58, 134, 255, 0.9);
+}
+
+
+.route-glow-white{
+  left: 42%;
+  background: rgba(191, 204, 228, 0.75);
+}
+
+
+.route-glow-green{
+  right: 17%;
+  background: rgba(64, 221, 255, 0.86);
+}
+
+
+.route-badge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  border-radius: 999px;
+  border: 1px solid #2f72ce;
+  color: #63b0ff;
+  background: rgba(8, 20, 38, 0.48);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  font-size: clamp(0.86rem, 1.45vw, 1.05rem);
+}
+
+
+.route-copy{
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 0 18px;
+}
+
+
+.route-subtext{
+  margin: 0;
+  color: #b8caea;
+  font-size: clamp(0.88rem, 1.3vw, 1.04rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  max-width: min(700px, 80vw);
+}
+
