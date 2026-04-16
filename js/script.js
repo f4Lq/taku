@@ -5122,12 +5122,8 @@
     }, STREAM_PLAYER_AUTO_REFRESH_MS);
   }
 
-  function syncStreamPlayerAutoRefresh(isLive) {
-    const shouldAutoRefresh = Boolean(isLive) && getRouteFromLocation() === "home";
-    if (shouldAutoRefresh) {
-      startStreamPlayerAutoRefresh();
-      return;
-    }
+  function syncStreamPlayerAutoRefresh(_isLive) {
+    // Auto-refresh disabled: keep player stable without periodic reloads.
     stopStreamPlayerAutoRefresh();
   }
 
