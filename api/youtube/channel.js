@@ -2,6 +2,9 @@ const { getRequestUrl, sendJson, sendOptions } = require("../_lib/http.js");
 
 const YT_API_BASE = "https://www.googleapis.com/youtube/v3";
 const YT_USER_AGENT = "Mozilla/5.0 (YouTubeAPI/3.0)";
+const YT_LOCALE_HL = "pl";
+const YT_LOCALE_GL = "PL";
+const YT_ACCEPT_LANGUAGE = "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7";
 const YT_DEFAULT_LIMIT = 5;
 const YT_MAX_RESULTS = 50;
 const YT_MAX_SCAN_PAGES = 80;
@@ -128,6 +131,31 @@ function canonicalChannelUrl(reference) {
   return parsed ? parsed.channelUrl : "";
 }
 
+function withYouTubeLocaleUrl(rawUrl) {
+  const cleanUrl = String(rawUrl || "").trim();
+  if (!cleanUrl) {
+    return "";
+  }
+  let parsed = null;
+  try {
+    parsed = new URL(cleanUrl);
+  } catch (_error) {
+    return cleanUrl;
+  }
+  const host = String(parsed.hostname || "").toLowerCase();
+  const isYouTubeHost = host === "youtube.com" || host === "www.youtube.com" || host === "m.youtube.com";
+  if (!isYouTubeHost) {
+    return cleanUrl;
+  }
+  if (!parsed.searchParams.get("hl")) {
+    parsed.searchParams.set("hl", YT_LOCALE_HL);
+  }
+  if (!parsed.searchParams.get("gl")) {
+    parsed.searchParams.set("gl", YT_LOCALE_GL);
+  }
+  return parsed.toString();
+}
+
 function parseCount(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return Math.max(0, Math.floor(value));
@@ -250,11 +278,12 @@ async function fetchJson(url, options = {}) {
 }
 
 async function fetchText(url) {
-  const response = await fetch(url, {
+  const response = await fetch(withYouTubeLocaleUrl(url), {
     method: "GET",
     headers: {
       Accept: "application/xml, text/xml, text/html, text/plain;q=0.9, */*;q=0.8",
       "User-Agent": YT_USER_AGENT,
+      "Accept-Language": YT_ACCEPT_LANGUAGE,
     },
     cache: "no-store",
   }).catch((error) => {
@@ -743,13 +772,14 @@ async function browseByContinuation(settings, continuationToken) {
     return null;
   }
   return fetchJson(
-    `https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}&prettyPrint=false`,
+    withYouTubeLocaleUrl(`https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}&prettyPrint=false`),
     {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
         "User-Agent": YT_USER_AGENT,
+        "Accept-Language": YT_ACCEPT_LANGUAGE,
       },
       body: JSON.stringify({
         context: {
@@ -802,7 +832,7 @@ async function loadFromWebOrRss(reference, sortMode, limit) {
   const mode = normalizeSortMode(sortMode);
   const safeLimit = clampInt(limit, 1, YT_MAX_RESULTS, YT_DEFAULT_LIMIT);
   const baseUrl = canonicalChannelUrl(reference);
-  const videosUrl = `${baseUrl.replace(/\/+$/, "")}/videos?view=0&sort=dd&flow=grid`;
+  const videosUrl = withYouTubeLocaleUrl(`${baseUrl.replace(/\/+$/, "")}/videos?view=0&sort=dd&flow=grid`);
 
   try {
     const html = await fetchText(videosUrl);
