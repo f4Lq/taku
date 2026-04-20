@@ -983,13 +983,25 @@
     return /^UC[a-zA-Z0-9_-]{22}$/.test(clean) ? clean : "";
   }
 
+  function decodeYouTubePathSegment(value) {
+    const raw = String(value || "");
+    if (!raw) {
+      return "";
+    }
+    try {
+      return decodeURIComponent(raw);
+    } catch (_error) {
+      return raw;
+    }
+  }
+
   function normalizeYouTubeHandle(value) {
-    const clean = String(value || "").trim();
+    const clean = decodeYouTubePathSegment(String(value || "").trim()).trim();
     if (!clean) {
       return "";
     }
-    const candidate = clean.startsWith("@") ? clean : `@${clean.replace(/^@+/, "")}`;
-    return /^@[a-zA-Z0-9._-]{2,60}$/.test(candidate) ? candidate : "";
+    const candidate = (clean.startsWith("@") ? clean : `@${clean.replace(/^@+/, "")}`).normalize("NFKC");
+    return /^@[^\s/@?&#]{2,100}$/u.test(candidate) ? candidate : "";
   }
 
   function normalizeYouTubeUserName(value) {
@@ -1046,7 +1058,7 @@
 
     const segments = String(parsed.pathname || "/")
       .split("/")
-      .map((segment) => segment.trim())
+      .map((segment) => decodeYouTubePathSegment(segment).trim())
       .filter(Boolean);
 
     const channelIdFromQuery = normalizeYouTubeChannelId(parsed.searchParams.get("channel_id"));
