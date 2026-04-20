@@ -267,6 +267,7 @@
   let adminAccountsBound = false;
   let adminLicznikiBound = false;
   let adminYoutubeBound = false;
+  let youtubeAdminHandleSyncInFlight = false;
   let adminStateSyncTimerId = 0;
   let adminStateSyncInFlight = false;
   let adminStateSyncPending = false;
@@ -1269,6 +1270,106 @@
   function saveYouTubeSortMode(modeValue) {
     youtubeSortMode = normalizeYouTubeSortMode(modeValue);
     saveStorageJsonFallback(YOUTUBE_SORT_MODE_KEY, youtubeSortMode);
+  }
+
+  function resolveYouTubeHandle(reference) {
+    const source = reference && typeof reference === "object" ? reference : {};
+    const directHandle = normalizeYouTubeHandle(source.handle);
+    if (directHandle) {
+      return directHandle;
+    }
+    const parsedFromUrl = parseYouTubeChannelReference(source.channelUrl || source.url || "");
+    const parsedHandle = normalizeYouTubeHandle(parsedFromUrl && parsedFromUrl.handle);
+    if (parsedHandle) {
+      return parsedHandle;
+    }
+    const userName = normalizeYouTubeUserName(source.userName);
+    if (userName) {
+      return `@${userName}`;
+    }
+    return "";
+  }
+
+  function buildYouTubeHandleUrl(reference) {
+    const handle = resolveYouTubeHandle(reference);
+    if (handle) {
+      return `https://www.youtube.com/${handle}`;
+    }
+    return buildCanonicalYouTubeChannelUrl(reference);
+  }
+
+  async function enrichMissingYouTubeHandlesForAdmin() {
+    if (youtubeAdminHandleSyncInFlight) {
+      return;
+    }
+    const source = Array.isArray(youtubeChannels) ? youtubeChannels : [];
+    const missing = source
+      .map((channel, index) => ({ channel, index }))
+      .filter((item) => {
+        const handle = resolveYouTubeHandle(item.channel);
+        return !handle;
+      });
+    if (!missing.length) {
+      return;
+    }
+
+    youtubeAdminHandleSyncInFlight = true;
+    try {
+      const updates = await mapWithConcurrencyLimit(missing, 3, async (item) => {
+        try {
+          const apiChannel = await fetchYouTubeChannelDataFromApi(item.channel, YOUTUBE_DEFAULT_SORT_MODE);
+          const handle = resolveYouTubeHandle(apiChannel);
+          if (!handle) {
+            return null;
+          }
+          const userName =
+            normalizeYouTubeUserName(apiChannel && apiChannel.userName) ||
+            normalizeYouTubeUserName(String(handle).replace(/^@+/, ""));
+          return {
+            index: item.index,
+            handle,
+            userName
+          };
+        } catch (_error) {
+          return null;
+        }
+      });
+
+      let changed = false;
+      updates.forEach((update) => {
+        if (!update || typeof update !== "object") {
+          return;
+        }
+        const index = Number.parseInt(String(update.index), 10);
+        if (!Number.isInteger(index) || index < 0 || index >= youtubeChannels.length) {
+          return;
+        }
+        const current = youtubeChannels[index] && typeof youtubeChannels[index] === "object" ? youtubeChannels[index] : null;
+        if (!current) {
+          return;
+        }
+        const next = {
+          ...current,
+          handle: update.handle,
+          userName: update.userName || current.userName
+        };
+        if (
+          normalizeYouTubeHandle(current.handle) === normalizeYouTubeHandle(next.handle) &&
+          normalizeYouTubeUserName(current.userName) === normalizeYouTubeUserName(next.userName)
+        ) {
+          return;
+        }
+        youtubeChannels[index] = next;
+        changed = true;
+      });
+
+      if (changed) {
+        saveYouTubeChannels();
+        renderAdminYoutubeTable();
+      }
+    } finally {
+      youtubeAdminHandleSyncInFlight = false;
+    }
   }
 
   function decodeEscapedJsonText(rawValue) {
@@ -2324,6 +2425,7 @@
       return;
     }
 
+    void enrichMissingYouTubeHandlesForAdmin();
     adminYoutubeTableBodyEl.innerHTML = "";
     if (!youtubeChannels.length) {
       adminYoutubeTableBodyEl.innerHTML = `
@@ -2335,13 +2437,9 @@
     }
 
     youtubeChannels.forEach((channel) => {
-      const channelUrl = buildCanonicalYouTubeChannelUrl(channel);
-      const parsedFromUrl = parseYouTubeChannelReference(channelUrl || channel.channelUrl || "") || {};
-      const handleLabel =
-        normalizeYouTubeHandle(channel.handle) ||
-        normalizeYouTubeHandle(parsedFromUrl.handle) ||
-        (normalizeYouTubeUserName(channel.userName) ? `@${normalizeYouTubeUserName(channel.userName)}` : "");
+      const handleLabel = resolveYouTubeHandle(channel);
       const channelLabel = String(handleLabel || channel.name || channel.channelId || channel.userName || "Kanał YouTube").trim();
+      const channelUrl = buildYouTubeHandleUrl(channel);
       const row = document.createElement("tr");
       row.className = "admin-youtube-row";
       row.dataset.youtubeId = String(channel.id || "").trim();
