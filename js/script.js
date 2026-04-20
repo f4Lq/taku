@@ -2336,7 +2336,12 @@
 
     youtubeChannels.forEach((channel) => {
       const channelUrl = buildCanonicalYouTubeChannelUrl(channel);
-      const channelLabel = String(channel.name || channel.handle || channel.channelId || channel.userName || "Kanał YouTube").trim();
+      const parsedFromUrl = parseYouTubeChannelReference(channelUrl || channel.channelUrl || "") || {};
+      const handleLabel =
+        normalizeYouTubeHandle(channel.handle) ||
+        normalizeYouTubeHandle(parsedFromUrl.handle) ||
+        (normalizeYouTubeUserName(channel.userName) ? `@${normalizeYouTubeUserName(channel.userName)}` : "");
+      const channelLabel = String(handleLabel || channel.name || channel.channelId || channel.userName || "Kanał YouTube").trim();
       const row = document.createElement("tr");
       row.className = "admin-youtube-row";
       row.dataset.youtubeId = String(channel.id || "").trim();
