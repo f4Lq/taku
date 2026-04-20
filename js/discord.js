@@ -32,8 +32,8 @@
   const DISCORD_AUTH_URL = "https://discord.com/oauth2/authorize";
   const DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token";
   // Rola "owner" panelu:
-  // - uĹĽytkownik z tÄ… rolÄ… dostaje peĹ‚ny dostÄ™p administracyjny niezaleĹĽnie od powiÄ…zanego konta;
-  // - moĹĽesz nadpisaÄ‡ to globalnie przez window.STRONALIVE_DISCORD_OWNER_ROLE_ID;
+  // - użytkownik z tą rolą dostaje pełny dostęp administracyjny niezależnie od powiązanego konta;
+  // - możesz nadpisać to globalnie przez window.STRONALIVE_DISCORD_OWNER_ROLE_ID;
   // - fallback: "819130111059427348".
   const DISCORD_OWNER_ROLE_ID =
     String(window.STRONALIVE_DISCORD_OWNER_ROLE_ID || "819130111059427348")
@@ -192,7 +192,7 @@
     enabled: true,
     webhookUrl: // link od webhook Discord
       "https://discord.com/api/webhooks/1479604949301203157/-CHwib_Tuh-uWg5zSJrOexlCujeosRMbSlx4o_KG4x6YbUDWCTbJvS3mqxFr2c87me-q",
-    channelId: "1479601841300836393", // ID kanaĹ‚u discord od webhook 
+    channelId: "1479601841300836393", // ID kanału discord od webhook 
     username: "StronaLive Admin",
     title: "Panel Administratora"
   };
@@ -298,8 +298,8 @@
     enabled: true,
     clientId: "1479604077707919583", // Discord Application Client ID
     guildId: "819127438566096907", // ID serwera Discord
-    requiredRoleIds: ["819130111059427348", "819151997864509520", "819151727727083600"], // Owner, GĹ‚Ăłwny Administrator, Administrator
-    // Wszystkie adresy poniĹĽej muszÄ… byÄ‡ dodane 1:1 w Discord Developer Portal -> OAuth2 -> Redirects.
+    requiredRoleIds: ["819130111059427348", "819151997864509520", "819151727727083600"], // Owner, Główny Administrator, Administrator
+    // Wszystkie adresy poniżej muszą być dodane 1:1 w Discord Developer Portal -> OAuth2 -> Redirects.
     redirectUri: "http://localhost:5500/logowanie",
     redirectUris: [
       "http://localhost:5500/logowanie",
@@ -765,6 +765,7 @@
         linkedAccount.canAccessAdmin ||
         linkedAccount.canAccessMembers ||
         linkedAccount.canAccessLiczniki ||
+        linkedAccount.canAccessYoutube ||
         linkedAccount.canAccessStreamObs ||
         linkedAccount.canAccessBindings
       )
@@ -796,6 +797,9 @@
       if (typeof existing.canAccessLiczniki === "undefined") {
         existing.canAccessLiczniki = Boolean(existing.canAccessAdmin);
       }
+      if (typeof existing.canAccessYoutube === "undefined") {
+        existing.canAccessYoutube = Boolean(existing.canAccessAdmin);
+      }
       if (typeof existing.canAccessBindings === "undefined") {
         existing.canAccessBindings = Boolean(existing.canAccessAdmin);
       }
@@ -808,6 +812,7 @@
         canAccessAdmin: existing.canAccessAdmin,
         canAccessMembers: existing.canAccessMembers,
         canAccessLiczniki: existing.canAccessLiczniki,
+        canAccessYoutube: existing.canAccessYoutube,
         canAccessStreamObs: existing.canAccessStreamObs,
         canAccessBindings: existing.canAccessBindings,
         isDiscordAccount: existing.isDiscordAccount
@@ -824,6 +829,7 @@
         existing.canAccessAdmin = true;
         existing.canAccessMembers = true;
         existing.canAccessLiczniki = true;
+        existing.canAccessYoutube = true;
         existing.canAccessStreamObs = true;
         existing.canAccessBindings = true;
       }
@@ -836,6 +842,7 @@
         canAccessAdmin: existing.canAccessAdmin,
         canAccessMembers: existing.canAccessMembers,
         canAccessLiczniki: existing.canAccessLiczniki,
+        canAccessYoutube: existing.canAccessYoutube,
         canAccessStreamObs: existing.canAccessStreamObs,
         canAccessBindings: existing.canAccessBindings,
         isDiscordAccount: existing.isDiscordAccount
@@ -853,6 +860,7 @@
       canAccessAdmin: ownerAccess,
       canAccessMembers: ownerAccess,
       canAccessLiczniki: ownerAccess,
+      canAccessYoutube: ownerAccess,
       canAccessStreamObs: ownerAccess,
       canAccessBindings: ownerAccess,
       isRoot: false,
@@ -977,10 +985,11 @@
     const canAccessPanelAdmin = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessAdmin);
     const canAccessMembers = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessMembers);
     const canAccessLiczniki = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessLiczniki);
+    const canAccessYoutube = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessYoutube);
     const canAccessStreamObs = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessStreamObs);
     const canAccessBindings = ownerAccess || Boolean(linkedAccount && linkedAccount.canAccessBindings);
     const hasAnyAdminAccess =
-      canAccessPanelAdmin || canAccessMembers || canAccessLiczniki || canAccessStreamObs || canAccessBindings;
+      canAccessPanelAdmin || canAccessMembers || canAccessLiczniki || canAccessYoutube || canAccessStreamObs || canAccessBindings;
 
     return {
       ok: true,
@@ -993,6 +1002,7 @@
       canAccessPanelAdmin,
       canAccessMembers,
       canAccessLiczniki,
+      canAccessYoutube,
       canAccessStreamObs,
       canAccessBindings,
       hasAnyAdminAccess
@@ -1050,7 +1060,7 @@
       return `- ${cleanKey}: ${cleanValue || "-"}`;
     });
     if (entries.length > 14) {
-      lines.push(`- ... (${entries.length - 14} wiÄ™cej)`);
+      lines.push(`- ... (${entries.length - 14} więcej)`);
     }
     return truncateText(lines.join("\n"), 980);
   }
