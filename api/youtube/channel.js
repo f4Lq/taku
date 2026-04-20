@@ -1,7 +1,7 @@
 const { getRequestUrl, sendJson, sendOptions } = require("../_lib/http.js");
 
 const YT_API_BASE = "https://www.googleapis.com/youtube/v3";
-const YT_USER_AGENT = "Mozilla/5.0 (TakuuYouTubeAPI/3.0)";
+const YT_USER_AGENT = "Mozilla/5.0 (YouTubeAPI/3.0)";
 const YT_DEFAULT_LIMIT = 5;
 const YT_MAX_RESULTS = 50;
 const YT_MAX_SCAN_PAGES = 80;

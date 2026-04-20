@@ -197,12 +197,17 @@
   const YOUTUBE_SORT_MODE_KEY = getStorageKey("youtube_sort_mode");
   const YOUTUBE_FEED_FETCH_TIMEOUT_MS = 4200;
   const YOUTUBE_META_FETCH_TIMEOUT_MS = 4200;
-  const YOUTUBE_API_FETCH_TIMEOUT_MS = 6500;
+  const YOUTUBE_API_FETCH_TIMEOUT_MS = 12000;
   const YOUTUBE_MAX_FEED_ITEMS = 25;
   const YOUTUBE_VISIBLE_VIDEO_COUNT = 5;
   const YOUTUBE_DEFAULT_SORT_MODE = "newest";
   const YOUTUBE_CHANNEL_CACHE_TTL_MS = 3 * 60 * 1000;
   const YOUTUBE_CHANNEL_CACHE_TTL_NEWEST_MS = 6 * 1000;
+  const YOUTUBE_RENDER_MAX_CONCURRENCY = 4;
+  const YOUTUBE_RENDER_MAX_CONCURRENCY_LARGE = 3;
+  const YOUTUBE_RENDER_MAX_CONCURRENCY_BACKGROUND = 2;
+  const YOUTUBE_RENDER_MAX_CONCURRENCY_BACKGROUND_LARGE = 1;
+  const YOUTUBE_LARGE_CHANNELS_THRESHOLD = 10;
   const YOUTUBE_LIVE_POLL_MS = 8 * 1000;
   const YOUTUBE_AVATAR_FALLBACK =
     String(window.YOUTUBE_AVATAR_FALLBACK || MEMBER_AVATAR_FALLBACK || "/img/default_profil.png").trim() || "/img/default_profil.png";
@@ -2061,6 +2066,27 @@
     `;
   }
 
+  async function mapWithConcurrencyLimit(items, maxConcurrency, mapper) {
+    const source = Array.isArray(items) ? items : [];
+    const workerLimit = Math.min(
+      source.length,
+      Math.max(1, Number.parseInt(String(maxConcurrency || "1"), 10) || 1)
+    );
+    const results = new Array(source.length);
+    let nextIndex = 0;
+
+    async function worker() {
+      while (nextIndex < source.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(source[currentIndex], currentIndex);
+      }
+    }
+
+    await Promise.all(Array.from({ length: workerLimit }, () => worker()));
+    return results;
+  }
+
   async function renderPublicYouTubeCards(options = {}) {
     if (!youtubeChannelsGridEl || !youtubePanelEl) {
       return;
@@ -2124,8 +2150,19 @@
       setYoutubeStatus("Ładowanie kanałów YouTube...", "info");
     }
 
-    const results = await Promise.all(
-      channels.map(async (channel) => {
+    const channelCount = channels.length;
+    const maxConcurrency = backgroundRefresh
+      ? channelCount >= YOUTUBE_LARGE_CHANNELS_THRESHOLD
+        ? YOUTUBE_RENDER_MAX_CONCURRENCY_BACKGROUND_LARGE
+        : YOUTUBE_RENDER_MAX_CONCURRENCY_BACKGROUND
+      : channelCount >= YOUTUBE_LARGE_CHANNELS_THRESHOLD
+        ? YOUTUBE_RENDER_MAX_CONCURRENCY_LARGE
+        : YOUTUBE_RENDER_MAX_CONCURRENCY;
+
+    const results = await mapWithConcurrencyLimit(
+      channels,
+      maxConcurrency,
+      async (channel) => {
         try {
           const payload = await loadYouTubeChannelCardData(channel, activeSortMode || channel.defaultSortMode);
           return {
@@ -2141,7 +2178,7 @@
             stalePayload: staleCached && staleCached.value && typeof staleCached.value === "object" ? staleCached.value : null
           };
         }
-      })
+      }
     );
 
     if (renderToken !== youtubeRenderSeq) {
@@ -2215,6 +2252,10 @@
     }
     const activeSortMode = normalizeYouTubeSortMode(youtubeSortMode);
     if (!force && activeSortMode !== "newest") {
+      return;
+    }
+    const channelCount = Array.isArray(youtubeChannels) ? youtubeChannels.length : 0;
+    if (!force && channelCount >= YOUTUBE_LARGE_CHANNELS_THRESHOLD) {
       return;
     }
 
