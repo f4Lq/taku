@@ -2199,6 +2199,11 @@
         }
 
         const channel = normalizeYouTubeChannelEntry(result.channel) || {};
+        const errorText = String(result.error && (result.error.message || result.error) || "").trim();
+        const notFoundLikeError =
+          errorText.includes("YOUTUBE_WEB_AND_RSS_FAILED") ||
+          errorText.includes("YOUTUBE_CHANNEL_NOT_FOUND") ||
+          errorText.includes("YOUTUBE_CHANNEL_REFERENCE_REQUIRED");
         const fallbackPayload = {
           id: String(channel.id || "").trim(),
           name: String(channel.name || channel.handle || channel.channelId || "Kanał YouTube").trim(),
@@ -2207,7 +2212,9 @@
           userName: normalizeYouTubeUserName(channel.userName),
           channelUrl: buildCanonicalYouTubeChannelUrl(channel),
           subscribersText: "",
-          description: "Nie udało się pobrać danych tego kanału.",
+          description: notFoundLikeError
+            ? "Nie znaleziono kanału YouTube. Sprawdź URL lub @handle w Panelu Administratora."
+            : "Nie udało się pobrać danych tego kanału.",
           avatarUrl: YOUTUBE_AVATAR_FALLBACK,
           sortMode: activeSortMode,
           videos: []
@@ -2422,7 +2429,7 @@
     adminYoutubeBound = true;
 
     if (adminYoutubeFormEl) {
-      adminYoutubeFormEl.addEventListener("submit", (event) => {
+      adminYoutubeFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
 
         if (!hasYouTubeTabAccess()) {
@@ -2443,7 +2450,7 @@
           return;
         }
 
-        const normalizedChannel = normalizeYouTubeChannelEntry({
+        let normalizedChannel = normalizeYouTubeChannelEntry({
           id: editingYoutubeChannelId || "",
           name,
           channelId: parsed.channelId,
@@ -2456,6 +2463,25 @@
           setAdminYoutubeStatus("Nie udało się zapisać kanału YouTube.", "error");
           return;
         }
+
+        let verifiedChannel = null;
+        try {
+          verifiedChannel = await fetchYouTubeChannelDataFromApi(normalizedChannel, defaultSortMode);
+        } catch (_error) {
+          setAdminYoutubeStatus("Nie udało się zweryfikować kanału YouTube. Sprawdź URL, @handle lub ID kanału.", "error");
+          return;
+        }
+
+        normalizedChannel =
+          normalizeYouTubeChannelEntry({
+            ...normalizedChannel,
+            channelId: String(verifiedChannel && verifiedChannel.channelId || "").trim() || normalizedChannel.channelId,
+            handle: String(verifiedChannel && verifiedChannel.handle || "").trim() || normalizedChannel.handle,
+            userName: String(verifiedChannel && verifiedChannel.userName || "").trim() || normalizedChannel.userName,
+            channelUrl: String(verifiedChannel && verifiedChannel.channelUrl || "").trim() || normalizedChannel.channelUrl,
+            name: String(name || "").trim() || String(verifiedChannel && verifiedChannel.name || "").trim() || normalizedChannel.name,
+            defaultSortMode
+          }) || normalizedChannel;
 
         const duplicate = youtubeChannels.find((entry) => {
           if (!entry || String(entry.id || "").trim() === String(editingYoutubeChannelId || "").trim()) {

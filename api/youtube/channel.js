@@ -869,8 +869,8 @@ async function loadFromWebOrRss(reference, sortMode, limit) {
           // Keep initial list.
         }
       }
-      if (continuationToken && !continuationUsed) {
-        // Do not trust initial mixed renderer list when dedicated sorted continuation failed.
+      if (continuationToken && !continuationUsed && mode !== "newest") {
+        // For popular/oldest we rely on dedicated sorted continuation payload.
         videos = [];
       }
 
