@@ -556,7 +556,7 @@
 
 
 .admin-tab-btn[data-tab="accounts"]{
-  order: 3;
+  order: 4;
 }
 
 
@@ -565,8 +565,13 @@
 }
 
 
+.admin-tab-btn[data-tab="youtube"]{
+  order: 3;
+}
+
+
 .admin-tab-btn[data-tab="bindings"]{
-  order: 4;
+  order: 5;
 }
 
 
@@ -785,8 +790,8 @@
 
 
 .admin-row-btn.admin-cennik-drag-handle .admin-drag-icon{
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   display: block;
   transition: transform 140ms ease;
 }

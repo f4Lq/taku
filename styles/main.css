@@ -373,6 +373,8 @@ body.route-soon .stream-layout,
 body.route-soon #friends,
 body.route-login .stream-layout,
 body.route-login #friends,
+body.route-youtube .stream-layout,
+body.route-youtube #friends,
 body.route-admin .stream-layout,
 body.route-admin #friends{
   display: none !important;
@@ -410,6 +412,7 @@ body.route-home,
 body.route-soon,
 body.route-clips,
 body.route-login,
+body.route-youtube,
 body.route-admin{
   background:
     radial-gradient(circle at 8% 24%, rgba(65, 114, 255, 0.17), transparent 36%),
@@ -422,6 +425,7 @@ body.route-home::before,
 body.route-soon::before,
 body.route-clips::before,
 body.route-login::before,
+body.route-youtube::before,
 body.route-admin::before{
   opacity: 0.15;
 }
@@ -431,6 +435,7 @@ body.route-home .stream-shell,
 body.route-soon .stream-shell,
 body.route-clips .stream-shell,
 body.route-login .stream-shell,
+body.route-youtube .stream-shell,
 body.route-admin .stream-shell{
   margin: 0 0 12px;
   background:
@@ -846,6 +851,7 @@ body.route-home,
 body.route-soon,
 body.route-clips,
 body.route-login,
+body.route-youtube,
 body.route-admin{
   background:
     radial-gradient(circle at 10% 18%, rgba(141, 217, 255, 0.26), transparent 34%),
@@ -859,6 +865,7 @@ body.route-home::before,
 body.route-soon::before,
 body.route-clips::before,
 body.route-login::before,
+body.route-youtube::before,
 body.route-admin::before{
   opacity: 0.22;
   background-image:
@@ -992,6 +999,7 @@ body.route-home .stream-shell,
 body.route-soon .stream-shell,
 body.route-clips .stream-shell,
 body.route-login .stream-shell,
+body.route-youtube .stream-shell,
 body.route-admin .stream-shell{
   background: transparent;
   background-image: none;

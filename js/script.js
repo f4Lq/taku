@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   "use strict";
 
   const IS_FILE_PROTOCOL = window.location.protocol === "file:";
@@ -31,6 +31,7 @@
   const ROUTES = {
     home: { path: "/", view: "home", title: `${STREAMER_TITLE} - Live` },
     clips: { path: "/klipy", view: "klipy", title: `${STREAMER_TITLE} - Klipy` },
+    youtube: { path: "/youtube", view: "youtube", title: `${STREAMER_TITLE} - YouTube` },
     liczniki: { path: "/liczniki", view: "liczniki", title: `${STREAMER_TITLE} - Liczniki` },
     soon: { path: "/soon", view: "soon", title: `${STREAMER_TITLE} - Wkrotce` },
     login: { path: "/logowanie", view: "logowanie", title: `${STREAMER_TITLE} - Logowanie` },
@@ -43,6 +44,8 @@
     "/index.htm": "home",
     "/klipy": "clips",
     "/clips": "clips",
+    "/youtube": "youtube",
+    "/yt": "youtube",
     "/liczniki": "liczniki",
     "/soon": "soon",
     "/wkrotce": "soon",
@@ -55,6 +58,8 @@
     home: "home",
     klipy: "clips",
     clips: "clips",
+    youtube: "youtube",
+    yt: "youtube",
     liczniki: "liczniki",
     soon: "soon",
     wkrotce: "soon",
@@ -73,6 +78,10 @@
   const routePlaceholderEl = document.getElementById("routePlaceholder");
   const routeBadgeEl = document.getElementById("routeBadge");
   const licznikiPanelEl = document.getElementById("licznikiPanel");
+  const youtubePanelEl = document.getElementById("youtubePanel");
+  const youtubeChannelsGridEl = document.getElementById("youtubeChannelsGrid");
+  const youtubeStatusEl = document.getElementById("youtubeStatus");
+  const youtubeSortTabsEl = document.getElementById("youtubeSortTabs");
   const adminPanelEl = document.getElementById("adminPanel");
   const adminDashboardEl = document.getElementById("adminDashboard");
   const adminLoginFormEl = document.getElementById("adminLoginForm");
@@ -88,6 +97,7 @@
   const adminMembersTabEl = document.getElementById("adminMembersTab");
   const adminAccountsTabEl = document.getElementById("adminAccountsTab");
   const adminLicznikiTabEl = document.getElementById("adminLicznikiTab");
+  const adminYoutubeTabEl = document.getElementById("adminYoutubeTab");
   const adminBindingsTabEl = document.getElementById("adminBindingsTab");
   const adminMemberFormEl = document.getElementById("adminMemberForm");
   const adminMembersTableBodyEl = document.getElementById("adminMembersTableBody");
@@ -98,6 +108,9 @@
   const adminLicznikFormEl = document.getElementById("adminLicznikForm");
   const adminLicznikiTableBodyEl = document.getElementById("adminLicznikiTableBody");
   const adminLicznikStatusEl = document.getElementById("adminLicznikStatus");
+  const adminYoutubeFormEl = document.getElementById("adminYoutubeForm");
+  const adminYoutubeTableBodyEl = document.getElementById("adminYoutubeTableBody");
+  const adminYoutubeStatusEl = document.getElementById("adminYoutubeStatus");
   const adminLicznikFinishPickerModalEl = document.getElementById("adminLicznikFinishPickerModal");
   const adminLicznikFinishInputEl = document.getElementById("adminLicznikFinishInput");
   const adminLicznikFinishPickerStatusEl = document.getElementById("adminLicznikFinishPickerStatus");
@@ -130,6 +143,7 @@
 
   const homeNavEl = document.querySelector(".stream-nav-item-home");
   const clipsNavEl = document.querySelector(".stream-nav-item-clips");
+  const youtubeNavEl = document.querySelector(".stream-nav-item-youtube");
   const licznikiNavEl = document.querySelector(".stream-nav-item-liczniki");
   const soonNavEl = document.querySelector(".stream-nav-item-soon");
   const adminNavEl = document.querySelector(".stream-log");
@@ -145,10 +159,11 @@
   const LOCAL_KICK_OAUTH_START_ENDPOINT = "/api/kick/oauth/start";
   const LOCAL_KICK_OAUTH_STATUS_ENDPOINT = "/api/kick/oauth/status";
   const LOCAL_KICK_OAUTH_UNLINK_ENDPOINT = "/api/kick/oauth/unlink";
+  const LOCAL_YOUTUBE_CHANNEL_ENDPOINT = "/api/youtube/channel";
   const KICK_OAUTH_PRIMARY_ORIGIN = "https://taku-live.pl";
   const KICK_OAUTH_ALLOWED_HOSTS = new Set(["taku-live.pl", "www.taku-live.pl"]);
   const KICK_SUBS_LAST_COUNT_STORAGE_KEY = `${STORAGE_NAMESPACE}:kick:last-subs-goal:${CHANNEL_SLUG}`;
-  const CLIPS_MAX_ITEMS = 200; // liczba klipów do załadowania w /klipy
+  const CLIPS_MAX_ITEMS = 200; // liczba klipĂłw do zaĹ‚adowania w /klipy
   const CLIPS_FAST_LOAD_ITEMS = 60;
   const CHANNEL_AVATAR_FALLBACK = String(
     (document.body && document.body.getAttribute("data-channel-avatar-fallback")) ||
@@ -178,21 +193,31 @@
   const ROOT_ADMIN_ID = "root-admin";
   const CCI_MEMBERS_KEY = getStorageKey("custom_members");
   const LICZNIKI_ITEMS_KEY = getStorageKey("liczniki_items");
+  const YOUTUBE_CHANNELS_KEY = getStorageKey("youtube_channels");
+  const YOUTUBE_SORT_MODE_KEY = getStorageKey("youtube_sort_mode");
+  const YOUTUBE_FEED_FETCH_TIMEOUT_MS = 4200;
+  const YOUTUBE_META_FETCH_TIMEOUT_MS = 4200;
+  const YOUTUBE_API_FETCH_TIMEOUT_MS = 5200;
+  const YOUTUBE_MAX_FEED_ITEMS = 25;
+  const YOUTUBE_VISIBLE_VIDEO_COUNT = 5;
+  const YOUTUBE_DEFAULT_SORT_MODE = "newest";
+  const YOUTUBE_AVATAR_FALLBACK =
+    String(window.YOUTUBE_AVATAR_FALLBACK || MEMBER_AVATAR_FALLBACK || "/img/default_profil.png").trim() || "/img/default_profil.png";
   const LICZNIKI_FIXED_UTC_OFFSET_MINUTES = 60;
   const LICZNIKI_FIXED_UTC_OFFSET_MS = LICZNIKI_FIXED_UTC_OFFSET_MINUTES * 60 * 1000;
   const LICZNIKI_MONTH_NAMES_PL = [
-    "styczeń",
+    "styczeĹ„",
     "luty",
     "marzec",
-    "kwiecień",
+    "kwiecieĹ„",
     "maj",
     "czerwiec",
     "lipiec",
-    "sierpień",
-    "wrzesień",
-    "październik",
+    "sierpieĹ„",
+    "wrzesieĹ„",
+    "paĹşdziernik",
     "listopad",
-    "grudzień"
+    "grudzieĹ„"
   ];
   // Keep root credential decoding stable even when STORAGE_NAMESPACE changes per streamer.
   const ADMIN_SECRET_XOR_KEY =
@@ -225,10 +250,12 @@
   let lastKnownKickSubsCount = null;
   let loginHandlersBound = false;
   let logoutHandlerBound = false;
+  let youtubeSortBound = false;
   let adminTabsBound = false;
   let adminMembersBound = false;
   let adminAccountsBound = false;
   let adminLicznikiBound = false;
+  let adminYoutubeBound = false;
   let adminStateSyncTimerId = 0;
   let adminStateSyncInFlight = false;
   let adminStateSyncPending = false;
@@ -237,6 +264,7 @@
   let adminStateLastSyncError = "";
   let editingMemberId = "";
   let editingLicznikId = "";
+  let editingYoutubeChannelId = "";
   let activeAdminTab = "members";
   let draggingMemberId = "";
   let draggingMemberRow = null;
@@ -249,6 +277,10 @@
   let cciMembers = [];
   let adminAccounts = [];
   let licznikiItems = [];
+  let youtubeChannels = [];
+  let youtubeSortMode = YOUTUBE_DEFAULT_SORT_MODE;
+  let youtubeRenderSeq = 0;
+  const youtubeChannelDataCache = new Map();
   const visibleAdminPasswords = new Set();
 
   function normalizePath(pathname) {
@@ -308,7 +340,13 @@
       const stored = String(window.localStorage.getItem(ADMIN_ACTIVE_TAB_KEY) || "")
         .trim()
         .toLowerCase();
-      if (stored === "members" || stored === "accounts" || stored === "liczniki" || stored === "bindings") {
+      if (
+        stored === "members" ||
+        stored === "accounts" ||
+        stored === "liczniki" ||
+        stored === "youtube" ||
+        stored === "bindings"
+      ) {
         return stored;
       }
     } catch (_error) {
@@ -339,6 +377,9 @@
     if (clean === "accounts") {
       return hasPanelAdminAccess();
     }
+    if (clean === "youtube") {
+      return hasYouTubeTabAccess();
+    }
     if (clean === "bindings") {
       return hasBindingsTabAccess();
     }
@@ -349,7 +390,7 @@
   }
 
   function getFirstAccessibleAdminTab(preferredTab = "") {
-    const candidates = [preferredTab, "members", "liczniki", "accounts", "bindings"]
+    const candidates = [preferredTab, "members", "liczniki", "youtube", "accounts", "bindings"]
       .map((value) => String(value || "").trim().toLowerCase())
       .filter((value, index, array) => value && array.indexOf(value) === index);
     const firstAllowed = candidates.find((tabName) => canAccessAdminTab(tabName));
@@ -359,25 +400,29 @@
   function notifyAdminTabAccessDenied(tabName) {
     const clean = String(tabName || "").trim().toLowerCase();
     if (clean === "accounts") {
-      setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+      setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
+      return;
+    }
+    if (clean === "youtube") {
+      setAdminYoutubeStatus("Brak permisji do zakładki YouTube.", "error");
       return;
     }
     if (clean === "bindings") {
-      setAdminAccountStatus("Brak permisji do zakładki Powiązania.", "error");
+      setAdminAccountStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
       return;
     }
     if (clean === "liczniki") {
-      setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+      setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
       return;
     }
-    setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+    setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
   }
 
   function setActiveAdminTab(tabName, options = {}) {
     const persist = options && options.persist !== false;
     const clean = String(tabName || "").trim().toLowerCase();
     let nextTab =
-      clean === "members" || clean === "accounts" || clean === "liczniki" || clean === "bindings"
+      clean === "members" || clean === "accounts" || clean === "liczniki" || clean === "youtube" || clean === "bindings"
         ? clean
         : "members";
 
@@ -388,10 +433,13 @@
 
     if (nextTab === "accounts" && !hasPanelAdminAccess()) {
       nextTab = "members";
-      setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+      setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
+    } else if (nextTab === "youtube" && !hasYouTubeTabAccess()) {
+      nextTab = "members";
+      setAdminYoutubeStatus("Brak permisji do zakĹ‚adki YouTube.", "error");
     } else if (nextTab === "bindings" && !hasBindingsTabAccess()) {
       nextTab = "members";
-      setAdminAccountStatus("Brak permisji do zakładki Powiązania.", "error");
+      setAdminAccountStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
     }
 
     if (adminTabsWrapEl) {
@@ -406,6 +454,7 @@
     setAdminTabPanelState(adminMembersTabEl, nextTab === "members");
     setAdminTabPanelState(adminAccountsTabEl, nextTab === "accounts");
     setAdminTabPanelState(adminLicznikiTabEl, nextTab === "liczniki");
+    setAdminTabPanelState(adminYoutubeTabEl, nextTab === "youtube");
     setAdminTabPanelState(adminBindingsTabEl, nextTab === "bindings");
     if (nextTab !== "liczniki") {
       closeAdminLicznikFinishModals();
@@ -482,6 +531,14 @@
     adminLicznikStatusEl.classList.toggle("is-success", type === "success");
   }
 
+  function setAdminYoutubeStatus(text, type = "info") {
+    setPanelStatus(adminYoutubeStatusEl, text, type);
+  }
+
+  function setYoutubeStatus(text, type = "info") {
+    setPanelStatus(youtubeStatusEl, text, type);
+  }
+
   function setAdminLicznikFinishPickerStatus(text, type = "info") {
     setPanelStatus(adminLicznikFinishPickerStatusEl, text, type);
   }
@@ -495,13 +552,17 @@
       setAdminLicznikStatus(text, type);
       return;
     }
+    if (activeAdminTab === "youtube") {
+      setAdminYoutubeStatus(text, type);
+      return;
+    }
     setAdminAccountStatus(text, type);
   }
 
   function normalizeAdminSyncErrorMessage(rawValue) {
     const text = String(rawValue || "").trim();
     if (!text) {
-      return "nieznany błąd synchronizacji";
+      return "nieznany bĹ‚Ä…d synchronizacji";
     }
     return text
       .replace(/^ADMIN_STATE_[A-Z_0-9]+:\s*/i, "")
@@ -514,7 +575,7 @@
     const message = normalizeAdminSyncErrorMessage(rawError);
     adminStateLastSyncError = message;
     if (getRouteFromLocation() === "admin") {
-      setActiveAdminSyncStatus(`Błąd zapisu do Redis: ${message}`, "error");
+      setActiveAdminSyncStatus(`BĹ‚Ä…d zapisu do Redis: ${message}`, "error");
     }
   }
 
@@ -882,6 +943,1413 @@
     void pushAdminStateToRemote();
   }
 
+  function normalizeYouTubeSortMode(modeValue) {
+    const clean = String(modeValue || "").trim().toLowerCase();
+    if (clean === "popular") {
+      return "popular";
+    }
+    if (clean === "oldest") {
+      return "oldest";
+    }
+    return "newest";
+  }
+
+  function formatYouTubeSortModeLabel(modeValue) {
+    const mode = normalizeYouTubeSortMode(modeValue);
+    if (mode === "popular") {
+      return "Popularne";
+    }
+    if (mode === "oldest") {
+      return "Najstarsze";
+    }
+    return "Najnowsze";
+  }
+
+  function normalizeYouTubeChannelId(value) {
+    const clean = String(value || "").trim();
+    return /^UC[a-zA-Z0-9_-]{22}$/.test(clean) ? clean : "";
+  }
+
+  function normalizeYouTubeHandle(value) {
+    const clean = String(value || "").trim();
+    if (!clean) {
+      return "";
+    }
+    const candidate = clean.startsWith("@") ? clean : `@${clean.replace(/^@+/, "")}`;
+    return /^@[a-zA-Z0-9._-]{2,60}$/.test(candidate) ? candidate : "";
+  }
+
+  function normalizeYouTubeUserName(value) {
+    const clean = String(value || "").trim();
+    return /^[a-zA-Z0-9._-]{2,60}$/.test(clean) ? clean : "";
+  }
+
+  function parseYouTubeChannelReference(rawValue) {
+    const input = String(rawValue || "").trim();
+    if (!input) {
+      return null;
+    }
+
+    const directId = normalizeYouTubeChannelId(input);
+    if (directId) {
+      return {
+        channelId: directId,
+        handle: "",
+        userName: "",
+        channelUrl: `https://www.youtube.com/channel/${directId}`
+      };
+    }
+
+    const directHandle = normalizeYouTubeHandle(input);
+    if (directHandle) {
+      return {
+        channelId: "",
+        handle: directHandle,
+        userName: "",
+        channelUrl: `https://www.youtube.com/${directHandle}`
+      };
+    }
+
+    let parsed = null;
+    try {
+      parsed = new URL(input, "https://www.youtube.com");
+    } catch (_error) {
+      parsed = null;
+    }
+
+    if (!parsed) {
+      return null;
+    }
+
+    const host = String(parsed.hostname || "").toLowerCase();
+    const isYouTubeHost =
+      host === "youtube.com" ||
+      host === "www.youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "youtu.be";
+    if (!isYouTubeHost) {
+      return null;
+    }
+
+    const segments = String(parsed.pathname || "/")
+      .split("/")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    const channelIdFromQuery = normalizeYouTubeChannelId(parsed.searchParams.get("channel_id"));
+    if (channelIdFromQuery) {
+      return {
+        channelId: channelIdFromQuery,
+        handle: "",
+        userName: "",
+        channelUrl: `https://www.youtube.com/channel/${channelIdFromQuery}`
+      };
+    }
+
+    if (!segments.length) {
+      return null;
+    }
+
+    const first = segments[0];
+    const firstLower = first.toLowerCase();
+    if (firstLower === "channel" && segments[1]) {
+      const channelId = normalizeYouTubeChannelId(segments[1]);
+      if (channelId) {
+        return {
+          channelId,
+          handle: "",
+          userName: "",
+          channelUrl: `https://www.youtube.com/channel/${channelId}`
+        };
+      }
+    }
+
+    if (firstLower === "user" && segments[1]) {
+      const userName = normalizeYouTubeUserName(segments[1]);
+      if (userName) {
+        return {
+          channelId: "",
+          handle: "",
+          userName,
+          channelUrl: `https://www.youtube.com/user/${userName}`
+        };
+      }
+    }
+
+    if (first.startsWith("@")) {
+      const handle = normalizeYouTubeHandle(first);
+      if (handle) {
+        return {
+          channelId: "",
+          handle,
+          userName: "",
+          channelUrl: `https://www.youtube.com/${handle}`
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function buildCanonicalYouTubeChannelUrl(reference) {
+    const source = reference && typeof reference === "object" ? reference : {};
+    const channelId = normalizeYouTubeChannelId(source.channelId);
+    if (channelId) {
+      return `https://www.youtube.com/channel/${channelId}`;
+    }
+
+    const handle = normalizeYouTubeHandle(source.handle);
+    if (handle) {
+      return `https://www.youtube.com/${handle}`;
+    }
+
+    const userName = normalizeYouTubeUserName(source.userName);
+    if (userName) {
+      return `https://www.youtube.com/user/${userName}`;
+    }
+
+    const parsed = parseYouTubeChannelReference(source.channelUrl || source.url || "");
+    if (parsed) {
+      return parsed.channelUrl;
+    }
+
+    return "";
+  }
+
+  function buildYouTubeFeedUrls(reference) {
+    const source = reference && typeof reference === "object" ? reference : {};
+    const urls = [];
+
+    const channelId = normalizeYouTubeChannelId(source.channelId);
+    if (channelId) {
+      urls.push(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`);
+    }
+
+    const userName = normalizeYouTubeUserName(source.userName);
+    if (userName) {
+      urls.push(`https://www.youtube.com/feeds/videos.xml?user=${encodeURIComponent(userName)}`);
+    }
+
+    const handle = normalizeYouTubeHandle(source.handle);
+    const handleAsUser = normalizeYouTubeUserName(handle.replace(/^@+/, ""));
+    if (handleAsUser) {
+      urls.push(`https://www.youtube.com/feeds/videos.xml?user=${encodeURIComponent(handleAsUser)}`);
+    }
+
+    return Array.from(new Set(urls));
+  }
+
+  function buildYouTubeFeedUrl(reference) {
+    const urls = buildYouTubeFeedUrls(reference);
+    return urls[0] || "";
+  }
+
+  function createYouTubeChannelId(seed = "") {
+    const cleanSeed = String(seed || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const stamp = Date.now().toString(36);
+    const rand = Math.random().toString(36).slice(2, 8);
+    return `youtube-${cleanSeed || "channel"}-${stamp}-${rand}`;
+  }
+
+  function normalizeYouTubeChannelEntry(entry, index = 0) {
+    const source = entry && typeof entry === "object" ? entry : {};
+    const parsed =
+      parseYouTubeChannelReference(
+        source.channelInput ||
+          source.channelUrl ||
+          source.url ||
+          source.channel ||
+          source.channelId ||
+          source.handle ||
+          source.userName
+      ) || null;
+
+    const channelId = normalizeYouTubeChannelId(source.channelId) || (parsed ? normalizeYouTubeChannelId(parsed.channelId) : "");
+    const handle = normalizeYouTubeHandle(source.handle) || (parsed ? normalizeYouTubeHandle(parsed.handle) : "");
+    const userName = normalizeYouTubeUserName(source.userName) || (parsed ? normalizeYouTubeUserName(parsed.userName) : "");
+    const channelUrl =
+      buildCanonicalYouTubeChannelUrl({
+        channelId,
+        handle,
+        userName,
+        channelUrl: source.channelUrl || source.url || (parsed && parsed.channelUrl) || ""
+      }) || "";
+    if (!channelId && !handle && !userName && !channelUrl) {
+      return null;
+    }
+
+    const displayName = String(source.name || source.title || source.label || "").trim();
+    const defaultSortMode = normalizeYouTubeSortMode(source.defaultSortMode || source.sortMode || YOUTUBE_DEFAULT_SORT_MODE);
+    const idSeed = channelId || handle || userName || channelUrl || `channel-${index + 1}`;
+
+    return {
+      id: String(source.id || "").trim() || createYouTubeChannelId(idSeed),
+      name: displayName,
+      channelId,
+      handle,
+      userName,
+      channelUrl,
+      defaultSortMode
+    };
+  }
+
+  function buildYouTubeChannelAuditSnapshot(channel) {
+    const source = channel && typeof channel === "object" ? channel : {};
+    return {
+      id: String(source.id || "").trim(),
+      name: String(source.name || "").trim(),
+      channelId: normalizeYouTubeChannelId(source.channelId),
+      handle: normalizeYouTubeHandle(source.handle),
+      userName: normalizeYouTubeUserName(source.userName),
+      channelUrl: buildCanonicalYouTubeChannelUrl(source),
+      defaultSortMode: normalizeYouTubeSortMode(source.defaultSortMode)
+    };
+  }
+
+  function loadYouTubeChannels() {
+    const stored = readStorageJsonFallback(YOUTUBE_CHANNELS_KEY, []);
+    return (Array.isArray(stored) ? stored : [])
+      .map((entry, index) => normalizeYouTubeChannelEntry(entry, index))
+      .filter(Boolean);
+  }
+
+  function saveYouTubeChannels() {
+    saveStorageJsonFallback(YOUTUBE_CHANNELS_KEY, youtubeChannels);
+    youtubeChannelDataCache.clear();
+    scheduleAdminStateSync();
+    void pushAdminStateToRemote();
+  }
+
+  function loadYouTubeSortMode() {
+    const stored = readStorageJsonFallback(YOUTUBE_SORT_MODE_KEY, YOUTUBE_DEFAULT_SORT_MODE);
+    return normalizeYouTubeSortMode(stored);
+  }
+
+  function saveYouTubeSortMode(modeValue) {
+    youtubeSortMode = normalizeYouTubeSortMode(modeValue);
+    saveStorageJsonFallback(YOUTUBE_SORT_MODE_KEY, youtubeSortMode);
+  }
+
+  function decodeEscapedJsonText(rawValue) {
+    return String(rawValue || "")
+      .replace(/\\\\u0026/g, "&")
+      .replace(/\\u0026/g, "&")
+      .replace(/\\\\\\//g, "/")
+      .replace(/\\\//g, "/")
+      .replace(/\\"/g, "\"");
+  }
+
+  function normalizeYouTubeViews(rawValue) {
+    if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+      return Math.max(0, Math.floor(rawValue));
+    }
+    const digits = String(rawValue || "").replace(/\D+/g, "");
+    if (!digits) {
+      return 0;
+    }
+    const parsed = Number.parseInt(digits, 10);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  }
+
+  function formatYouTubeViewsLabel(rawValue) {
+    const views = normalizeYouTubeViews(rawValue);
+    if (!Number.isFinite(views) || views <= 0) {
+      return "";
+    }
+    if (views >= 1000000) {
+      return `${(views / 1000000).toFixed(1).replace(".", ",")} mln wyświetleń`;
+    }
+    if (views >= 1000) {
+      return `${(views / 1000).toFixed(1).replace(".", ",")} tys. wyświetleń`;
+    }
+    return `${views.toLocaleString("pl-PL")} wyświetleń`;
+  }
+
+  function formatYouTubeDateLabel(rawValue) {
+    const value = String(rawValue || "").trim();
+    if (!value) {
+      return "";
+    }
+    const parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) {
+      return "";
+    }
+    try {
+      return parsed.toLocaleDateString("pl-PL", {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      });
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function extractYouTubeFeedXml(rawText) {
+    const text = String(rawText || "").trim();
+    if (!text) {
+      return "";
+    }
+
+    const fenced = text.match(/```(?:xml)?\s*([\s\S]*?)\s*```/i);
+    const candidate = fenced && fenced[1] ? fenced[1].trim() : text;
+
+    const xmlStart = candidate.indexOf("<?xml");
+    const feedStart = candidate.indexOf("<feed");
+    const start =
+      xmlStart !== -1 && feedStart !== -1 ? Math.min(xmlStart, feedStart) : Math.max(xmlStart, feedStart);
+    const end = candidate.lastIndexOf("</feed>");
+    if (start !== -1 && end !== -1 && end > start) {
+      return candidate.slice(start, end + "</feed>".length);
+    }
+
+    return candidate;
+  }
+
+  function parseYouTubeChannelMetaFromHtml(rawHtml) {
+    const html = String(rawHtml || "");
+    if (!html) {
+      return {};
+    }
+
+    const decodedHtml = decodeEscapedJsonText(html);
+    const channelIdPatterns = [
+      /"channelId":"(UC[a-zA-Z0-9_-]{22})"/,
+      /"externalId":"(UC[a-zA-Z0-9_-]{22})"/,
+      /"rssUrl":"[^"]*feeds\/videos\.xml\?channel_id=(UC[a-zA-Z0-9_-]{22})"/,
+      /feeds\/videos\.xml\?channel_id=(UC[a-zA-Z0-9_-]{22})/,
+      /<meta[^>]+itemprop=["']channelId["'][^>]+content=["'](UC[a-zA-Z0-9_-]{22})["']/i,
+      /<link[^>]+rel=["']canonical["'][^>]+href=["'][^"']*\/channel\/(UC[a-zA-Z0-9_-]{22})["']/i
+    ];
+
+    let channelId = "";
+    channelIdPatterns.some((pattern) => {
+      const matched = decodedHtml.match(pattern);
+      if (!matched || !matched[1]) {
+        return false;
+      }
+      channelId = normalizeYouTubeChannelId(matched[1]);
+      return Boolean(channelId);
+    });
+
+    const canonicalMatch =
+      decodedHtml.match(/"canonicalBaseUrl":"(\/@[^"]+)"/) ||
+      decodedHtml.match(/"vanityChannelUrl":"https?:\/\/www\.youtube\.com(\/@[^"]+)"/) ||
+      decodedHtml.match(/<link[^>]+rel=["']canonical["'][^>]+href=["'][^"']*(\/@[^"'/?]+)["']/i);
+    const titleMatch = decodedHtml.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
+    const descMatch = decodedHtml.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i);
+    const subsMatch =
+      decodedHtml.match(/"subscriberCountText":\{"simpleText":"([^"]+)"/) ||
+      decodedHtml.match(/"subscriberCountText":\{[^{}]*"simpleText":"([^"]+)"/) ||
+      decodedHtml.match(/"subscriberCountText":\{[^{}]*"label":"([^"]+)"/);
+
+    let avatarUrl = "";
+    const avatarBlock = decodedHtml.match(/"avatar":\{"thumbnails":\[(.*?)\]\}/);
+    if (avatarBlock && avatarBlock[1]) {
+      const avatarUrls = Array.from(avatarBlock[1].matchAll(/"url":"([^"]+)"/g))
+        .map((match) => decodeEscapedJsonText(match[1]))
+        .filter(Boolean);
+      if (avatarUrls.length) {
+        avatarUrl = avatarUrls[avatarUrls.length - 1];
+      }
+    }
+    if (!avatarUrl) {
+      const ogImageMatch = decodedHtml.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
+      avatarUrl = ogImageMatch && ogImageMatch[1] ? decodeEscapedJsonText(ogImageMatch[1]) : "";
+    }
+
+    const handle = canonicalMatch ? normalizeYouTubeHandle(canonicalMatch[1]) : "";
+    return {
+      channelId,
+      handle,
+      title: titleMatch ? decodeEscapedJsonText(titleMatch[1]) : "",
+      description: descMatch ? decodeEscapedJsonText(descMatch[1]) : "",
+      subscribersText: subsMatch ? decodeEscapedJsonText(subsMatch[1]) : "",
+      avatarUrl: avatarUrl || ""
+    };
+  }
+
+  function parseYouTubeFeed(xmlText) {
+    const source = extractYouTubeFeedXml(xmlText);
+    if (!source) {
+      throw new Error("YOUTUBE_FEED_EMPTY");
+    }
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(source, "application/xml");
+    if (doc.querySelector("parsererror")) {
+      throw new Error("YOUTUBE_FEED_PARSE_ERROR");
+    }
+
+    const getDirectChildText = (parent, localName) => {
+      if (!parent) {
+        return "";
+      }
+      const nodes = Array.from(parent.childNodes || []);
+      const matched = nodes.find((node) => {
+        return node && node.nodeType === 1 && String(node.localName || node.nodeName || "").toLowerCase() === localName;
+      });
+      return matched ? String(matched.textContent || "").trim() : "";
+    };
+
+    const feedRoot = doc.documentElement;
+    const feedTitle = getDirectChildText(feedRoot, "title");
+    const feedAuthor = Array.from(feedRoot.getElementsByTagNameNS("*", "author"))[0] || null;
+    const authorName = getDirectChildText(feedAuthor, "name");
+    const authorUrl = getDirectChildText(feedAuthor, "uri");
+    const feedChannelIdNode = Array.from(feedRoot.getElementsByTagNameNS("*", "channelId"))[0] || null;
+    const feedChannelId = normalizeYouTubeChannelId(feedChannelIdNode ? feedChannelIdNode.textContent : "");
+
+    const entries = Array.from(feedRoot.getElementsByTagNameNS("*", "entry"))
+      .slice(0, YOUTUBE_MAX_FEED_ITEMS)
+      .map((entryNode) => {
+        const entryTitle = getDirectChildText(entryNode, "title");
+        const videoIdNode = Array.from(entryNode.getElementsByTagNameNS("*", "videoId"))[0] || null;
+        const videoId = String(videoIdNode ? videoIdNode.textContent || "" : "").trim();
+        const publishedAt = getDirectChildText(entryNode, "published");
+        const updatedAt = getDirectChildText(entryNode, "updated");
+        const links = Array.from(entryNode.getElementsByTagName("link"));
+        const alternateLink =
+          links.find((linkNode) => String(linkNode.getAttribute("rel") || "").toLowerCase() === "alternate") || links[0] || null;
+        const videoUrl =
+          String(alternateLink ? alternateLink.getAttribute("href") || "" : "").trim() ||
+          (videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}` : "");
+        const thumbnailNode = Array.from(entryNode.getElementsByTagNameNS("*", "thumbnail"))[0] || null;
+        const thumbnailUrl = String(thumbnailNode ? thumbnailNode.getAttribute("url") || "" : "").trim();
+        const descNode = Array.from(entryNode.getElementsByTagNameNS("*", "description"))[0] || null;
+        const description = String(descNode ? descNode.textContent || "" : "").trim();
+        const statsNode = Array.from(entryNode.getElementsByTagNameNS("*", "statistics"))[0] || null;
+        const views = normalizeYouTubeViews(statsNode ? statsNode.getAttribute("views") : "");
+        const publishedMs = Number.isFinite(new Date(publishedAt).getTime()) ? new Date(publishedAt).getTime() : 0;
+
+        return {
+          id: videoId || videoUrl || `yt-entry-${Math.random().toString(36).slice(2, 10)}`,
+          title: entryTitle || "Bez tytułu",
+          videoId,
+          url: videoUrl,
+          thumbnailUrl,
+          description,
+          publishedAt,
+          updatedAt,
+          publishedMs,
+          views
+        };
+      })
+      .filter((entry) => Boolean(entry.url));
+
+    const authorReference = parseYouTubeChannelReference(authorUrl || "");
+    return {
+      channelId: feedChannelId || (authorReference ? normalizeYouTubeChannelId(authorReference.channelId) : ""),
+      title: feedTitle,
+      authorName,
+      authorUrl,
+      entries
+    };
+  }
+
+  async function withYouTubeTimeout(taskFactory, timeoutMs, timeoutLabel) {
+    let timeoutId = 0;
+    try {
+      return await Promise.race([
+        taskFactory(),
+        new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            reject(new Error(`${timeoutLabel}_${timeoutMs}`));
+          }, timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  async function fetchYouTubeTextDirect(url, timeoutMs, timeoutLabel) {
+    const response = await withYouTubeTimeout(
+      () =>
+        fetch(url, {
+          mode: "cors",
+          cache: "no-store",
+          headers: {
+            Accept: "application/atom+xml, application/xml, text/xml, text/plain;q=0.9, */*;q=0.8"
+          }
+        }),
+      timeoutMs,
+      timeoutLabel
+    );
+    if (!response.ok) {
+      throw new Error(`YOUTUBE_HTTP_${response.status}`);
+    }
+    const text = await response.text();
+    if (!String(text || "").trim()) {
+      throw new Error("YOUTUBE_EMPTY_RESPONSE");
+    }
+    return text;
+  }
+
+  async function fetchYouTubeTextViaProxy(sourceUrl, proxyPrefix, timeoutMs, timeoutLabel) {
+    const response = await withYouTubeTimeout(
+      () =>
+        fetch(`${proxyPrefix}${encodeURIComponent(sourceUrl)}`, {
+          mode: "cors",
+          cache: "no-store",
+          headers: {
+            Accept: "application/xml, text/xml, text/plain;q=0.9, */*;q=0.8"
+          }
+        }),
+      timeoutMs,
+      timeoutLabel
+    );
+    if (!response.ok) {
+      throw new Error(`YOUTUBE_PROXY_HTTP_${response.status}`);
+    }
+    const text = await response.text();
+    if (!String(text || "").trim()) {
+      throw new Error("YOUTUBE_PROXY_EMPTY_RESPONSE");
+    }
+    return text;
+  }
+
+  async function fetchYouTubeFeedText(feedUrl) {
+    const direct = await fetchYouTubeTextDirect(feedUrl, YOUTUBE_FEED_FETCH_TIMEOUT_MS, "YOUTUBE_FEED_TIMEOUT").catch(
+      () => ""
+    );
+    if (direct) {
+      return direct;
+    }
+
+    const proxyPrefixes = [ALL_ORIGINS_RAW_PREFIX, CORS_PROXY_PREFIX];
+    for (const proxyPrefix of proxyPrefixes) {
+      try {
+        const proxyText = await fetchYouTubeTextViaProxy(
+          feedUrl,
+          proxyPrefix,
+          YOUTUBE_FEED_FETCH_TIMEOUT_MS,
+          "YOUTUBE_FEED_PROXY_TIMEOUT"
+        );
+        if (proxyText) {
+          return proxyText;
+        }
+      } catch (_error) {
+        // Try the next proxy.
+      }
+    }
+
+    const jinaUrl = `${JINA_PREFIX}${feedUrl.replace(/^https:\/\//i, "http://")}`;
+    const jinaText = await fetchYouTubeTextDirect(jinaUrl, YOUTUBE_FEED_FETCH_TIMEOUT_MS, "YOUTUBE_FEED_JINA_TIMEOUT");
+    if (!jinaText) {
+      throw new Error("YOUTUBE_FEED_FETCH_FAILED");
+    }
+    return jinaText;
+  }
+
+  async function fetchYouTubeOEmbedMeta(channelUrl) {
+    const cleanChannelUrl = String(channelUrl || "").trim();
+    if (!cleanChannelUrl) {
+      return {};
+    }
+    const oembedUrl = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(cleanChannelUrl)}`;
+
+    try {
+      const response = await withYouTubeTimeout(
+        () =>
+          fetch(oembedUrl, {
+            mode: "cors",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json, text/plain;q=0.9, */*;q=0.8"
+            }
+          }),
+        YOUTUBE_META_FETCH_TIMEOUT_MS,
+        "YOUTUBE_OEMBED_TIMEOUT"
+      );
+      if (!response.ok) {
+        throw new Error(`YOUTUBE_OEMBED_HTTP_${response.status}`);
+      }
+      const payload = await response.json();
+      return payload && typeof payload === "object" ? payload : {};
+    } catch (_error) {
+      // Fallback below.
+    }
+
+    for (const proxyPrefix of [ALL_ORIGINS_RAW_PREFIX, CORS_PROXY_PREFIX]) {
+      try {
+        const proxyPayload = await fetchViaProxyJson(oembedUrl, proxyPrefix);
+        if (proxyPayload && typeof proxyPayload === "object") {
+          return proxyPayload;
+        }
+      } catch (_error) {
+        // Try next source.
+      }
+    }
+
+    try {
+      const jinaPayload = await fetchJinaJson(oembedUrl.replace(/^https:\/\//i, "http://"));
+      return jinaPayload && typeof jinaPayload === "object" ? jinaPayload : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  async function fetchYouTubeChannelPageMeta(channelUrl) {
+    const cleanChannelUrl = String(channelUrl || "").trim();
+    if (!cleanChannelUrl) {
+      return {};
+    }
+
+    const direct = await fetchYouTubeTextDirect(cleanChannelUrl, YOUTUBE_META_FETCH_TIMEOUT_MS, "YOUTUBE_META_TIMEOUT").catch(
+      () => ""
+    );
+    if (direct) {
+      return parseYouTubeChannelMetaFromHtml(direct);
+    }
+
+    for (const proxyPrefix of [ALL_ORIGINS_RAW_PREFIX, CORS_PROXY_PREFIX]) {
+      try {
+        const proxyText = await fetchYouTubeTextViaProxy(
+          cleanChannelUrl,
+          proxyPrefix,
+          YOUTUBE_META_FETCH_TIMEOUT_MS,
+          "YOUTUBE_META_PROXY_TIMEOUT"
+        );
+        if (proxyText) {
+          return parseYouTubeChannelMetaFromHtml(proxyText);
+        }
+      } catch (_error) {
+        // Try next source.
+      }
+    }
+
+    const jinaUrl = `${JINA_PREFIX}${cleanChannelUrl.replace(/^https:\/\//i, "http://")}`;
+    try {
+      const jinaText = await fetchYouTubeTextDirect(jinaUrl, YOUTUBE_META_FETCH_TIMEOUT_MS, "YOUTUBE_META_JINA_TIMEOUT");
+      return parseYouTubeChannelMetaFromHtml(jinaText);
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function sortYouTubeVideos(videosList, modeValue) {
+    const mode = normalizeYouTubeSortMode(modeValue);
+    const entries = Array.isArray(videosList) ? [...videosList] : [];
+    if (mode === "oldest") {
+      entries.sort((left, right) => (left.publishedMs || 0) - (right.publishedMs || 0));
+      return entries;
+    }
+    if (mode === "popular") {
+      entries.sort((left, right) => {
+        const byViews = (right.views || 0) - (left.views || 0);
+        if (byViews !== 0) {
+          return byViews;
+        }
+        return (right.publishedMs || 0) - (left.publishedMs || 0);
+      });
+      return entries;
+    }
+
+    entries.sort((left, right) => (right.publishedMs || 0) - (left.publishedMs || 0));
+    return entries;
+  }
+
+  function getYouTubeChannelCacheKey(channelEntry, sortMode) {
+    const source = channelEntry && typeof channelEntry === "object" ? channelEntry : {};
+    const normalizedSort = normalizeYouTubeSortMode(sortMode || source.defaultSortMode || YOUTUBE_DEFAULT_SORT_MODE);
+    return [
+      String(source.id || "").trim().toLowerCase(),
+      normalizeYouTubeChannelId(source.channelId),
+      normalizeYouTubeHandle(source.handle),
+      normalizeYouTubeUserName(source.userName),
+      String(source.channelUrl || "").trim().toLowerCase(),
+      normalizedSort
+    ].join("::");
+  }
+
+  async function fetchYouTubeChannelDataFromApi(channelEntry, sortMode) {
+    const source = channelEntry && typeof channelEntry === "object" ? channelEntry : {};
+    const params = new URLSearchParams();
+    const channelId = normalizeYouTubeChannelId(source.channelId);
+    const handle = normalizeYouTubeHandle(source.handle);
+    const userName = normalizeYouTubeUserName(source.userName);
+    const channelUrl = buildCanonicalYouTubeChannelUrl(source);
+
+    if (channelId) {
+      params.set("channelId", channelId);
+    }
+    if (handle) {
+      params.set("handle", handle);
+    }
+    if (userName) {
+      params.set("userName", userName);
+    }
+    if (channelUrl) {
+      params.set("channelUrl", channelUrl);
+    }
+    params.set("sort", normalizeYouTubeSortMode(sortMode || source.defaultSortMode || YOUTUBE_DEFAULT_SORT_MODE));
+    params.set("limit", String(YOUTUBE_VISIBLE_VIDEO_COUNT));
+
+    const endpoint = `${LOCAL_YOUTUBE_CHANNEL_ENDPOINT}?${params.toString()}`;
+    const response = await withYouTubeTimeout(
+      () =>
+        fetch(endpoint, {
+          method: "GET",
+          headers: {
+            Accept: "application/json"
+          },
+          cache: "no-store"
+        }),
+      YOUTUBE_API_FETCH_TIMEOUT_MS,
+      "YOUTUBE_API_TIMEOUT"
+    );
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_error) {
+      throw new Error(`YOUTUBE_API_INVALID_JSON:${response.status}`);
+    }
+
+    if (!response.ok || !payload || payload.ok !== true || !payload.channel || typeof payload.channel !== "object") {
+      const errorText = String(payload && payload.error || "").trim();
+      throw new Error(errorText || `YOUTUBE_API_HTTP_${response.status}`);
+    }
+
+    return payload.channel;
+  }
+
+  async function loadYouTubeChannelCardDataLegacy(channelEntry, sortMode) {
+    const source = normalizeYouTubeChannelEntry(channelEntry);
+    if (!source) {
+      throw new Error("YOUTUBE_CHANNEL_INVALID");
+    }
+
+    const mode = normalizeYouTubeSortMode(sortMode || source.defaultSortMode || YOUTUBE_DEFAULT_SORT_MODE);
+    let mergedChannelId = normalizeYouTubeChannelId(source.channelId);
+    let mergedHandle = normalizeYouTubeHandle(source.handle);
+    let mergedUserName = normalizeYouTubeUserName(source.userName);
+    let mergedChannelUrl = buildCanonicalYouTubeChannelUrl(source);
+    let channelTitle = String(source.name || "").trim();
+    let subscribersText = "";
+    let description = "";
+    let avatarUrl = "";
+
+    const oembed = await fetchYouTubeOEmbedMeta(mergedChannelUrl);
+    if (oembed && typeof oembed === "object") {
+      channelTitle = channelTitle || String(oembed.title || oembed.author_name || "").trim();
+      avatarUrl = String(oembed.thumbnail_url || "").trim();
+      const authorUrl = String(oembed.author_url || "").trim();
+      if (authorUrl) {
+        mergedChannelUrl = buildCanonicalYouTubeChannelUrl({ channelUrl: authorUrl }) || mergedChannelUrl;
+        const fromAuthor = parseYouTubeChannelReference(authorUrl);
+        if (fromAuthor) {
+          mergedChannelId = mergedChannelId || normalizeYouTubeChannelId(fromAuthor.channelId);
+          mergedHandle = mergedHandle || normalizeYouTubeHandle(fromAuthor.handle);
+          mergedUserName = mergedUserName || normalizeYouTubeUserName(fromAuthor.userName);
+        }
+      }
+    }
+
+    const pageMeta = await fetchYouTubeChannelPageMeta(mergedChannelUrl);
+    if (pageMeta && typeof pageMeta === "object") {
+      mergedChannelId = mergedChannelId || normalizeYouTubeChannelId(pageMeta.channelId);
+      mergedHandle = mergedHandle || normalizeYouTubeHandle(pageMeta.handle);
+      channelTitle = channelTitle || String(pageMeta.title || "").trim();
+      subscribersText = String(pageMeta.subscribersText || "").trim();
+      description = String(pageMeta.description || "").trim();
+      avatarUrl = String(pageMeta.avatarUrl || "").trim() || avatarUrl;
+    }
+
+    if (!mergedUserName && mergedHandle) {
+      mergedUserName = normalizeYouTubeUserName(String(mergedHandle || "").replace(/^@+/, ""));
+    }
+
+    const feedUrls = buildYouTubeFeedUrls({
+      channelId: mergedChannelId,
+      handle: mergedHandle,
+      userName: mergedUserName,
+      channelUrl: mergedChannelUrl
+    });
+    if (!feedUrls.length) {
+      throw new Error("YOUTUBE_CHANNEL_ID_REQUIRED");
+    }
+
+    let feed = null;
+    let feedError = null;
+    for (const feedUrl of feedUrls) {
+      try {
+        const feedText = await fetchYouTubeFeedText(feedUrl);
+        const parsedFeed = parseYouTubeFeed(feedText);
+        if (parsedFeed && typeof parsedFeed === "object") {
+          feed = parsedFeed;
+          break;
+        }
+      } catch (error) {
+        feedError = error;
+      }
+    }
+    if (!feed) {
+      throw feedError || new Error("YOUTUBE_FEED_FETCH_FAILED");
+    }
+
+    const authorRef = parseYouTubeChannelReference(feed.authorUrl || "");
+    mergedChannelId = mergedChannelId || normalizeYouTubeChannelId(feed.channelId) || normalizeYouTubeChannelId(authorRef && authorRef.channelId);
+    mergedHandle = mergedHandle || normalizeYouTubeHandle(authorRef && authorRef.handle);
+    mergedChannelUrl =
+      buildCanonicalYouTubeChannelUrl({
+        channelId: mergedChannelId,
+        handle: mergedHandle,
+        userName: mergedUserName,
+        channelUrl: mergedChannelUrl || feed.authorUrl || source.channelUrl
+      }) || mergedChannelUrl;
+
+    const sortedVideos = sortYouTubeVideos(feed.entries, mode).slice(0, YOUTUBE_VISIBLE_VIDEO_COUNT);
+    return {
+      id: source.id,
+      name: channelTitle || feed.authorName || "Kanał YouTube",
+      channelId: mergedChannelId,
+      handle: mergedHandle,
+      userName: mergedUserName,
+      channelUrl: mergedChannelUrl,
+      subscribersText,
+      description,
+      avatarUrl: avatarUrl || YOUTUBE_AVATAR_FALLBACK,
+      sortMode: mode,
+      videos: sortedVideos
+    };
+  }
+
+  async function loadYouTubeChannelCardData(channelEntry, sortMode) {
+    const source = normalizeYouTubeChannelEntry(channelEntry);
+    if (!source) {
+      throw new Error("YOUTUBE_CHANNEL_INVALID");
+    }
+
+    const mode = normalizeYouTubeSortMode(sortMode || source.defaultSortMode || YOUTUBE_DEFAULT_SORT_MODE);
+    const cacheKey = getYouTubeChannelCacheKey(source, mode);
+    const cached = youtubeChannelDataCache.get(cacheKey);
+    if (cached && typeof cached === "object" && Date.now() - Number(cached.cachedAt || 0) < 120000) {
+      return cached.value;
+    }
+
+    let result = null;
+    let apiError = null;
+    try {
+      const apiChannel = await fetchYouTubeChannelDataFromApi(source, mode);
+      const mergedChannelId = normalizeYouTubeChannelId(apiChannel.channelId) || normalizeYouTubeChannelId(source.channelId);
+      const mergedHandle = normalizeYouTubeHandle(apiChannel.handle) || normalizeYouTubeHandle(source.handle);
+      const mergedUserName =
+        normalizeYouTubeUserName(apiChannel.userName) ||
+        normalizeYouTubeUserName(source.userName) ||
+        normalizeYouTubeUserName(String(mergedHandle || "").replace(/^@+/, ""));
+      const mergedChannelUrl =
+        buildCanonicalYouTubeChannelUrl({
+          channelId: mergedChannelId,
+          handle: mergedHandle,
+          userName: mergedUserName,
+          channelUrl: apiChannel.channelUrl || source.channelUrl
+        }) || buildCanonicalYouTubeChannelUrl(source);
+
+      const sortedVideos = sortYouTubeVideos(apiChannel.videos, mode).slice(0, YOUTUBE_VISIBLE_VIDEO_COUNT);
+      result = {
+        id: source.id,
+        name: String(source.name || apiChannel.name || "Kanał YouTube").trim() || "Kanał YouTube",
+        channelId: mergedChannelId,
+        handle: mergedHandle,
+        userName: mergedUserName,
+        channelUrl: mergedChannelUrl,
+        subscribersText: String(apiChannel.subscribersText || "").trim(),
+        description: String(apiChannel.description || "").trim(),
+        avatarUrl: String(apiChannel.avatarUrl || "").trim() || YOUTUBE_AVATAR_FALLBACK,
+        sortMode: mode,
+        videos: sortedVideos
+      };
+    } catch (error) {
+      apiError = error;
+    }
+
+    if (!result) {
+      try {
+        result = await loadYouTubeChannelCardDataLegacy(source, mode);
+      } catch (legacyError) {
+        if (apiError) {
+          throw new Error(`${String(apiError.message || apiError)} | ${String(legacyError.message || legacyError)}`);
+        }
+        throw legacyError;
+      }
+    }
+
+    youtubeChannelDataCache.set(cacheKey, {
+      cachedAt: Date.now(),
+      value: result
+    });
+    return result;
+  }
+
+  function renderYouTubeSortButtons() {
+    if (!youtubeSortTabsEl) {
+      return;
+    }
+    const normalized = normalizeYouTubeSortMode(youtubeSortMode);
+    const buttons = Array.from(youtubeSortTabsEl.querySelectorAll("button[data-youtube-sort]"));
+    buttons.forEach((button) => {
+      const mode = normalizeYouTubeSortMode(button.getAttribute("data-youtube-sort"));
+      const active = mode === normalized;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  function bindYouTubeSortControls() {
+    if (!youtubeSortTabsEl || youtubeSortBound) {
+      return;
+    }
+    youtubeSortBound = true;
+
+    youtubeSortTabsEl.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-youtube-sort]");
+      if (!button || !youtubeSortTabsEl.contains(button)) {
+        return;
+      }
+      event.preventDefault();
+      const nextSort = normalizeYouTubeSortMode(button.getAttribute("data-youtube-sort"));
+      if (nextSort === normalizeYouTubeSortMode(youtubeSortMode)) {
+        return;
+      }
+      saveYouTubeSortMode(nextSort);
+      renderYouTubeSortButtons();
+      void renderPublicYouTubeCards({ force: true });
+    });
+  }
+
+  function buildYouTubeVideoMetaLabel(videoEntry) {
+    const entry = videoEntry && typeof videoEntry === "object" ? videoEntry : {};
+    const parts = [];
+    const dateLabel = formatYouTubeDateLabel(entry.publishedAt || entry.updatedAt);
+    if (dateLabel) {
+      parts.push(dateLabel);
+    }
+    const viewsLabel = formatYouTubeViewsLabel(entry.views);
+    if (viewsLabel) {
+      parts.push(viewsLabel);
+    }
+    return parts.join(" • ");
+  }
+
+  function buildYouTubeChannelCardHtml(channelData) {
+    const source = channelData && typeof channelData === "object" ? channelData : {};
+    const channelUrl = String(source.channelUrl || "").trim() || "#";
+    const safeChannelUrl = escapeHtmlText(channelUrl);
+    const channelName = escapeHtmlText(source.name || "Kanał YouTube");
+    const channelHandle = escapeHtmlText(source.handle || "");
+    const subscribersText = escapeHtmlText(source.subscribersText || "");
+    const description = escapeHtmlText(source.description || "");
+    const avatarUrl = escapeHtmlText(source.avatarUrl || YOUTUBE_AVATAR_FALLBACK);
+
+    const metaParts = [channelHandle, subscribersText].filter(Boolean);
+    const metaLine = metaParts.join(" • ");
+
+    const videos = Array.isArray(source.videos) ? source.videos : [];
+    const videosHtml = videos.length
+      ? `
+        <ul class="youtube-videos-list">
+          ${videos
+            .map((video) => {
+              const videoUrl = escapeHtmlText(String(video && video.url || "").trim() || "#");
+              const videoTitle = escapeHtmlText(String(video && video.title || "Bez tytułu").trim() || "Bez tytułu");
+              const videoThumb = escapeHtmlText(String(video && video.thumbnailUrl || "").trim());
+              const videoMeta = escapeHtmlText(buildYouTubeVideoMetaLabel(video));
+              return `
+                <li class="youtube-video-item">
+                  <a class="youtube-video-link" href="${videoUrl}" target="_blank" rel="noopener noreferrer">
+                    ${
+                      videoThumb
+                        ? `<img class="youtube-video-thumb" src="${videoThumb}" alt="">`
+                        : `<span class="youtube-video-thumb" aria-hidden="true"></span>`
+                    }
+                    <span class="youtube-video-copy">
+                      <strong class="youtube-video-title">${videoTitle}</strong>
+                      ${videoMeta ? `<span class="youtube-video-meta">${videoMeta}</span>` : ""}
+                    </span>
+                  </a>
+                </li>
+              `;
+            })
+            .join("")}
+        </ul>
+      `
+      : `<p class="youtube-video-empty">Brak dostępnych filmów dla tego kanału.</p>`;
+
+    return `
+      <article class="youtube-channel-card">
+        <div class="youtube-channel-main">
+          <section class="youtube-channel-profile">
+            <img class="youtube-channel-avatar" src="${avatarUrl}" alt="${channelName}">
+            <div class="youtube-channel-copy">
+              <div class="youtube-channel-top">
+                <h3 class="youtube-channel-name">${channelName}</h3>
+                <a class="youtube-channel-subscribe" href="${safeChannelUrl}" target="_blank" rel="noopener noreferrer">
+                  <i class="fab fa-youtube" aria-hidden="true"></i>
+                  Subskrybuj
+                </a>
+              </div>
+              ${metaLine ? `<p class="youtube-channel-meta">${metaLine}</p>` : ""}
+              ${description ? `<p class="youtube-channel-description">${description}</p>` : ""}
+            </div>
+          </section>
+          <section class="youtube-videos">
+            ${videosHtml}
+          </section>
+        </div>
+      </article>
+    `;
+  }
+
+  async function renderPublicYouTubeCards(options = {}) {
+    if (!youtubeChannelsGridEl || !youtubePanelEl) {
+      return;
+    }
+
+    const forceReload = Boolean(options && options.force);
+    const channels = Array.isArray(youtubeChannels) ? youtubeChannels : [];
+    bindYouTubeSortControls();
+    renderYouTubeSortButtons();
+
+    if (!channels.length) {
+      youtubeChannelsGridEl.innerHTML = `
+        <article class="youtube-channel-card">
+          <div class="youtube-channel-main">
+            <section class="youtube-channel-profile">
+              <img class="youtube-channel-avatar" src="${escapeHtmlText(YOUTUBE_AVATAR_FALLBACK)}" alt="YouTube">
+              <div class="youtube-channel-copy">
+                <h3 class="youtube-channel-name">Brak kanałów YouTube</h3>
+                <p class="youtube-channel-description">Administrator nie dodał jeszcze żadnych kanałów.</p>
+              </div>
+            </section>
+            <section class="youtube-videos">
+              <p class="youtube-video-empty">Po dodaniu kanałów zobaczysz tutaj 5 filmów.</p>
+            </section>
+          </div>
+        </article>
+      `;
+      setYoutubeStatus("Brak kanałów YouTube do wyświetlenia.", "info");
+      return;
+    }
+
+    const activeSortMode = normalizeYouTubeSortMode(youtubeSortMode);
+    const renderToken = ++youtubeRenderSeq;
+    if (forceReload) {
+      youtubeChannelDataCache.clear();
+    }
+
+    youtubeChannelsGridEl.innerHTML = channels
+      .map((channel) => {
+        const label = escapeHtmlText(channel && (channel.name || channel.handle || channel.channelId) || "Kanał YouTube");
+        return `
+          <article class="youtube-channel-card is-loading">
+            <div class="youtube-channel-main">
+              <section class="youtube-channel-profile">
+                <img class="youtube-channel-avatar" src="${escapeHtmlText(YOUTUBE_AVATAR_FALLBACK)}" alt="${label}">
+                <div class="youtube-channel-copy">
+                  <h3 class="youtube-channel-name">${label}</h3>
+                  <p class="youtube-channel-description">Ładowanie danych kanału i filmów...</p>
+                </div>
+              </section>
+              <section class="youtube-videos">
+                <p class="youtube-video-empty">Ładowanie 5 filmów...</p>
+              </section>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+    setYoutubeStatus("Ładowanie kanałów YouTube...", "info");
+
+    const results = await Promise.all(
+      channels.map(async (channel) => {
+        try {
+          const payload = await loadYouTubeChannelCardData(channel, activeSortMode || channel.defaultSortMode);
+          return {
+            ok: true,
+            payload
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            channel,
+            error
+          };
+        }
+      })
+    );
+
+    if (renderToken !== youtubeRenderSeq) {
+      return;
+    }
+
+    let successCount = 0;
+    youtubeChannelsGridEl.innerHTML = results
+      .map((result) => {
+        if (result.ok) {
+          successCount += 1;
+          return buildYouTubeChannelCardHtml(result.payload);
+        }
+
+        const channel = normalizeYouTubeChannelEntry(result.channel) || {};
+        const fallbackPayload = {
+          id: String(channel.id || "").trim(),
+          name: String(channel.name || channel.handle || channel.channelId || "Kanał YouTube").trim(),
+          channelId: normalizeYouTubeChannelId(channel.channelId),
+          handle: normalizeYouTubeHandle(channel.handle),
+          userName: normalizeYouTubeUserName(channel.userName),
+          channelUrl: buildCanonicalYouTubeChannelUrl(channel),
+          subscribersText: "",
+          description: "Nie udało się pobrać danych tego kanału.",
+          avatarUrl: YOUTUBE_AVATAR_FALLBACK,
+          sortMode: activeSortMode,
+          videos: []
+        };
+        return buildYouTubeChannelCardHtml(fallbackPayload);
+      })
+      .join("");
+
+    if (!successCount) {
+      setYoutubeStatus("Nie udało się pobrać kanałów YouTube.", "error");
+      return;
+    }
+
+    if (successCount < channels.length) {
+      setYoutubeStatus(`Załadowano ${successCount}/${channels.length} kanałów YouTube.`, "info");
+      return;
+    }
+
+    setYoutubeStatus(`Załadowano ${successCount} kanałów YouTube.`, "success");
+  }
+
+  function setYouTubeFormEditingState(channelId = "") {
+    editingYoutubeChannelId = String(channelId || "").trim();
+    if (!adminYoutubeFormEl) {
+      return;
+    }
+    const submitBtn = adminYoutubeFormEl.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.textContent = editingYoutubeChannelId ? "Zapisz zmiany kanału" : "Dodaj kanał YouTube";
+    }
+  }
+
+  function renderAdminYoutubeTable() {
+    if (!adminYoutubeTableBodyEl) {
+      return;
+    }
+
+    adminYoutubeTableBodyEl.innerHTML = "";
+    if (!youtubeChannels.length) {
+      adminYoutubeTableBodyEl.innerHTML = `
+        <tr>
+          <td colspan="3" class="admin-table-empty">Brak dodanych kanałów YouTube.</td>
+        </tr>
+      `;
+      return;
+    }
+
+    youtubeChannels.forEach((channel) => {
+      const channelUrl = buildCanonicalYouTubeChannelUrl(channel);
+      const channelLabel = String(channel.name || channel.handle || channel.channelId || channel.userName || "Kanał YouTube").trim();
+      const row = document.createElement("tr");
+      row.dataset.youtubeId = String(channel.id || "").trim();
+      row.innerHTML = `
+        <td>
+          <strong>${escapeHtmlText(channelLabel)}</strong>
+          ${
+            channelUrl
+              ? `<div><a href="${escapeHtmlText(channelUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtmlText(channelUrl)}</a></div>`
+              : ""
+          }
+        </td>
+        <td>${escapeHtmlText(formatYouTubeSortModeLabel(channel.defaultSortMode))}</td>
+        <td>
+          <span class="admin-account-actions">
+            <button class="admin-row-btn" type="button" data-youtube-edit="${escapeHtmlText(channel.id)}">Edytuj</button>
+            <button class="admin-row-btn admin-row-btn-danger" type="button" data-youtube-remove="${escapeHtmlText(channel.id)}">Usuń</button>
+          </span>
+        </td>
+      `;
+      adminYoutubeTableBodyEl.appendChild(row);
+    });
+  }
+
+  function bindAdminYoutubeFeature() {
+    if (adminYoutubeBound) {
+      return;
+    }
+    adminYoutubeBound = true;
+
+    if (adminYoutubeFormEl) {
+      adminYoutubeFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        if (!hasYouTubeTabAccess()) {
+          setAdminYoutubeStatus("Brak permisji do zakładki YouTube.", "error");
+          sendAdminAuditEvent("admin_youtube_access_denied", {
+            operation: "submit_youtube_form"
+          });
+          return;
+        }
+
+        const formData = new FormData(adminYoutubeFormEl);
+        const channelInput = String(formData.get("youtubeChannelInput") || "").trim();
+        const name = String(formData.get("youtubeChannelName") || "").trim();
+        const defaultSortMode = normalizeYouTubeSortMode(formData.get("youtubeSortMode"));
+        const parsed = parseYouTubeChannelReference(channelInput);
+        if (!parsed) {
+          setAdminYoutubeStatus("Podaj poprawny URL kanału, @handle lub ID kanału (UC...).", "error");
+          return;
+        }
+
+        const normalizedChannel = normalizeYouTubeChannelEntry({
+          id: editingYoutubeChannelId || "",
+          name,
+          channelId: parsed.channelId,
+          handle: parsed.handle,
+          userName: parsed.userName,
+          channelUrl: parsed.channelUrl,
+          defaultSortMode
+        });
+        if (!normalizedChannel) {
+          setAdminYoutubeStatus("Nie udało się zapisać kanału YouTube.", "error");
+          return;
+        }
+
+        const duplicate = youtubeChannels.find((entry) => {
+          if (!entry || String(entry.id || "").trim() === String(editingYoutubeChannelId || "").trim()) {
+            return false;
+          }
+          if (normalizedChannel.channelId && normalizeYouTubeChannelId(entry.channelId) === normalizedChannel.channelId) {
+            return true;
+          }
+          if (
+            normalizedChannel.handle &&
+            normalizeYouTubeHandle(entry.handle).toLowerCase() === normalizedChannel.handle.toLowerCase()
+          ) {
+            return true;
+          }
+          const entryUrl = buildCanonicalYouTubeChannelUrl(entry).toLowerCase();
+          const nextUrl = buildCanonicalYouTubeChannelUrl(normalizedChannel).toLowerCase();
+          return Boolean(nextUrl && entryUrl && nextUrl === entryUrl);
+        });
+        if (duplicate) {
+          setAdminYoutubeStatus("Ten kanał YouTube jest już dodany.", "error");
+          return;
+        }
+
+        if (editingYoutubeChannelId) {
+          const index = youtubeChannels.findIndex((entry) => String(entry.id || "").trim() === editingYoutubeChannelId);
+          if (index === -1) {
+            setYouTubeFormEditingState("");
+            setAdminYoutubeStatus("Nie znaleziono kanału do edycji.", "error");
+            return;
+          }
+
+          const beforeEntry = { ...youtubeChannels[index] };
+          youtubeChannels[index] = {
+            ...youtubeChannels[index],
+            ...normalizedChannel,
+            id: editingYoutubeChannelId
+          };
+          saveYouTubeChannels();
+          renderAdminYoutubeTable();
+          setYouTubeFormEditingState("");
+          adminYoutubeFormEl.reset();
+          setAdminYoutubeStatus("Zaktualizowano kanał YouTube.", "success");
+          sendAdminAuditEvent("admin_youtube_channel_updated", {
+            before: buildYouTubeChannelAuditSnapshot(beforeEntry),
+            after: buildYouTubeChannelAuditSnapshot(youtubeChannels[index])
+          });
+        } else {
+          youtubeChannels.push(normalizedChannel);
+          saveYouTubeChannels();
+          renderAdminYoutubeTable();
+          setYouTubeFormEditingState("");
+          adminYoutubeFormEl.reset();
+          setAdminYoutubeStatus("Dodano kanał YouTube.", "success");
+          sendAdminAuditEvent("admin_youtube_channel_added", {
+            channel: buildYouTubeChannelAuditSnapshot(normalizedChannel),
+            channelsCount: youtubeChannels.length
+          });
+        }
+
+        void renderPublicYouTubeCards({ force: true });
+      });
+    }
+
+    if (adminYoutubeTableBodyEl) {
+      adminYoutubeTableBodyEl.addEventListener("click", (event) => {
+        if (!hasYouTubeTabAccess()) {
+          setAdminYoutubeStatus("Brak permisji do zakładki YouTube.", "error");
+          sendAdminAuditEvent("admin_youtube_access_denied", {
+            operation: "click_youtube_table"
+          });
+          return;
+        }
+
+        const editBtn = event.target.closest("[data-youtube-edit]");
+        if (editBtn) {
+          const channelId = String(editBtn.getAttribute("data-youtube-edit") || "").trim();
+          const entry = youtubeChannels.find((item) => String(item.id || "").trim() === channelId);
+          if (!entry || !adminYoutubeFormEl) {
+            setAdminYoutubeStatus("Nie znaleziono kanału do edycji.", "error");
+            return;
+          }
+
+          const inputEl = adminYoutubeFormEl.querySelector('input[name="youtubeChannelInput"]');
+          const nameEl = adminYoutubeFormEl.querySelector('input[name="youtubeChannelName"]');
+          const sortEl = adminYoutubeFormEl.querySelector('select[name="youtubeSortMode"]');
+          if (inputEl) {
+            inputEl.value = buildCanonicalYouTubeChannelUrl(entry);
+          }
+          if (nameEl) {
+            nameEl.value = String(entry.name || "").trim();
+          }
+          if (sortEl) {
+            sortEl.value = normalizeYouTubeSortMode(entry.defaultSortMode);
+          }
+
+          setYouTubeFormEditingState(channelId);
+          setAdminYoutubeStatus("Tryb edycji kanału YouTube.", "info");
+          return;
+        }
+
+        const removeBtn = event.target.closest("[data-youtube-remove]");
+        if (!removeBtn) {
+          return;
+        }
+
+        const channelId = String(removeBtn.getAttribute("data-youtube-remove") || "").trim();
+        const removedEntry = youtubeChannels.find((item) => String(item.id || "").trim() === channelId) || null;
+        const beforeCount = youtubeChannels.length;
+        youtubeChannels = youtubeChannels.filter((item) => String(item.id || "").trim() !== channelId);
+        if (youtubeChannels.length === beforeCount) {
+          setAdminYoutubeStatus("Nie znaleziono kanału do usunięcia.", "error");
+          return;
+        }
+
+        saveYouTubeChannels();
+        renderAdminYoutubeTable();
+        if (editingYoutubeChannelId === channelId) {
+          setYouTubeFormEditingState("");
+          if (adminYoutubeFormEl) {
+            adminYoutubeFormEl.reset();
+          }
+        }
+        setAdminYoutubeStatus("Usunięto kanał YouTube.", "success");
+        sendAdminAuditEvent("admin_youtube_channel_removed", {
+          channel: buildYouTubeChannelAuditSnapshot(removedEntry),
+          channelsCount: youtubeChannels.length
+        });
+        void renderPublicYouTubeCards({ force: true });
+      });
+    }
+  }
+
   function formatLicznikModeLabel(modeValue) {
     return normalizeLicznikMode(modeValue) === "until" ? "Do daty" : "Od daty";
   }
@@ -1092,7 +2560,7 @@
       }
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Nie udało się wczytać pliku graficznego."));
+      reader.onerror = () => reject(new Error("Nie udaĹ‚o siÄ™ wczytaÄ‡ pliku graficznego."));
       reader.readAsDataURL(file);
     });
   }
@@ -1530,7 +2998,7 @@
       licznikiGridEl.innerHTML = `
         <article class="kary-counter-card liczniki-card">
           <p class="kary-card-state">BRAK DANYCH</p>
-          <h3>Brak liczników</h3>
+          <h3>Brak licznikĂłw</h3>
           <span class="kary-counter-pill">--</span>
         </article>
       `;
@@ -1591,7 +3059,7 @@
     if (!licznikiItems.length) {
       adminLicznikiTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="6" class="admin-table-empty">Brak liczników.</td>
+          <td colspan="6" class="admin-table-empty">Brak licznikĂłw.</td>
         </tr>
       `;
       return;
@@ -1613,12 +3081,10 @@
             type="button"
             draggable="true"
             data-licznik-drag-handle="${escapeHtmlText(item.id)}"
-            title="Przeciągnij, aby ustawić kolejność liczników"
-            aria-label="Przeciągnij, aby ustawić kolejność liczników"
+            title="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ licznikĂłw"
+            aria-label="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ licznikĂłw"
           >
-            <svg class="admin-drag-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 3L9.4 5.6M12 3L14.6 5.6M12 21L9.4 18.4M12 21L14.6 18.4M3 12L5.6 9.4M3 12L5.6 14.6M21 12L18.4 9.4M21 12L18.4 14.6M12 5.6V18.4M5.6 12H18.4"></path>
-            </svg>
+            <img class="admin-drag-icon" src="/img/drag%26drop.ico" alt="" aria-hidden="true">
           </button>
           ${escapeHtmlText(item.title)}
         </td>
@@ -1637,7 +3103,7 @@
             ${
               isFinished
                 ? `
-                  <button class="admin-row-btn admin-row-btn-resume" type="button" data-licznik-resume="${escapeHtmlText(item.id)}">Wznów</button>
+                  <button class="admin-row-btn admin-row-btn-resume" type="button" data-licznik-resume="${escapeHtmlText(item.id)}">WznĂłw</button>
                 `
                 : `
                   <button
@@ -1645,11 +3111,11 @@
                     type="button"
                     data-licznik-finish="${escapeHtmlText(item.id)}"
                     ${canScheduleFinish ? "" : "disabled"}
-                  >Zakończ</button>
+                  >ZakoĹ„cz</button>
                 `
             }
             <button class="admin-row-btn" type="button" data-licznik-edit="${escapeHtmlText(item.id)}">Edytuj</button>
-            <button class="admin-row-btn admin-row-btn-danger" type="button" data-licznik-remove="${escapeHtmlText(item.id)}">Usuń</button>
+            <button class="admin-row-btn admin-row-btn-danger" type="button" data-licznik-remove="${escapeHtmlText(item.id)}">UsuĹ„</button>
           </span>
         </td>
       `;
@@ -1687,18 +3153,18 @@
 
     const licznik = licznikiItems.find((item) => String(item && item.id || "").trim() === cleanId);
     if (!licznik) {
-      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
+      setAdminLicznikStatus("Nie znaleziono licznika do zakoĹ„czenia odliczania.", "error");
       return;
     }
     if (normalizeLicznikMode(licznik.mode) !== "since") {
-      setAdminLicznikStatus("Opcja zakończenia działa tylko dla liczników w trybie Od daty.", "error");
+      setAdminLicznikStatus("Opcja zakoĹ„czenia dziaĹ‚a tylko dla licznikĂłw w trybie Od daty.", "error");
       return;
     }
 
     const parsedTargetDate = parseLicznikDateInputValue(String(licznik.targetDate || "").trim());
     const targetDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
     if (!Number.isFinite(targetDateMs)) {
-      setAdminLicznikStatus("Ten licznik ma nieprawidłową datę startu.", "error");
+      setAdminLicznikStatus("Ten licznik ma nieprawidĹ‚owÄ… datÄ™ startu.", "error");
       return;
     }
 
@@ -1741,7 +3207,7 @@
     const licznik = licznikiItems.find((item) => String(item && item.id || "").trim() === licznikId);
     if (!licznik) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
+      setAdminLicznikStatus("Nie znaleziono licznika do zakoĹ„czenia odliczania.", "error");
       return;
     }
 
@@ -1751,18 +3217,18 @@
     const selectedDate = parseLicznikDateInputValue(selectedRawValue);
     const selectedDateMs = selectedDate ? selectedDate.getTime() : Number.NaN;
     if (!selectedDate || !Number.isFinite(selectedDateMs)) {
-      setAdminLicznikFinishPickerStatus("Wybierz poprawną datę i godzinę zakończenia.", "error");
+      setAdminLicznikFinishPickerStatus("Wybierz poprawnÄ… datÄ™ i godzinÄ™ zakoĹ„czenia.", "error");
       return;
     }
     if (!Number.isFinite(targetDateMs) || selectedDateMs <= targetDateMs) {
-      setAdminLicznikFinishPickerStatus("Data zakończenia musi być późniejsza niż data startu licznika.", "error");
+      setAdminLicznikFinishPickerStatus("Data zakoĹ„czenia musi byÄ‡ pĂłĹşniejsza niĹĽ data startu licznika.", "error");
       return;
     }
 
     const selectedEndDateIso = selectedDate.toISOString();
     pendingLicznikFinishContext.selectedEndDateIso = selectedEndDateIso;
     if (adminLicznikFinishConfirmTextEl) {
-      adminLicznikFinishConfirmTextEl.textContent = `Czy napewno chcesz zakończyć odliczanie wtedy ${formatLicznikDateLabel(selectedEndDateIso)}?`;
+      adminLicznikFinishConfirmTextEl.textContent = `Czy napewno chcesz zakoĹ„czyÄ‡ odliczanie wtedy ${formatLicznikDateLabel(selectedEndDateIso)}?`;
     }
 
     closeAdminLicznikFinishPickerModal();
@@ -1786,14 +3252,14 @@
     const index = licznikiItems.findIndex((item) => String(item && item.id || "").trim() === licznikId);
     if (index === -1) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
+      setAdminLicznikStatus("Nie znaleziono licznika do zakoĹ„czenia odliczania.", "error");
       return;
     }
 
     const beforeLicznik = { ...licznikiItems[index] };
     if (normalizeLicznikMode(beforeLicznik.mode) !== "since") {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Opcja zakończenia działa tylko dla liczników w trybie Od daty.", "error");
+      setAdminLicznikStatus("Opcja zakoĹ„czenia dziaĹ‚a tylko dla licznikĂłw w trybie Od daty.", "error");
       return;
     }
 
@@ -1803,12 +3269,12 @@
     const selectedDateMs = selectedDate ? selectedDate.getTime() : Number.NaN;
     if (!selectedDate || !Number.isFinite(selectedDateMs)) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Wybrano nieprawidłową datę zakończenia odliczania.", "error");
+      setAdminLicznikStatus("Wybrano nieprawidĹ‚owÄ… datÄ™ zakoĹ„czenia odliczania.", "error");
       return;
     }
     if (!Number.isFinite(targetDateMs) || selectedDateMs <= targetDateMs) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Data zakończenia musi być późniejsza niż data startu licznika.", "error");
+      setAdminLicznikStatus("Data zakoĹ„czenia musi byÄ‡ pĂłĹşniejsza niĹĽ data startu licznika.", "error");
       return;
     }
 
@@ -1823,7 +3289,7 @@
     renderLicznikiPanel();
     closeAdminLicznikFinishModals();
     setAdminLicznikStatus(
-      `Ustawiono zakończenie odliczania na ${formatLicznikDateLabel(licznikiItems[index].endDate)}.`,
+      `Ustawiono zakoĹ„czenie odliczania na ${formatLicznikDateLabel(licznikiItems[index].endDate)}.`,
       "success"
     );
     sendAdminAuditEvent("admin_licznik_finish_scheduled", {
@@ -1965,7 +3431,7 @@
         event.preventDefault();
 
         if (!hasLicznikiTabAccess()) {
-          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "submit_licznik_form"
           });
@@ -1982,7 +3448,7 @@
         const parsedTargetDate = parseLicznikDateInputValue(dateInputRaw);
         const parsedDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
         if (!title || !parsedTargetDate || !Number.isFinite(parsedDateMs)) {
-          setAdminLicznikStatus("Podaj nazwę i poprawną datę licznika.", "error");
+          setAdminLicznikStatus("Podaj nazwÄ™ i poprawnÄ… datÄ™ licznika.", "error");
           return;
         }
         const targetDate = parsedTargetDate.toISOString();
@@ -2005,13 +3471,13 @@
             return;
           }
           if (selectedImageFile.size > 1_500_000) {
-            setAdminLicznikStatus("Plik grafiki jest za duży (max 1.5 MB).", "error");
+            setAdminLicznikStatus("Plik grafiki jest za duĹĽy (max 1.5 MB).", "error");
             return;
           }
           try {
             imageUrl = sanitizeLicznikImageUrl(await readImageFileAsDataUrl(selectedImageFile));
           } catch (_error) {
-            setAdminLicznikStatus("Nie udało się wczytać pliku grafiki.", "error");
+            setAdminLicznikStatus("Nie udaĹ‚o siÄ™ wczytaÄ‡ pliku grafiki.", "error");
             return;
           }
         }
@@ -2071,7 +3537,7 @@
     if (adminLicznikiTableBodyEl) {
       adminLicznikiTableBodyEl.addEventListener("click", (event) => {
         if (!hasLicznikiTabAccess()) {
-          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "click_liczniki_table"
           });
@@ -2087,7 +3553,7 @@
 
         const dragHandleId = String(target.getAttribute("data-licznik-drag-handle") || "").trim();
         if (dragHandleId) {
-          setAdminLicznikStatus("Przeciągnij uchwyt, aby ustawić kolejność liczników.", "info");
+          setAdminLicznikStatus("PrzeciÄ…gnij uchwyt, aby ustawiÄ‡ kolejnoĹ›Ä‡ licznikĂłw.", "info");
           return;
         }
 
@@ -2102,7 +3568,7 @@
 
           const beforeLicznik = { ...licznikiItems[index] };
           if (!isLicznikFinished(beforeLicznik)) {
-            setAdminLicznikStatus("Ten licznik nie jest jeszcze zakończony.", "error");
+            setAdminLicznikStatus("Ten licznik nie jest jeszcze zakoĹ„czony.", "error");
             return;
           }
 
@@ -2183,7 +3649,7 @@
         const beforeCount = licznikiItems.length;
         licznikiItems = licznikiItems.filter((item) => item.id !== licznikId);
         if (licznikiItems.length === beforeCount) {
-          setAdminLicznikStatus("Nie znaleziono licznika do usunięcia.", "error");
+          setAdminLicznikStatus("Nie znaleziono licznika do usuniÄ™cia.", "error");
           return;
         }
         if (pendingLicznikFinishContext && String(pendingLicznikFinishContext.licznikId || "").trim() === licznikId) {
@@ -2206,13 +3672,13 @@
           licznik: buildLicznikAuditSnapshot(removedLicznik),
           licznikiCount: licznikiItems.length
         });
-        setAdminLicznikStatus("Usunięto licznik.", "success");
+        setAdminLicznikStatus("UsuniÄ™to licznik.", "success");
       });
 
       adminLicznikiTableBodyEl.addEventListener("dragstart", (event) => {
         if (!hasLicznikiTabAccess()) {
           event.preventDefault();
-          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "dragstart_liczniki_table"
           });
@@ -2277,7 +3743,7 @@
         if (!hasLicznikiTabAccess()) {
           event.preventDefault();
           resetLicznikDragState();
-          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "drop_liczniki_table"
           });
@@ -2303,7 +3769,7 @@
           orderedLicznikIds: licznikiItems.map((item) => String(item.id || "").trim()).filter(Boolean),
           licznikiCount: licznikiItems.length
         });
-        setAdminLicznikStatus("Zmieniono kolejność liczników.", "success");
+        setAdminLicznikStatus("Zmieniono kolejnoĹ›Ä‡ licznikĂłw.", "success");
       });
 
       adminLicznikiTableBodyEl.addEventListener("dragend", () => {
@@ -2359,7 +3825,7 @@
     if (!cciMembers.length) {
       adminMembersTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="3" class="admin-table-empty">Brak dodanych członków.</td>
+          <td colspan="3" class="admin-table-empty">Brak dodanych czĹ‚onkĂłw.</td>
         </tr>
       `;
       return;
@@ -2378,12 +3844,10 @@
               type="button"
               draggable="true"
               data-member-drag-handle="${escapeHtmlText(member.id)}"
-              title="Przeciągnij, aby ustawić kolejność członków CCI"
-              aria-label="Przeciągnij, aby ustawić kolejność członków CCI"
+              title="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI"
+              aria-label="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI"
             >
-              <svg class="admin-drag-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M12 3L9.4 5.6M12 3L14.6 5.6M12 21L9.4 18.4M12 21L14.6 18.4M3 12L5.6 9.4M3 12L5.6 14.6M21 12L18.4 9.4M21 12L18.4 14.6M12 5.6V18.4M5.6 12H18.4"></path>
-              </svg>
+              <img class="admin-drag-icon" src="/img/drag%26drop.ico" alt="" aria-hidden="true">
             </button>
             <img class="admin-member-avatar" src="${escapeHtmlText(memberAvatar)}" alt="">
             <span class="admin-member-name-text">${escapeHtmlText(member.name)}</span>
@@ -2393,7 +3857,7 @@
         <td>
           <span class="admin-account-actions">
             <button class="admin-row-btn" type="button" data-member-edit="${escapeHtmlText(member.id)}">Edytuj</button>
-            <button class="admin-row-btn admin-row-btn-danger" type="button" data-member-remove="${escapeHtmlText(member.id)}">Usuń</button>
+            <button class="admin-row-btn admin-row-btn-danger" type="button" data-member-remove="${escapeHtmlText(member.id)}">UsuĹ„</button>
           </span>
         </td>
       `;
@@ -2422,7 +3886,7 @@
     }
     const submitBtn = adminMemberFormEl.querySelector('button[type="submit"]');
     if (submitBtn) {
-      submitBtn.textContent = editingMemberId ? "Zapisz zmiany" : "Dodaj członka CCI";
+      submitBtn.textContent = editingMemberId ? "Zapisz zmiany" : "Dodaj czĹ‚onka CCI";
     }
   }
 
@@ -2496,7 +3960,7 @@
         event.preventDefault();
 
         if (!hasMembersTabAccess()) {
-          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "submit_member_form"
           });
@@ -2512,7 +3976,7 @@
         let auditDetails = {};
 
         if (!name || !url) {
-          setAdminMemberStatus("Podaj nazwę i profil Kick.", "error");
+          setAdminMemberStatus("Podaj nazwÄ™ i profil Kick.", "error");
           return;
         }
 
@@ -2520,7 +3984,7 @@
           const index = cciMembers.findIndex((member) => member.id === editingMemberId);
           if (index === -1) {
             setMemberFormEditingState("");
-            setAdminMemberStatus("Nie znaleziono członka do edycji.", "error");
+            setAdminMemberStatus("Nie znaleziono czĹ‚onka do edycji.", "error");
             return;
           }
           const beforeMember = { ...cciMembers[index] };
@@ -2536,7 +4000,7 @@
             before: buildMemberAuditSnapshot(beforeMember),
             after: buildMemberAuditSnapshot(cciMembers[index])
           };
-          setAdminMemberStatus("Zaktualizowano członka CCI.", "success");
+          setAdminMemberStatus("Zaktualizowano czĹ‚onka CCI.", "success");
         } else {
           const createdMember = {
             id: createMemberId(getKickSlugFromUrl(url)),
@@ -2550,7 +4014,7 @@
             member: buildMemberAuditSnapshot(createdMember),
             membersCount: cciMembers.length
           };
-          setAdminMemberStatus("Dodano nowego członka CCI.", "success");
+          setAdminMemberStatus("Dodano nowego czĹ‚onka CCI.", "success");
         }
 
         saveCciMembers();
@@ -2566,7 +4030,7 @@
     if (adminMembersTableBodyEl) {
       adminMembersTableBodyEl.addEventListener("click", (event) => {
         if (!hasMembersTabAccess()) {
-          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "click_members_table"
           });
@@ -2580,7 +4044,7 @@
 
         const dragHandleId = String(target.getAttribute("data-member-drag-handle") || "").trim();
         if (dragHandleId) {
-          setAdminMemberStatus("Przeciągnij uchwyt, aby ustawić kolejność członków CCI.", "info");
+          setAdminMemberStatus("PrzeciÄ…gnij uchwyt, aby ustawiÄ‡ kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI.", "info");
           return;
         }
 
@@ -2588,7 +4052,7 @@
         if (editId) {
           const member = cciMembers.find((item) => item.id === editId);
           if (!member || !adminMemberFormEl) {
-            setAdminMemberStatus("Nie znaleziono członka do edycji.", "error");
+            setAdminMemberStatus("Nie znaleziono czĹ‚onka do edycji.", "error");
             return;
           }
           const nameInput = adminMemberFormEl.querySelector('input[name="memberName"]');
@@ -2606,7 +4070,7 @@
               : String(member.avatar || "").trim();
           }
           setMemberFormEditingState(member.id);
-          setAdminMemberStatus("Tryb edycji członka CCI.", "info");
+          setAdminMemberStatus("Tryb edycji czĹ‚onka CCI.", "info");
           return;
         }
 
@@ -2616,7 +4080,7 @@
           const beforeCount = cciMembers.length;
           cciMembers = cciMembers.filter((member) => member.id !== removeId);
           if (cciMembers.length === beforeCount) {
-            setAdminMemberStatus("Nie znaleziono członka do usunięcia.", "error");
+            setAdminMemberStatus("Nie znaleziono czĹ‚onka do usuniÄ™cia.", "error");
             return;
           }
           saveCciMembers();
@@ -2628,7 +4092,7 @@
               adminMemberFormEl.reset();
             }
           }
-          setAdminMemberStatus("Usunięto członka CCI.", "success");
+          setAdminMemberStatus("UsuniÄ™to czĹ‚onka CCI.", "success");
           void updateFriendsLiveBadges(true);
           sendAdminAuditEvent("admin_member_removed", {
             memberId: removeId,
@@ -2642,7 +4106,7 @@
       adminMembersTableBodyEl.addEventListener("dragstart", (event) => {
         if (!hasMembersTabAccess()) {
           event.preventDefault();
-          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "dragstart_members_table"
           });
@@ -2707,7 +4171,7 @@
         if (!hasMembersTabAccess()) {
           event.preventDefault();
           resetMemberDragState();
-          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "drop_members_table"
           });
@@ -2728,7 +4192,7 @@
         saveCciMembers();
         renderPublicMembersCards();
         renderAdminMembersTable();
-        setAdminMemberStatus("Zmieniono kolejność członków CCI.", "success");
+        setAdminMemberStatus("Zmieniono kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI.", "success");
         void updateFriendsLiveBadges(true);
         sendAdminAuditEvent("admin_members_reordered", {
           orderedMemberIds: cciMembers.map((member) => String(member.id || "").trim()).filter(Boolean),
@@ -2753,7 +4217,7 @@
     if (!accounts.length) {
       adminAccountsTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="10" class="admin-table-empty">Brak kont administracyjnych.</td>
+          <td colspan="11" class="admin-table-empty">Brak kont administracyjnych.</td>
         </tr>
       `;
       return;
@@ -2767,6 +4231,7 @@
       const permissionsEnabledCount =
         (account.canAccessMembers ? 1 : 0) +
         (account.canAccessLiczniki ? 1 : 0) +
+        (account.canAccessYoutube ? 1 : 0) +
         (account.canAccessAdmin ? 1 : 0) +
         (account.canAccessBindings ? 1 : 0);
       const row = document.createElement("tr");
@@ -2779,11 +4244,12 @@
           ${
             account.isRoot
               ? "-"
-              : `<button class="admin-row-btn" type="button" data-account-toggle="${escapeHtmlText(accountId)}">${visiblePassword ? "Ukryj" : "Pokaż"}</button>`
+              : `<button class="admin-row-btn" type="button" data-account-toggle="${escapeHtmlText(accountId)}">${visiblePassword ? "Ukryj" : "PokaĹĽ"}</button>`
           }
         </td>
         <td>${account.canAccessMembers ? "Tak" : "Nie"}</td>
         <td>${account.canAccessLiczniki ? "Tak" : "Nie"}</td>
+        <td>${account.canAccessYoutube ? "Tak" : "Nie"}</td>
         <td>${account.canAccessAdmin ? "Tak" : "Nie"}</td>
         <td>${account.canAccessBindings ? "Tak" : "Nie"}</td>
         <td>
@@ -2794,12 +4260,12 @@
                 <div class="admin-account-actions">
                   <details class="admin-permissions-details">
                     <summary class="admin-row-btn admin-permissions-summary">
-                      Permisje (${permissionsEnabledCount}/4)
+                      Permisje (${permissionsEnabledCount}/5)
                     </summary>
                     <ul class="admin-permissions-list">
                       <li class="admin-permission-item">
                         <label>
-                          <span>Członkowie CCI</span>
+                          <span>CzĹ‚onkowie CCI</span>
                           <input
                             class="admin-access-checkbox"
                             type="checkbox"
@@ -2835,7 +4301,19 @@
                       </li>
                       <li class="admin-permission-item">
                         <label>
-                          <span>Powiązania</span>
+                          <span>YouTube</span>
+                          <input
+                            class="admin-access-checkbox"
+                            type="checkbox"
+                            data-account-permission-checkbox="youtube"
+                            data-account-id="${escapeHtmlText(accountId)}"
+                            ${account.canAccessYoutube ? "checked" : ""}
+                          >
+                        </label>
+                      </li>
+                      <li class="admin-permission-item">
+                        <label>
+                          <span>PowiÄ…zania</span>
                           <input
                             class="admin-access-checkbox"
                             type="checkbox"
@@ -2847,7 +4325,7 @@
                       </li>
                     </ul>
                   </details>
-                  <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtmlText(accountId)}">Usuń</button>
+                  <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtmlText(accountId)}">UsuĹ„</button>
                 </div>
               `
           }
@@ -2870,7 +4348,7 @@
         let auditDetails = {};
 
         if (!hasPanelAdminAccess()) {
-          setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+          setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
           sendAdminAuditEvent("admin_accounts_access_denied", {
             operation: "submit_account_form"
           });
@@ -2883,6 +4361,7 @@
         const discordUserId = normalizeDiscordUserId(formData.get("accountDiscordId"));
         const canAccessMembers = formData.get("accountAccessMembers") === "on";
         const canAccessLiczniki = formData.get("accountAccessLiczniki") === "on";
+        const canAccessYoutube = formData.get("accountAccessYoutube") === "on";
         const canAccessAdmin = formData.get("accountAccessAdmin") === "on";
         const canAccessBindings = formData.get("accountAccessBindings") === "on";
         const isDiscordAccount = Boolean(discordUserId);
@@ -2920,6 +4399,7 @@
             discordName: String(adminAccounts[existingIndex].discordName || ""),
             canAccessMembers,
             canAccessLiczniki,
+            canAccessYoutube,
             canAccessAdmin,
             canAccessBindings,
             isDiscordAccount
@@ -2939,6 +4419,7 @@
             discordName: "",
             canAccessMembers,
             canAccessLiczniki,
+            canAccessYoutube,
             canAccessAdmin,
             canAccessBindings,
             isRoot: false,
@@ -2965,7 +4446,7 @@
     if (adminAccountsTableBodyEl) {
       adminAccountsTableBodyEl.addEventListener("click", (event) => {
         if (!hasPanelAdminAccess()) {
-          setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+          setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
           sendAdminAuditEvent("admin_accounts_access_denied", {
             operation: "click_accounts_table"
           });
@@ -3007,7 +4488,7 @@
         visibleAdminPasswords.delete(accountId);
         saveAdminAccounts();
         renderAdminAccountsTable();
-        setAdminAccountStatus("Usunięto konto admina.", "success");
+        setAdminAccountStatus("UsuniÄ™to konto admina.", "success");
         sendAdminAuditEvent("admin_account_removed", {
           account: buildAdminAccountAuditSnapshot(accountToDelete),
           accountsCount: adminAccounts.length
@@ -3034,7 +4515,7 @@
 
         if (!hasPanelAdminAccess()) {
           renderAdminAccountsTable();
-          setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
+          setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
           sendAdminAuditEvent("admin_accounts_access_denied", {
             operation: "change_permissions"
           });
@@ -3054,14 +4535,16 @@
         const permissionFieldByKey = {
           members: "canAccessMembers",
           liczniki: "canAccessLiczniki",
+          youtube: "canAccessYoutube",
           admin: "canAccessAdmin",
           bindings: "canAccessBindings"
         };
         const successMessageByKey = {
-          members: permissionCheckbox.checked ? "Nadano permisje do Członków CCI." : "Odebrano permisje do Członków CCI.",
-          liczniki: permissionCheckbox.checked ? "Nadano permisje do Liczników." : "Odebrano permisje do Liczników.",
+          members: permissionCheckbox.checked ? "Nadano permisje do CzĹ‚onkĂłw CCI." : "Odebrano permisje do CzĹ‚onkĂłw CCI.",
+          liczniki: permissionCheckbox.checked ? "Nadano permisje do LicznikĂłw." : "Odebrano permisje do LicznikĂłw.",
+          youtube: permissionCheckbox.checked ? "Nadano permisje do YouTube." : "Odebrano permisje do YouTube.",
           admin: permissionCheckbox.checked ? "Nadano permisje do Panelu Admina." : "Odebrano permisje do Panelu Admina.",
-          bindings: permissionCheckbox.checked ? "Nadano permisje do Powiązań." : "Odebrano permisje do Powiązań."
+          bindings: permissionCheckbox.checked ? "Nadano permisje do PowiÄ…zaĹ„." : "Odebrano permisje do PowiÄ…zaĹ„."
         };
 
         const permissionField = permissionFieldByKey[permissionKey];
@@ -3132,9 +4615,9 @@
     }
   }
 
-  const ROOT_ADMIN_LOGIN = decodeObfuscatedSecret("FUA+Hg=="); // login właściciela
-  const ROOT_ADMIN_PASSWORD = decodeObfuscatedSecret("PhEeDgAITCcGHQ=="); // hasło właściciela
-  const ROOT_ADMIN_DISCORD_ID = decodeObfuscatedSecret("R0NFV15RGFhQQ1VqAQAAA0FN"); // ID discord właściciela
+  const ROOT_ADMIN_LOGIN = decodeObfuscatedSecret("FUA+Hg=="); // login wĹ‚aĹ›ciciela
+  const ROOT_ADMIN_PASSWORD = decodeObfuscatedSecret("PhEeDgAITCcGHQ=="); // hasĹ‚o wĹ‚aĹ›ciciela
+  const ROOT_ADMIN_DISCORD_ID = decodeObfuscatedSecret("R0NFV15RGFhQQ1VqAQAAA0FN"); // ID discord wĹ‚aĹ›ciciela
 
   function readStorageJsonFallback(key, fallback) {
     try {
@@ -3231,6 +4714,31 @@
     }
     if (Array.isArray(config.entries)) {
       return config.entries;
+    }
+
+    return null;
+  }
+
+  function extractRemoteYouTubeChannels(state) {
+    const source = state && typeof state === "object" ? state : null;
+    if (!source) {
+      return null;
+    }
+
+    if (Array.isArray(source.youtubeChannels)) {
+      return source.youtubeChannels;
+    }
+
+    const config = source.youtubeConfig;
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      return null;
+    }
+
+    if (Array.isArray(config.channels)) {
+      return config.channels;
+    }
+    if (Array.isArray(config.youtubeChannels)) {
+      return config.youtubeChannels;
     }
 
     return null;
@@ -3352,6 +4860,19 @@
       }
     }
 
+    const remoteYouTubeChannels = extractRemoteYouTubeChannels(source);
+    if (remoteYouTubeChannels !== null) {
+      const nextYouTubeChannels = (Array.isArray(remoteYouTubeChannels) ? remoteYouTubeChannels : [])
+        .map((entry, index) => normalizeYouTubeChannelEntry(entry, index))
+        .filter(Boolean);
+      if (jsonSnapshot(nextYouTubeChannels) !== jsonSnapshot(youtubeChannels)) {
+        youtubeChannels = nextYouTubeChannels;
+        saveStorageJsonFallback(YOUTUBE_CHANNELS_KEY, youtubeChannels);
+        youtubeChannelDataCache.clear();
+        changed = true;
+      }
+    }
+
     if (!changed || !shouldRender) {
       return changed;
     }
@@ -3361,8 +4882,12 @@
     renderAdminAccountsTable();
     renderPublicLicznikiCards();
     renderAdminLicznikiTable();
+    renderAdminYoutubeTable();
     if (getRouteFromLocation() === "liczniki") {
       renderLicznikiPanel();
+    }
+    if (getRouteFromLocation() === "youtube") {
+      void renderPublicYouTubeCards({ force: true });
     }
     void updateFriendsLiveBadges(true);
     return changed;
@@ -3375,9 +4900,14 @@
       cachedState.licznikiConfig && typeof cachedState.licznikiConfig === "object" && !Array.isArray(cachedState.licznikiConfig)
         ? cloneJsonValue(cachedState.licznikiConfig, {})
         : {};
+    const cachedYoutubeConfig =
+      cachedState.youtubeConfig && typeof cachedState.youtubeConfig === "object" && !Array.isArray(cachedState.youtubeConfig)
+        ? cloneJsonValue(cachedState.youtubeConfig, {})
+        : {};
 
     const nextMembers = cloneJsonValue(Array.isArray(cciMembers) ? cciMembers : [], []);
     const nextLicznikiItems = cloneJsonValue(Array.isArray(licznikiItems) ? licznikiItems : [], []);
+    const nextYouTubeChannels = cloneJsonValue(Array.isArray(youtubeChannels) ? youtubeChannels : [], []);
     const nextAccounts = cloneJsonValue(normalizeAdminAccounts(adminAccounts), []);
 
     return {
@@ -3389,9 +4919,14 @@
         .map((member) => String(member?.id || "").trim())
         .filter(Boolean),
       licznikiItems: nextLicznikiItems,
+      youtubeChannels: nextYouTubeChannels,
       licznikiConfig: {
         ...cachedLicznikiConfig,
         items: nextLicznikiItems
+      },
+      youtubeConfig: {
+        ...cachedYoutubeConfig,
+        channels: nextYouTubeChannels
       }
     };
   }
@@ -3591,6 +5126,7 @@
       account.canAccessAdmin ||
       account.canAccessMembers ||
       account.canAccessLiczniki ||
+      account.canAccessYoutube ||
       account.canAccessBindings ||
       account.canAccessStreamObs
     );
@@ -3606,6 +5142,7 @@
       canAccessAdmin: true,
       canAccessMembers: true,
       canAccessLiczniki: true,
+      canAccessYoutube: true,
       canAccessBindings: true,
       isRoot: true,
       isDiscordAccount: false
@@ -3639,6 +5176,8 @@
       rawEntry.canAccessMembers == null ? canAccessAdmin : Boolean(rawEntry.canAccessMembers);
     const canAccessLiczniki =
       rawEntry.canAccessLiczniki == null ? canAccessAdmin : Boolean(rawEntry.canAccessLiczniki);
+    const canAccessYoutube =
+      rawEntry.canAccessYoutube == null ? canAccessAdmin : Boolean(rawEntry.canAccessYoutube);
     const canAccessBindings =
       rawEntry.canAccessBindings == null ? canAccessAdmin : Boolean(rawEntry.canAccessBindings);
     const isRoot = Boolean(rawEntry.isRoot);
@@ -3655,6 +5194,7 @@
       canAccessAdmin,
       canAccessMembers,
       canAccessLiczniki,
+      canAccessYoutube,
       canAccessBindings,
       isRoot,
       isDiscordAccount
@@ -3766,6 +5306,7 @@
       canAccessAdmin: Boolean(source.canAccessAdmin),
       canAccessMembers: Boolean(source.canAccessMembers),
       canAccessLiczniki: Boolean(source.canAccessLiczniki),
+      canAccessYoutube: Boolean(source.canAccessYoutube),
       canAccessBindings: Boolean(source.canAccessBindings),
       isRoot: Boolean(source.isRoot),
       isDiscordAccount: Boolean(source.isDiscordAccount)
@@ -3880,6 +5421,18 @@
     return hasLicznikiAccess();
   }
 
+  function hasYouTubeAccess() {
+    const currentAccount = getCurrentAdminAccount();
+    if (!currentAccount) {
+      return false;
+    }
+    return Boolean(currentAccount.isRoot || currentAccount.canAccessYoutube);
+  }
+
+  function hasYouTubeTabAccess() {
+    return hasYouTubeAccess();
+  }
+
   function hasBindingsAccess() {
     const currentAccount = getCurrentAdminAccount();
     if (!currentAccount) {
@@ -3945,7 +5498,7 @@
     const hasSubscribers = Number.isFinite(Number(state.subscribersCount));
 
     if (kickOauthStatusTextEl) {
-      kickOauthStatusTextEl.textContent = linked ? "Powiązane" : "Niepowiązane";
+      kickOauthStatusTextEl.textContent = linked ? "PowiÄ…zane" : "NiepowiÄ…zane";
     }
     if (kickOauthChannelTextEl) {
       const channelLabel = String(state.channelSlug || state.channelName || "").trim();
@@ -4061,12 +5614,12 @@
     const oauthMessage = String(currentUrl.searchParams.get("kick_oauth_msg") || "").trim();
 
     if (oauthState === "success") {
-      setKickOAuthPanelStatus(oauthMessage || "Konto Kick zostało pomyślnie powiązane.", "success");
+      setKickOAuthPanelStatus(oauthMessage || "Konto Kick zostaĹ‚o pomyĹ›lnie powiÄ…zane.", "success");
       sendAdminAuditEvent("admin_kick_oauth_callback_success", {
         message: oauthMessage || "konto_kick_powiazane"
       });
     } else {
-      setKickOAuthPanelStatus(oauthMessage || "Nie udało się powiązać konta Kick.", "error");
+      setKickOAuthPanelStatus(oauthMessage || "Nie udaĹ‚o siÄ™ powiÄ…zaÄ‡ konta Kick.", "error");
       sendAdminAuditEvent("admin_kick_oauth_callback_error", {
         message: oauthMessage || "kick_oauth_callback_error"
       });
@@ -4129,7 +5682,7 @@
       if (!response.ok) {
         throw new Error(`HTTP_${response.status}`);
       }
-      setKickOAuthPanelStatus("Połączenie Kick OAuth zostało odłączone.", "success");
+      setKickOAuthPanelStatus("PoĹ‚Ä…czenie Kick OAuth zostaĹ‚o odĹ‚Ä…czone.", "success");
       cachedKickOAuthStatus = { linked: false, subscribersCount: null };
       updateKickOAuthPanelView(cachedKickOAuthStatus);
       setKickSubsBadgeState({
@@ -4143,7 +5696,7 @@
       });
       return { ok: true };
     } catch (error) {
-      setKickOAuthPanelStatus("Nie udało się odłączyć konta Kick.", "error");
+      setKickOAuthPanelStatus("Nie udaĹ‚o siÄ™ odĹ‚Ä…czyÄ‡ konta Kick.", "error");
       sendAdminAuditEvent("admin_kick_oauth_unlink_failed", {
         error: error instanceof Error ? error.message : "KICK_OAUTH_UNLINK_FAILED"
       });
@@ -4163,7 +5716,7 @@
     if (kickOauthConnectBtnEl) {
       kickOauthConnectBtnEl.addEventListener("click", () => {
         if (!hasBindingsAccess()) {
-          setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
+          setKickOAuthPanelStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
           sendAdminAuditEvent("admin_kick_oauth_access_denied", {
             operation: "connect"
           });
@@ -4176,7 +5729,7 @@
 
     if (kickOauthRefreshBtnEl) {
       kickOauthRefreshBtnEl.addEventListener("click", () => {
-        setKickOAuthPanelStatus("Odświeżanie statusu Kick OAuth...", "info");
+        setKickOAuthPanelStatus("OdĹ›wieĹĽanie statusu Kick OAuth...", "info");
         sendAdminAuditEvent("admin_kick_oauth_status_refresh_requested", {
           force: true
         });
@@ -4195,7 +5748,7 @@
     if (kickOauthUnlinkBtnEl) {
       kickOauthUnlinkBtnEl.addEventListener("click", () => {
         if (!hasBindingsAccess()) {
-          setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
+          setKickOAuthPanelStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
           sendAdminAuditEvent("admin_kick_oauth_access_denied", {
             operation: "unlink"
           });
@@ -4414,7 +5967,7 @@
     }
     if (adminPasswordToggleEl) {
       adminPasswordToggleEl.setAttribute("aria-pressed", visible ? "true" : "false");
-      adminPasswordToggleEl.setAttribute("aria-label", visible ? "Ukryj hasło" : "Pokaż hasło");
+      adminPasswordToggleEl.setAttribute("aria-label", visible ? "Ukryj hasĹ‚o" : "PokaĹĽ hasĹ‚o");
     }
     if (adminPasswordToggleIconEl) {
       adminPasswordToggleIconEl.classList.toggle("fa-eye", !visible);
@@ -4476,7 +6029,7 @@
         if (!result.ok || !hasAnyAdminAccess) {
           setInlineLoginStatus(
             adminDiscordStatusEl,
-            (result && result.error) || "Brak permisji do żadnej zakładki panelu administratora.",
+            (result && result.error) || "Brak permisji do ĹĽadnej zakĹ‚adki panelu administratora.",
             "error"
           );
           sendAdminAuditEvent("admin_discord_login_failed", {
@@ -4498,7 +6051,7 @@
           clearPersistedAdminSessionFallback();
         }
 
-        setInlineLoginStatus(adminDiscordStatusEl, "Logowanie Discord zakończone pomyślnie.", "success");
+        setInlineLoginStatus(adminDiscordStatusEl, "Logowanie Discord zakoĹ„czone pomyĹ›lnie.", "success");
         sendAdminAuditEvent("admin_discord_login_success", {
           username: String(session.username || "").trim(),
           discordUserId: normalizeDiscordUserId(session.id),
@@ -4508,7 +6061,7 @@
         navigateToRouteAfterAuth(getAdminRoutePathFallback(), "admin");
       })
       .catch((error) => {
-        setInlineLoginStatus(adminDiscordStatusEl, "Nie udało się zakończyć logowania Discord.", "error");
+        setInlineLoginStatus(adminDiscordStatusEl, "Nie udaĹ‚o siÄ™ zakoĹ„czyÄ‡ logowania Discord.", "error");
         sendAdminAuditEvent("admin_discord_login_failed", {
           error: error instanceof Error ? error.message : "DISCORD_LOGIN_CALLBACK_FAILED"
         });
@@ -4527,7 +6080,7 @@
     if (typeof window.StronaliveWebhook.isDiscordLoginAvailable === "function") {
       const availability = window.StronaliveWebhook.isDiscordLoginAvailable();
       if (!availability.ok) {
-        setInlineLoginStatus(adminDiscordStatusEl, availability.error || "Logowanie Discord jest niedostępne.", "error");
+        setInlineLoginStatus(adminDiscordStatusEl, availability.error || "Logowanie Discord jest niedostÄ™pne.", "error");
         sendAdminAuditEvent("admin_discord_login_start_failed", {
           reason: availability.error || "DISCORD_LOGIN_UNAVAILABLE"
         });
@@ -4542,7 +6095,7 @@
       rememberMe
     });
     Promise.resolve(window.StronaliveWebhook.startDiscordLogin()).catch((error) => {
-      setInlineLoginStatus(adminDiscordStatusEl, "Nie udało się uruchomić logowania Discord.", "error");
+      setInlineLoginStatus(adminDiscordStatusEl, "Nie udaĹ‚o siÄ™ uruchomiÄ‡ logowania Discord.", "error");
       sendAdminAuditEvent("admin_discord_login_start_failed", {
         error: error instanceof Error ? error.message : "DISCORD_LOGIN_START_FAILED"
       });
@@ -4610,7 +6163,7 @@
           saveRememberFallback(Boolean(adminRememberMeEl && adminRememberMeEl.checked));
           setLoginPasswordVisibility(false);
           adminLoginFormEl.reset();
-          setInlineLoginStatus(adminLoginStatusEl, "Zalogowano pomyślnie.", "success");
+          setInlineLoginStatus(adminLoginStatusEl, "Zalogowano pomyĹ›lnie.", "success");
           setInlineLoginStatus(adminDiscordStatusEl, "", "info");
           sendAdminAuditEvent("admin_local_login_success", {
             login: String(matched.login || login).trim(),
@@ -4633,7 +6186,7 @@
           adminDiscordLoginBtnEl.disabled = true;
           setInlineLoginStatus(
             adminDiscordStatusEl,
-            availability.error || "Logowanie Discord jest niedostępne.",
+            availability.error || "Logowanie Discord jest niedostÄ™pne.",
             "error"
           );
         }
@@ -5026,7 +6579,7 @@
     return readKickNumericCandidates(channelData, goalPaths);
   }
 
-  function setKickSubsBadgeState({ count = null, text = "subskrybentów na Kicku", state = "ready" } = {}) {
+  function setKickSubsBadgeState({ count = null, text = "subskrybentĂłw na Kicku", state = "ready" } = {}) {
     if (!streamIntroSubsStatEl || !streamIntroSubsCountEl || !streamIntroSubsTextEl) {
       return;
     }
@@ -5632,7 +7185,7 @@
         }
       }
 
-      throw new Error("Nieprawidłowy format danych klipów.");
+      throw new Error("NieprawidĹ‚owy format danych klipĂłw.");
     }
 
     function buildApiUrl(cursor = "") {
@@ -6313,7 +7866,7 @@
 
       const source = String(video.dataset.src ?? "").trim();
       if (!source) {
-        setStatus("Ten klip nie ma bezpośredniego linku do odtworzenia na stronie.", true);
+        setStatus("Ten klip nie ma bezpoĹ›redniego linku do odtworzenia na stronie.", true);
         return false;
       }
 
@@ -7009,7 +8562,7 @@
         syncClipViewerControls(viewer);
       } catch (_error) {
         if (currentOpenSeq === clipViewerOpenSeq) {
-          setStatus("Nie udało się odtworzyć klipu w podglądzie.", true);
+          setStatus("Nie udaĹ‚o siÄ™ odtworzyÄ‡ klipu w podglÄ…dzie.", true);
         }
         syncClipViewerControls(viewer);
       }
@@ -7196,7 +8749,7 @@
             try {
               await downloadClipBestQuality(clipData, downloadBtn);
             } catch (_error) {
-              setStatus("Nie udało się pobrać klipu w najlepszej jakości.", true);
+              setStatus("Nie udaĹ‚o siÄ™ pobraÄ‡ klipu w najlepszej jakoĹ›ci.", true);
             }
           });
         }
@@ -7329,7 +8882,7 @@
             <a class="clip-title" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clip.title)}</a>
             <p class="clip-meta">
               <span class="clip-meta-category">${escapeHtml(categoryLabel)}</span>
-              ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">•</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
+              ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">â€˘</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
             </p>
             ${authorUrl
               ? `<a class="clip-author" href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(authorName)}</a>`
@@ -7398,7 +8951,7 @@
       clipsEl.innerHTML = "";
 
       if (!Array.isArray(clips) || !clips.length) {
-        setStatus("Brak klipów w odczytanych danych.", true);
+        setStatus("Brak klipĂłw w odczytanych danych.", true);
         return;
       }
 
@@ -7409,7 +8962,7 @@
 
       setupClipPosterLoading();
       bindPlayers();
-      setStatus(`Załadowano ${clips.length} klipów.`);
+      setStatus(`ZaĹ‚adowano ${clips.length} klipĂłw.`);
     }
 
     async function loadClips() {
@@ -7449,16 +9002,16 @@
         const shouldLoadRest = Boolean(quickResult.reachedLimit && quickLimit < CLIPS_MAX_ITEMS);
         if (!shouldLoadRest) {
           if (quickResult.reachedLimit) {
-            setStatus(`Załadowano ${quickClips.length} klipów (limit ${CLIPS_MAX_ITEMS}).`);
+            setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw (limit ${CLIPS_MAX_ITEMS}).`);
           } else if (quickResult.partial) {
-            setStatus(`Załadowano ${quickClips.length} klipów.`);
+            setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw.`);
           } else {
-            setStatus(`Załadowano ${quickClips.length} klipów.`);
+            setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw.`);
           }
           return;
         }
 
-        setStatus(`Załadowano ${quickClips.length} klipów. Doczytuję resztę...`);
+        setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw. DoczytujÄ™ resztÄ™...`);
 
         const fullResult = await fetchAllClips(40, CLIPS_MAX_ITEMS);
         if (loadSeq !== clipsLoadSeq) {
@@ -7488,11 +9041,11 @@
 
         const totalLoaded = quickClips.length + extraClips.length;
         if (fullResult.reachedLimit) {
-          setStatus(`Załadowano ${totalLoaded} klipów (limit ${CLIPS_MAX_ITEMS}).`);
+          setStatus(`ZaĹ‚adowano ${totalLoaded} klipĂłw (limit ${CLIPS_MAX_ITEMS}).`);
         } else if (fullResult.partial) {
-          setStatus(`Załadowano ${totalLoaded} klipów.`);
+          setStatus(`ZaĹ‚adowano ${totalLoaded} klipĂłw.`);
         } else {
-          setStatus(`Załadowano ${totalLoaded} klipów.`);
+          setStatus(`ZaĹ‚adowano ${totalLoaded} klipĂłw.`);
         }
       } catch (error) {
         if (loadSeq !== clipsLoadSeq) {
@@ -7500,7 +9053,7 @@
         }
         const reason = String(error?.message || "").trim();
         const suffix = reason ? ` (${reason})` : "";
-        setStatus(`Nie udało się pobrać wszystkich klipów.${suffix}`, true);
+        setStatus(`Nie udaĹ‚o siÄ™ pobraÄ‡ wszystkich klipĂłw.${suffix}`, true);
       } finally {
         if (releaseRefreshInFinally && loadSeq === clipsLoadSeq) {
           refreshBtn.disabled = false;
@@ -7574,7 +9127,7 @@
       const remainingMs = remainingSeconds * 1000;
       return {
         value: formatLicznikDuration(remainingMs),
-        state: remainingMs > 0 ? "DO STARTU" : "ZAKOŃCZONO",
+        state: remainingMs > 0 ? "DO STARTU" : "ZAKOĹCZONO",
         isDone: remainingMs <= 0
       };
     }
@@ -7585,7 +9138,7 @@
         const totalSecondsAtEnd = Math.max(0, Math.floor((endDateMs - targetDateMs) / 1000));
         return {
           value: formatLicznikDuration(totalSecondsAtEnd * 1000),
-          state: "ZAKOŃCZONO",
+          state: "ZAKOĹCZONO",
           isDone: true
         };
       }
@@ -7632,7 +9185,7 @@
           valueEl.textContent = "--";
         }
         if (stateEl) {
-          stateEl.textContent = "BŁĘDNA DATA";
+          stateEl.textContent = "BĹÄDNA DATA";
         }
         return;
       }
@@ -7673,6 +9226,9 @@
     if (clipsNavEl) {
       clipsNavEl.classList.toggle("is-active", routeName === "clips");
     }
+    if (youtubeNavEl) {
+      youtubeNavEl.classList.toggle("is-active", routeName === "youtube");
+    }
     if (licznikiNavEl) {
       licznikiNavEl.classList.toggle("is-active", routeName === "liczniki");
     }
@@ -7708,6 +9264,7 @@
     setVisible(streamLayoutEl, route === "home");
     setVisible(friendsEl, route === "home");
     setVisible(mainWrapEl, route === "clips");
+    setVisible(youtubePanelEl, route === "youtube");
     setVisible(licznikiPanelEl, route === "liczniki");
     setVisible(routePlaceholderEl, route === "soon");
     setVisible(adminPanelEl, route === "login");
@@ -7733,10 +9290,12 @@
       bindAdminMembersFeature();
       bindAdminAccountsFeature();
       bindAdminLicznikiFeature();
+      bindAdminYoutubeFeature();
       bindKickOAuthControls();
       renderAdminMembersTable();
       renderAdminAccountsTable();
       renderAdminLicznikiTable();
+      renderAdminYoutubeTable();
       updateKickOAuthPanelView(cachedKickOAuthStatus);
       setActiveAdminTab(activeAdminTab, { persist: false });
     }
@@ -7751,6 +9310,10 @@
 
     if (route === "clips") {
       clipsFeature.ensureLoaded();
+    }
+
+    if (route === "youtube") {
+      void renderPublicYouTubeCards();
     }
 
     if (route === "liczniki") {
@@ -7800,21 +9363,28 @@
     cciMembers = loadCciMembers();
     adminAccounts = loadAdminAccounts();
     licznikiItems = loadLicznikiItems();
+    youtubeChannels = loadYouTubeChannels();
+    youtubeSortMode = loadYouTubeSortMode();
 
     renderPublicMembersCards();
     renderPublicLicznikiCards();
+    bindYouTubeSortControls();
+    renderYouTubeSortButtons();
     bindAdminMembersFeature();
     bindAdminAccountsFeature();
     bindAdminLicznikiFeature();
+    bindAdminYoutubeFeature();
     bindKickOAuthControls();
     renderAdminMembersTable();
     renderAdminAccountsTable();
     renderAdminLicznikiTable();
+    renderAdminYoutubeTable();
     updateKickOAuthPanelView(cachedKickOAuthStatus);
     void hydrateAdminStateFromRemote(true, { render: true });
 
     bindHardNavigation(homeNavEl, "home");
     bindHardNavigation(clipsNavEl, "clips");
+    bindHardNavigation(youtubeNavEl, "youtube");
     bindHardNavigation(licznikiNavEl, "liczniki");
     bindHardNavigation(soonNavEl, "soon");
     bindHardNavigation(adminNavEl, "login");

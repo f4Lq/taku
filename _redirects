@@ -19,6 +19,10 @@
 /klipy/       /index.html   200
 /klipy/*      /index.html   200
 
+/youtube      /index.html   200
+/youtube/     /index.html   200
+/youtube/*    /index.html   200
+
 /soon         /index.html   200
 /soon/        /index.html   200
 /soon/*       /index.html   200
