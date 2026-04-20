@@ -833,7 +833,8 @@
 
 
 .admin-row-btn.admin-cennik-drag-handle:active,
-.admin-member-row .admin-cennik-drag-handle:active{
+.admin-member-row .admin-cennik-drag-handle:active,
+.admin-youtube-row .admin-cennik-drag-handle:active{
   cursor: grabbing;
   transform: translateY(0) scale(0.97);
   box-shadow:
@@ -843,7 +844,8 @@
 
 
 .admin-row-btn.admin-cennik-drag-handle:active .admin-drag-icon,
-.admin-member-row .admin-cennik-drag-handle:active .admin-drag-icon{
+.admin-member-row .admin-cennik-drag-handle:active .admin-drag-icon,
+.admin-youtube-row .admin-cennik-drag-handle:active .admin-drag-icon{
   transform: scale(0.94);
 }
 
@@ -853,11 +855,31 @@
 }
 
 
+.admin-youtube-row .admin-cennik-drag-handle{
+  cursor: grab;
+}
+
+
 .admin-member-name-cell{
   display: inline-flex;
   align-items: center;
   gap: 10px;
   min-height: 34px;
+}
+
+
+.admin-youtube-name-cell{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
+
+.admin-youtube-link-cell{
+  max-width: 440px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 
@@ -895,6 +917,26 @@
 
 
 .admin-member-row.is-dragging .admin-row-btn{
+  opacity: 0.72;
+}
+
+
+.admin-youtube-row.is-dragging{
+  opacity: 0.55;
+}
+
+
+.admin-youtube-row.is-dragging td{
+  color: rgba(219, 232, 255, 0.62);
+}
+
+
+.admin-youtube-row.is-dragging td a{
+  color: rgba(151, 198, 243, 0.62);
+}
+
+
+.admin-youtube-row.is-dragging .admin-row-btn{
   opacity: 0.72;
 }
 

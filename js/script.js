@@ -163,7 +163,7 @@
   const KICK_OAUTH_PRIMARY_ORIGIN = "https://taku-live.pl";
   const KICK_OAUTH_ALLOWED_HOSTS = new Set(["taku-live.pl", "www.taku-live.pl"]);
   const KICK_SUBS_LAST_COUNT_STORAGE_KEY = `${STORAGE_NAMESPACE}:kick:last-subs-goal:${CHANNEL_SLUG}`;
-  const CLIPS_MAX_ITEMS = 200; // liczba klipĂłw do zaĹ‚adowania w /klipy
+  const CLIPS_MAX_ITEMS = 200; // liczba klipów do załadowania w /klipy
   const CLIPS_FAST_LOAD_ITEMS = 60;
   const CHANNEL_AVATAR_FALLBACK = String(
     (document.body && document.body.getAttribute("data-channel-avatar-fallback")) ||
@@ -197,27 +197,30 @@
   const YOUTUBE_SORT_MODE_KEY = getStorageKey("youtube_sort_mode");
   const YOUTUBE_FEED_FETCH_TIMEOUT_MS = 4200;
   const YOUTUBE_META_FETCH_TIMEOUT_MS = 4200;
-  const YOUTUBE_API_FETCH_TIMEOUT_MS = 5200;
+  const YOUTUBE_API_FETCH_TIMEOUT_MS = 6500;
   const YOUTUBE_MAX_FEED_ITEMS = 25;
   const YOUTUBE_VISIBLE_VIDEO_COUNT = 5;
   const YOUTUBE_DEFAULT_SORT_MODE = "newest";
+  const YOUTUBE_CHANNEL_CACHE_TTL_MS = 3 * 60 * 1000;
+  const YOUTUBE_CHANNEL_CACHE_TTL_NEWEST_MS = 6 * 1000;
+  const YOUTUBE_LIVE_POLL_MS = 8 * 1000;
   const YOUTUBE_AVATAR_FALLBACK =
     String(window.YOUTUBE_AVATAR_FALLBACK || MEMBER_AVATAR_FALLBACK || "/img/default_profil.png").trim() || "/img/default_profil.png";
   const LICZNIKI_FIXED_UTC_OFFSET_MINUTES = 60;
   const LICZNIKI_FIXED_UTC_OFFSET_MS = LICZNIKI_FIXED_UTC_OFFSET_MINUTES * 60 * 1000;
   const LICZNIKI_MONTH_NAMES_PL = [
-    "styczeĹ„",
+    "styczeń",
     "luty",
     "marzec",
-    "kwiecieĹ„",
+    "kwiecień",
     "maj",
     "czerwiec",
     "lipiec",
-    "sierpieĹ„",
-    "wrzesieĹ„",
-    "paĹşdziernik",
+    "sierpień",
+    "wrzesień",
+    "październik",
     "listopad",
-    "grudzieĹ„"
+    "grudzień"
   ];
   // Keep root credential decoding stable even when STORAGE_NAMESPACE changes per streamer.
   const ADMIN_SECRET_XOR_KEY =
@@ -251,6 +254,9 @@
   let loginHandlersBound = false;
   let logoutHandlerBound = false;
   let youtubeSortBound = false;
+  let youtubeLivePollId = 0;
+  let youtubeLivePollBusy = false;
+  let youtubeLiveVisibilityBound = false;
   let adminTabsBound = false;
   let adminMembersBound = false;
   let adminAccountsBound = false;
@@ -270,6 +276,8 @@
   let draggingMemberRow = null;
   let draggingLicznikId = "";
   let draggingLicznikRow = null;
+  let draggingYoutubeId = "";
+  let draggingYoutubeRow = null;
   let pendingLicznikFinishContext = null;
   let licznikiTickerId = 0;
   const downloadInProgress = new Set();
@@ -400,7 +408,7 @@
   function notifyAdminTabAccessDenied(tabName) {
     const clean = String(tabName || "").trim().toLowerCase();
     if (clean === "accounts") {
-      setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
+      setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
       return;
     }
     if (clean === "youtube") {
@@ -408,14 +416,14 @@
       return;
     }
     if (clean === "bindings") {
-      setAdminAccountStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
+      setAdminAccountStatus("Brak permisji do zakładki Powiązania.", "error");
       return;
     }
     if (clean === "liczniki") {
-      setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
+      setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
       return;
     }
-    setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
+    setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
   }
 
   function setActiveAdminTab(tabName, options = {}) {
@@ -433,13 +441,13 @@
 
     if (nextTab === "accounts" && !hasPanelAdminAccess()) {
       nextTab = "members";
-      setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
+      setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
     } else if (nextTab === "youtube" && !hasYouTubeTabAccess()) {
       nextTab = "members";
-      setAdminYoutubeStatus("Brak permisji do zakĹ‚adki YouTube.", "error");
+      setAdminYoutubeStatus("Brak permisji do zakładki YouTube.", "error");
     } else if (nextTab === "bindings" && !hasBindingsTabAccess()) {
       nextTab = "members";
-      setAdminAccountStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
+      setAdminAccountStatus("Brak permisji do zakładki Powiązania.", "error");
     }
 
     if (adminTabsWrapEl) {
@@ -562,7 +570,7 @@
   function normalizeAdminSyncErrorMessage(rawValue) {
     const text = String(rawValue || "").trim();
     if (!text) {
-      return "nieznany bĹ‚Ä…d synchronizacji";
+      return "nieznany błąd synchronizacji";
     }
     return text
       .replace(/^ADMIN_STATE_[A-Z_0-9]+:\s*/i, "")
@@ -575,7 +583,7 @@
     const message = normalizeAdminSyncErrorMessage(rawError);
     adminStateLastSyncError = message;
     if (getRouteFromLocation() === "admin") {
-      setActiveAdminSyncStatus(`BĹ‚Ä…d zapisu do Redis: ${message}`, "error");
+      setActiveAdminSyncStatus(`Błąd zapisu do Redis: ${message}`, "error");
     }
   }
 
@@ -1159,14 +1167,30 @@
           source.channelUrl ||
           source.url ||
           source.channel ||
-          source.channelId ||
           source.handle ||
-          source.userName
+          source.userName ||
+          source.channelId
       ) || null;
 
-    const channelId = normalizeYouTubeChannelId(source.channelId) || (parsed ? normalizeYouTubeChannelId(parsed.channelId) : "");
-    const handle = normalizeYouTubeHandle(source.handle) || (parsed ? normalizeYouTubeHandle(parsed.handle) : "");
-    const userName = normalizeYouTubeUserName(source.userName) || (parsed ? normalizeYouTubeUserName(parsed.userName) : "");
+    let channelId = normalizeYouTubeChannelId(source.channelId);
+    let handle = normalizeYouTubeHandle(source.handle);
+    let userName = normalizeYouTubeUserName(source.userName);
+    const parsedChannelId = parsed ? normalizeYouTubeChannelId(parsed.channelId) : "";
+    const parsedHandle = parsed ? normalizeYouTubeHandle(parsed.handle) : "";
+    const parsedUserName = parsed ? normalizeYouTubeUserName(parsed.userName) : "";
+
+    if (parsedHandle || parsedUserName) {
+      handle = parsedHandle || handle;
+      userName = parsedUserName || userName;
+      if (!parsedChannelId) {
+        // Auto-heal legacy entries where stale channelId points to another channel.
+        channelId = "";
+      }
+    }
+    if (parsedChannelId) {
+      channelId = parsedChannelId;
+    }
+
     const channelUrl =
       buildCanonicalYouTubeChannelUrl({
         channelId,
@@ -1232,9 +1256,9 @@
 
   function decodeEscapedJsonText(rawValue) {
     return String(rawValue || "")
-      .replace(/\\\\u0026/g, "&")
-      .replace(/\\u0026/g, "&")
-      .replace(/\\\\\\//g, "/")
+      .replace(/\\\\u0026/gi, "&")
+      .replace(/\\u0026/gi, "&")
+      .replace(/\\\\\//g, "/")
       .replace(/\\\//g, "/")
       .replace(/\\"/g, "\"");
   }
@@ -1665,13 +1689,44 @@
     ].join("::");
   }
 
+  function getYouTubeChannelCacheTtlMs(sortMode) {
+    const mode = normalizeYouTubeSortMode(sortMode);
+    return mode === "newest" ? YOUTUBE_CHANNEL_CACHE_TTL_NEWEST_MS : YOUTUBE_CHANNEL_CACHE_TTL_MS;
+  }
+
   async function fetchYouTubeChannelDataFromApi(channelEntry, sortMode) {
     const source = channelEntry && typeof channelEntry === "object" ? channelEntry : {};
     const params = new URLSearchParams();
-    const channelId = normalizeYouTubeChannelId(source.channelId);
-    const handle = normalizeYouTubeHandle(source.handle);
-    const userName = normalizeYouTubeUserName(source.userName);
-    const channelUrl = buildCanonicalYouTubeChannelUrl(source);
+    const parsedFromUrl = parseYouTubeChannelReference(source.channelUrl || "");
+    let channelId = normalizeYouTubeChannelId(source.channelId);
+    let handle = normalizeYouTubeHandle(source.handle);
+    let userName = normalizeYouTubeUserName(source.userName);
+
+    if (parsedFromUrl) {
+      const parsedChannelId = normalizeYouTubeChannelId(parsedFromUrl.channelId);
+      const parsedHandle = normalizeYouTubeHandle(parsedFromUrl.handle);
+      const parsedUserName = normalizeYouTubeUserName(parsedFromUrl.userName);
+      if (parsedHandle || parsedUserName) {
+        handle = parsedHandle || handle;
+        userName = parsedUserName || userName;
+        if (!parsedChannelId) {
+          channelId = "";
+        }
+      }
+      if (parsedChannelId) {
+        channelId = parsedChannelId;
+      }
+    }
+    if ((handle || userName) && !(parsedFromUrl && normalizeYouTubeChannelId(parsedFromUrl.channelId))) {
+      channelId = "";
+    }
+
+    const channelUrl = buildCanonicalYouTubeChannelUrl({
+      channelId,
+      handle,
+      userName,
+      channelUrl: source.channelUrl || source.url || ""
+    });
 
     if (channelId) {
       params.set("channelId", channelId);
@@ -1827,7 +1882,8 @@
     const mode = normalizeYouTubeSortMode(sortMode || source.defaultSortMode || YOUTUBE_DEFAULT_SORT_MODE);
     const cacheKey = getYouTubeChannelCacheKey(source, mode);
     const cached = youtubeChannelDataCache.get(cacheKey);
-    if (cached && typeof cached === "object" && Date.now() - Number(cached.cachedAt || 0) < 120000) {
+    const cacheTtlMs = getYouTubeChannelCacheTtlMs(mode);
+    if (cached && typeof cached === "object" && Date.now() - Number(cached.cachedAt || 0) < cacheTtlMs) {
       return cached.value;
     }
 
@@ -1912,12 +1968,13 @@
       }
       event.preventDefault();
       const nextSort = normalizeYouTubeSortMode(button.getAttribute("data-youtube-sort"));
-      if (nextSort === normalizeYouTubeSortMode(youtubeSortMode)) {
-        return;
+      const currentSort = normalizeYouTubeSortMode(youtubeSortMode);
+      if (nextSort !== currentSort) {
+        saveYouTubeSortMode(nextSort);
       }
-      saveYouTubeSortMode(nextSort);
       renderYouTubeSortButtons();
-      void renderPublicYouTubeCards({ force: true });
+      setYoutubeStatus(`Ładowanie filmów: ${formatYouTubeSortModeLabel(nextSort)}...`, "info");
+      void renderPublicYouTubeCards();
     });
   }
 
@@ -2010,6 +2067,7 @@
     }
 
     const forceReload = Boolean(options && options.force);
+    const backgroundRefresh = Boolean(options && options.background);
     const channels = Array.isArray(youtubeChannels) ? youtubeChannels : [];
     bindYouTubeSortControls();
     renderYouTubeSortButtons();
@@ -2041,28 +2099,30 @@
       youtubeChannelDataCache.clear();
     }
 
-    youtubeChannelsGridEl.innerHTML = channels
-      .map((channel) => {
-        const label = escapeHtmlText(channel && (channel.name || channel.handle || channel.channelId) || "Kanał YouTube");
-        return `
-          <article class="youtube-channel-card is-loading">
-            <div class="youtube-channel-main">
-              <section class="youtube-channel-profile">
-                <img class="youtube-channel-avatar" src="${escapeHtmlText(YOUTUBE_AVATAR_FALLBACK)}" alt="${label}">
-                <div class="youtube-channel-copy">
-                  <h3 class="youtube-channel-name">${label}</h3>
-                  <p class="youtube-channel-description">Ładowanie danych kanału i filmów...</p>
-                </div>
-              </section>
-              <section class="youtube-videos">
-                <p class="youtube-video-empty">Ładowanie 5 filmów...</p>
-              </section>
-            </div>
-          </article>
-        `;
-      })
-      .join("");
-    setYoutubeStatus("Ładowanie kanałów YouTube...", "info");
+    if (!backgroundRefresh) {
+      youtubeChannelsGridEl.innerHTML = channels
+        .map((channel) => {
+          const label = escapeHtmlText(channel && (channel.name || channel.handle || channel.channelId) || "Kanał YouTube");
+          return `
+            <article class="youtube-channel-card is-loading">
+              <div class="youtube-channel-main">
+                <section class="youtube-channel-profile">
+                  <img class="youtube-channel-avatar" src="${escapeHtmlText(YOUTUBE_AVATAR_FALLBACK)}" alt="${label}">
+                  <div class="youtube-channel-copy">
+                    <h3 class="youtube-channel-name">${label}</h3>
+                    <p class="youtube-channel-description">Ładowanie danych kanału i filmów...</p>
+                  </div>
+                </section>
+                <section class="youtube-videos">
+                  <p class="youtube-video-empty">Ładowanie 5 filmów...</p>
+                </section>
+              </div>
+            </article>
+          `;
+        })
+        .join("");
+      setYoutubeStatus("Ładowanie kanałów YouTube...", "info");
+    }
 
     const results = await Promise.all(
       channels.map(async (channel) => {
@@ -2073,10 +2133,12 @@
             payload
           };
         } catch (error) {
+          const staleCached = youtubeChannelDataCache.get(getYouTubeChannelCacheKey(channel, activeSortMode || channel.defaultSortMode));
           return {
             ok: false,
             channel,
-            error
+            error,
+            stalePayload: staleCached && staleCached.value && typeof staleCached.value === "object" ? staleCached.value : null
           };
         }
       })
@@ -2087,11 +2149,16 @@
     }
 
     let successCount = 0;
-    youtubeChannelsGridEl.innerHTML = results
+    const nextHtml = results
       .map((result) => {
         if (result.ok) {
           successCount += 1;
           return buildYouTubeChannelCardHtml(result.payload);
+        }
+
+        if (backgroundRefresh && result.stalePayload) {
+          successCount += 1;
+          return buildYouTubeChannelCardHtml(result.stalePayload);
         }
 
         const channel = normalizeYouTubeChannelEntry(result.channel) || {};
@@ -2112,6 +2179,17 @@
       })
       .join("");
 
+    if (backgroundRefresh && !successCount) {
+      setYoutubeStatus("Nie udało się odświeżyć kanałów YouTube.", "error");
+      return;
+    }
+
+    youtubeChannelsGridEl.innerHTML = nextHtml;
+
+    if (backgroundRefresh) {
+      return;
+    }
+
     if (!successCount) {
       setYoutubeStatus("Nie udało się pobrać kanałów YouTube.", "error");
       return;
@@ -2123,6 +2201,51 @@
     }
 
     setYoutubeStatus(`Załadowano ${successCount} kanałów YouTube.`, "success");
+  }
+
+  async function refreshYouTubeLiveData(force = false) {
+    if (youtubeLivePollBusy) {
+      return;
+    }
+    if (document.hidden) {
+      return;
+    }
+    if (getRouteFromLocation() !== "youtube") {
+      return;
+    }
+    const activeSortMode = normalizeYouTubeSortMode(youtubeSortMode);
+    if (!force && activeSortMode !== "newest") {
+      return;
+    }
+
+    youtubeLivePollBusy = true;
+    try {
+      await renderPublicYouTubeCards({
+        force: Boolean(force),
+        background: true
+      });
+    } finally {
+      youtubeLivePollBusy = false;
+    }
+  }
+
+  function startYouTubeLivePolling() {
+    if (!youtubeLiveVisibilityBound) {
+      youtubeLiveVisibilityBound = true;
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          return;
+        }
+        void refreshYouTubeLiveData(true);
+      });
+    }
+    if (youtubeLivePollId) {
+      return;
+    }
+
+    youtubeLivePollId = window.setInterval(() => {
+      void refreshYouTubeLiveData();
+    }, YOUTUBE_LIVE_POLL_MS);
   }
 
   function setYouTubeFormEditingState(channelId = "") {
@@ -2145,7 +2268,7 @@
     if (!youtubeChannels.length) {
       adminYoutubeTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="3" class="admin-table-empty">Brak dodanych kanałów YouTube.</td>
+          <td colspan="4" class="admin-table-empty">Brak dodanych kanałów YouTube.</td>
         </tr>
       `;
       return;
@@ -2155,14 +2278,29 @@
       const channelUrl = buildCanonicalYouTubeChannelUrl(channel);
       const channelLabel = String(channel.name || channel.handle || channel.channelId || channel.userName || "Kanał YouTube").trim();
       const row = document.createElement("tr");
+      row.className = "admin-youtube-row";
       row.dataset.youtubeId = String(channel.id || "").trim();
       row.innerHTML = `
         <td>
-          <strong>${escapeHtmlText(channelLabel)}</strong>
+          <span class="admin-youtube-name-cell">
+            <button
+              class="admin-row-btn admin-cennik-drag-handle"
+              type="button"
+              draggable="true"
+              data-youtube-drag-handle="${escapeHtmlText(channel.id)}"
+              title="Przeciągnij, aby ustawić kolejność kanałów YouTube"
+              aria-label="Przeciągnij, aby ustawić kolejność kanałów YouTube"
+            >
+              <img class="admin-drag-icon" src="/img/drag%26drop.ico" alt="" aria-hidden="true">
+            </button>
+            <strong>${escapeHtmlText(channelLabel)}</strong>
+          </span>
+        </td>
+        <td class="admin-youtube-link-cell">
           ${
             channelUrl
-              ? `<div><a href="${escapeHtmlText(channelUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtmlText(channelUrl)}</a></div>`
-              : ""
+              ? `<a href="${escapeHtmlText(channelUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtmlText(channelUrl)}</a>`
+              : `<span>-</span>`
           }
         </td>
         <td>${escapeHtmlText(formatYouTubeSortModeLabel(channel.defaultSortMode))}</td>
@@ -2175,6 +2313,65 @@
       `;
       adminYoutubeTableBodyEl.appendChild(row);
     });
+  }
+
+  function findDropTargetYoutubeRow(clientY) {
+    if (!adminYoutubeTableBodyEl) {
+      return null;
+    }
+
+    const rows = Array.from(
+      adminYoutubeTableBodyEl.querySelectorAll("tr.admin-youtube-row[data-youtube-id]:not(.is-dragging)")
+    );
+    let dropTarget = null;
+    let bestOffset = Number.NEGATIVE_INFINITY;
+    rows.forEach((row) => {
+      const box = row.getBoundingClientRect();
+      const offset = clientY - box.top - box.height / 2;
+      if (offset < 0 && offset > bestOffset) {
+        bestOffset = offset;
+        dropTarget = row;
+      }
+    });
+    return dropTarget;
+  }
+
+  function applyYoutubeOrderFromDom() {
+    if (!adminYoutubeTableBodyEl || !youtubeChannels.length) {
+      return false;
+    }
+
+    const youtubeIds = Array.from(adminYoutubeTableBodyEl.querySelectorAll("tr.admin-youtube-row[data-youtube-id]"))
+      .map((row) => String(row.dataset.youtubeId || "").trim())
+      .filter(Boolean);
+    if (!youtubeIds.length) {
+      return false;
+    }
+
+    const byId = new Map(youtubeChannels.map((channel) => [String(channel.id || "").trim(), channel]));
+    const nextChannels = youtubeIds.map((id) => byId.get(id)).filter(Boolean);
+    if (nextChannels.length !== youtubeChannels.length) {
+      return false;
+    }
+
+    const changed = nextChannels.some(
+      (channel, index) => String(channel?.id || "") !== String(youtubeChannels[index]?.id || "")
+    );
+    if (!changed) {
+      return false;
+    }
+
+    youtubeChannels = nextChannels;
+    return true;
+  }
+
+  function resetYoutubeDragState() {
+    if (draggingYoutubeRow) {
+      draggingYoutubeRow.classList.remove("is-dragging");
+      draggingYoutubeRow.style.opacity = "";
+    }
+    draggingYoutubeRow = null;
+    draggingYoutubeId = "";
   }
 
   function bindAdminYoutubeFeature() {
@@ -2291,6 +2488,12 @@
           return;
         }
 
+        const dragHandleBtn = event.target.closest("[data-youtube-drag-handle]");
+        if (dragHandleBtn) {
+          setAdminYoutubeStatus("Przeciągnij uchwyt, aby ustawić kolejność kanałów YouTube.", "info");
+          return;
+        }
+
         const editBtn = event.target.closest("[data-youtube-edit]");
         if (editBtn) {
           const channelId = String(editBtn.getAttribute("data-youtube-edit") || "").trim();
@@ -2346,6 +2549,106 @@
           channelsCount: youtubeChannels.length
         });
         void renderPublicYouTubeCards({ force: true });
+      });
+
+      adminYoutubeTableBodyEl.addEventListener("dragstart", (event) => {
+        if (!hasYouTubeTabAccess()) {
+          event.preventDefault();
+          setAdminYoutubeStatus("Brak permisji do zakładki YouTube.", "error");
+          sendAdminAuditEvent("admin_youtube_access_denied", {
+            operation: "dragstart_youtube_table"
+          });
+          return;
+        }
+
+        const handle = event.target.closest("[data-youtube-drag-handle]");
+        if (!handle) {
+          event.preventDefault();
+          return;
+        }
+
+        const row = handle.closest("tr.admin-youtube-row[data-youtube-id]");
+        const youtubeId = String(row?.dataset.youtubeId || "").trim();
+        if (!row || !youtubeId) {
+          event.preventDefault();
+          return;
+        }
+
+        draggingYoutubeId = youtubeId;
+        draggingYoutubeRow = row;
+        row.classList.add("is-dragging");
+        row.style.opacity = "0.55";
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.dropEffect = "move";
+          try {
+            event.dataTransfer.setData("text/plain", youtubeId);
+          } catch (_error) {
+            // Ignore browsers that block setting drag payload.
+          }
+        }
+      });
+
+      adminYoutubeTableBodyEl.addEventListener("dragover", (event) => {
+        if (!hasYouTubeTabAccess()) {
+          return;
+        }
+
+        if (!draggingYoutubeRow || !draggingYoutubeId) {
+          return;
+        }
+
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "move";
+        }
+
+        const dropTarget = findDropTargetYoutubeRow(event.clientY);
+        if (!dropTarget) {
+          adminYoutubeTableBodyEl.appendChild(draggingYoutubeRow);
+          return;
+        }
+
+        if (dropTarget !== draggingYoutubeRow) {
+          adminYoutubeTableBodyEl.insertBefore(draggingYoutubeRow, dropTarget);
+        }
+      });
+
+      adminYoutubeTableBodyEl.addEventListener("drop", (event) => {
+        if (!hasYouTubeTabAccess()) {
+          event.preventDefault();
+          resetYoutubeDragState();
+          setAdminYoutubeStatus("Brak permisji do zakładki YouTube.", "error");
+          sendAdminAuditEvent("admin_youtube_access_denied", {
+            operation: "drop_youtube_table"
+          });
+          return;
+        }
+
+        if (!draggingYoutubeRow || !draggingYoutubeId) {
+          return;
+        }
+        event.preventDefault();
+
+        const changed = applyYoutubeOrderFromDom();
+        resetYoutubeDragState();
+        if (!changed) {
+          return;
+        }
+
+        saveYouTubeChannels();
+        renderAdminYoutubeTable();
+        sendAdminAuditEvent("admin_youtube_channels_reordered", {
+          orderedYouTubeIds: youtubeChannels.map((entry) => String(entry?.id || "").trim()).filter(Boolean),
+          channelsCount: youtubeChannels.length
+        });
+        setAdminYoutubeStatus("Zmieniono kolejność kanałów YouTube.", "success");
+        void renderPublicYouTubeCards({ force: true });
+      });
+
+      adminYoutubeTableBodyEl.addEventListener("dragend", () => {
+        resetYoutubeDragState();
       });
     }
   }
@@ -2560,7 +2863,7 @@
       }
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Nie udaĹ‚o siÄ™ wczytaÄ‡ pliku graficznego."));
+      reader.onerror = () => reject(new Error("Nie udało się wczytać pliku graficznego."));
       reader.readAsDataURL(file);
     });
   }
@@ -2998,7 +3301,7 @@
       licznikiGridEl.innerHTML = `
         <article class="kary-counter-card liczniki-card">
           <p class="kary-card-state">BRAK DANYCH</p>
-          <h3>Brak licznikĂłw</h3>
+          <h3>Brak liczników</h3>
           <span class="kary-counter-pill">--</span>
         </article>
       `;
@@ -3059,7 +3362,7 @@
     if (!licznikiItems.length) {
       adminLicznikiTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="6" class="admin-table-empty">Brak licznikĂłw.</td>
+          <td colspan="6" class="admin-table-empty">Brak liczników.</td>
         </tr>
       `;
       return;
@@ -3081,8 +3384,8 @@
             type="button"
             draggable="true"
             data-licznik-drag-handle="${escapeHtmlText(item.id)}"
-            title="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ licznikĂłw"
-            aria-label="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ licznikĂłw"
+            title="Przeciągnij, aby ustawić kolejność liczników"
+            aria-label="Przeciągnij, aby ustawić kolejność liczników"
           >
             <img class="admin-drag-icon" src="/img/drag%26drop.ico" alt="" aria-hidden="true">
           </button>
@@ -3103,7 +3406,7 @@
             ${
               isFinished
                 ? `
-                  <button class="admin-row-btn admin-row-btn-resume" type="button" data-licznik-resume="${escapeHtmlText(item.id)}">WznĂłw</button>
+                  <button class="admin-row-btn admin-row-btn-resume" type="button" data-licznik-resume="${escapeHtmlText(item.id)}">Wznów</button>
                 `
                 : `
                   <button
@@ -3111,11 +3414,11 @@
                     type="button"
                     data-licznik-finish="${escapeHtmlText(item.id)}"
                     ${canScheduleFinish ? "" : "disabled"}
-                  >ZakoĹ„cz</button>
+                  >Zakończ</button>
                 `
             }
             <button class="admin-row-btn" type="button" data-licznik-edit="${escapeHtmlText(item.id)}">Edytuj</button>
-            <button class="admin-row-btn admin-row-btn-danger" type="button" data-licznik-remove="${escapeHtmlText(item.id)}">UsuĹ„</button>
+            <button class="admin-row-btn admin-row-btn-danger" type="button" data-licznik-remove="${escapeHtmlText(item.id)}">Usuń</button>
           </span>
         </td>
       `;
@@ -3153,18 +3456,18 @@
 
     const licznik = licznikiItems.find((item) => String(item && item.id || "").trim() === cleanId);
     if (!licznik) {
-      setAdminLicznikStatus("Nie znaleziono licznika do zakoĹ„czenia odliczania.", "error");
+      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
       return;
     }
     if (normalizeLicznikMode(licznik.mode) !== "since") {
-      setAdminLicznikStatus("Opcja zakoĹ„czenia dziaĹ‚a tylko dla licznikĂłw w trybie Od daty.", "error");
+      setAdminLicznikStatus("Opcja zakończenia działa tylko dla liczników w trybie Od daty.", "error");
       return;
     }
 
     const parsedTargetDate = parseLicznikDateInputValue(String(licznik.targetDate || "").trim());
     const targetDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
     if (!Number.isFinite(targetDateMs)) {
-      setAdminLicznikStatus("Ten licznik ma nieprawidĹ‚owÄ… datÄ™ startu.", "error");
+      setAdminLicznikStatus("Ten licznik ma nieprawidłową datę startu.", "error");
       return;
     }
 
@@ -3207,7 +3510,7 @@
     const licznik = licznikiItems.find((item) => String(item && item.id || "").trim() === licznikId);
     if (!licznik) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Nie znaleziono licznika do zakoĹ„czenia odliczania.", "error");
+      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
       return;
     }
 
@@ -3217,18 +3520,18 @@
     const selectedDate = parseLicznikDateInputValue(selectedRawValue);
     const selectedDateMs = selectedDate ? selectedDate.getTime() : Number.NaN;
     if (!selectedDate || !Number.isFinite(selectedDateMs)) {
-      setAdminLicznikFinishPickerStatus("Wybierz poprawnÄ… datÄ™ i godzinÄ™ zakoĹ„czenia.", "error");
+      setAdminLicznikFinishPickerStatus("Wybierz poprawną datę i godzinę zakończenia.", "error");
       return;
     }
     if (!Number.isFinite(targetDateMs) || selectedDateMs <= targetDateMs) {
-      setAdminLicznikFinishPickerStatus("Data zakoĹ„czenia musi byÄ‡ pĂłĹşniejsza niĹĽ data startu licznika.", "error");
+      setAdminLicznikFinishPickerStatus("Data zakończenia musi być późniejsza niż data startu licznika.", "error");
       return;
     }
 
     const selectedEndDateIso = selectedDate.toISOString();
     pendingLicznikFinishContext.selectedEndDateIso = selectedEndDateIso;
     if (adminLicznikFinishConfirmTextEl) {
-      adminLicznikFinishConfirmTextEl.textContent = `Czy napewno chcesz zakoĹ„czyÄ‡ odliczanie wtedy ${formatLicznikDateLabel(selectedEndDateIso)}?`;
+      adminLicznikFinishConfirmTextEl.textContent = `Czy na pewno chcesz zakończyć odliczanie wtedy ${formatLicznikDateLabel(selectedEndDateIso)}?`;
     }
 
     closeAdminLicznikFinishPickerModal();
@@ -3252,14 +3555,14 @@
     const index = licznikiItems.findIndex((item) => String(item && item.id || "").trim() === licznikId);
     if (index === -1) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Nie znaleziono licznika do zakoĹ„czenia odliczania.", "error");
+      setAdminLicznikStatus("Nie znaleziono licznika do zakończenia odliczania.", "error");
       return;
     }
 
     const beforeLicznik = { ...licznikiItems[index] };
     if (normalizeLicznikMode(beforeLicznik.mode) !== "since") {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Opcja zakoĹ„czenia dziaĹ‚a tylko dla licznikĂłw w trybie Od daty.", "error");
+      setAdminLicznikStatus("Opcja zakończenia działa tylko dla liczników w trybie Od daty.", "error");
       return;
     }
 
@@ -3269,12 +3572,12 @@
     const selectedDateMs = selectedDate ? selectedDate.getTime() : Number.NaN;
     if (!selectedDate || !Number.isFinite(selectedDateMs)) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Wybrano nieprawidĹ‚owÄ… datÄ™ zakoĹ„czenia odliczania.", "error");
+      setAdminLicznikStatus("Wybrano nieprawidłową datę zakończenia odliczania.", "error");
       return;
     }
     if (!Number.isFinite(targetDateMs) || selectedDateMs <= targetDateMs) {
       closeAdminLicznikFinishModals();
-      setAdminLicznikStatus("Data zakoĹ„czenia musi byÄ‡ pĂłĹşniejsza niĹĽ data startu licznika.", "error");
+      setAdminLicznikStatus("Data zakończenia musi być późniejsza niż data startu licznika.", "error");
       return;
     }
 
@@ -3289,7 +3592,7 @@
     renderLicznikiPanel();
     closeAdminLicznikFinishModals();
     setAdminLicznikStatus(
-      `Ustawiono zakoĹ„czenie odliczania na ${formatLicznikDateLabel(licznikiItems[index].endDate)}.`,
+      `Ustawiono zakończenie odliczania na ${formatLicznikDateLabel(licznikiItems[index].endDate)}.`,
       "success"
     );
     sendAdminAuditEvent("admin_licznik_finish_scheduled", {
@@ -3431,7 +3734,7 @@
         event.preventDefault();
 
         if (!hasLicznikiTabAccess()) {
-          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "submit_licznik_form"
           });
@@ -3448,7 +3751,7 @@
         const parsedTargetDate = parseLicznikDateInputValue(dateInputRaw);
         const parsedDateMs = parsedTargetDate ? parsedTargetDate.getTime() : Number.NaN;
         if (!title || !parsedTargetDate || !Number.isFinite(parsedDateMs)) {
-          setAdminLicznikStatus("Podaj nazwÄ™ i poprawnÄ… datÄ™ licznika.", "error");
+          setAdminLicznikStatus("Podaj nazwę i poprawną datę licznika.", "error");
           return;
         }
         const targetDate = parsedTargetDate.toISOString();
@@ -3471,13 +3774,13 @@
             return;
           }
           if (selectedImageFile.size > 1_500_000) {
-            setAdminLicznikStatus("Plik grafiki jest za duĹĽy (max 1.5 MB).", "error");
+            setAdminLicznikStatus("Plik grafiki jest za duży (max 1.5 MB).", "error");
             return;
           }
           try {
             imageUrl = sanitizeLicznikImageUrl(await readImageFileAsDataUrl(selectedImageFile));
           } catch (_error) {
-            setAdminLicznikStatus("Nie udaĹ‚o siÄ™ wczytaÄ‡ pliku grafiki.", "error");
+            setAdminLicznikStatus("Nie udało się wczytać pliku grafiki.", "error");
             return;
           }
         }
@@ -3537,7 +3840,7 @@
     if (adminLicznikiTableBodyEl) {
       adminLicznikiTableBodyEl.addEventListener("click", (event) => {
         if (!hasLicznikiTabAccess()) {
-          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "click_liczniki_table"
           });
@@ -3553,7 +3856,7 @@
 
         const dragHandleId = String(target.getAttribute("data-licznik-drag-handle") || "").trim();
         if (dragHandleId) {
-          setAdminLicznikStatus("PrzeciÄ…gnij uchwyt, aby ustawiÄ‡ kolejnoĹ›Ä‡ licznikĂłw.", "info");
+          setAdminLicznikStatus("Przeciągnij uchwyt, aby ustawić kolejność liczników.", "info");
           return;
         }
 
@@ -3568,7 +3871,7 @@
 
           const beforeLicznik = { ...licznikiItems[index] };
           if (!isLicznikFinished(beforeLicznik)) {
-            setAdminLicznikStatus("Ten licznik nie jest jeszcze zakoĹ„czony.", "error");
+            setAdminLicznikStatus("Ten licznik nie jest jeszcze zakończony.", "error");
             return;
           }
 
@@ -3649,7 +3952,7 @@
         const beforeCount = licznikiItems.length;
         licznikiItems = licznikiItems.filter((item) => item.id !== licznikId);
         if (licznikiItems.length === beforeCount) {
-          setAdminLicznikStatus("Nie znaleziono licznika do usuniÄ™cia.", "error");
+          setAdminLicznikStatus("Nie znaleziono licznika do usunięcia.", "error");
           return;
         }
         if (pendingLicznikFinishContext && String(pendingLicznikFinishContext.licznikId || "").trim() === licznikId) {
@@ -3672,13 +3975,13 @@
           licznik: buildLicznikAuditSnapshot(removedLicznik),
           licznikiCount: licznikiItems.length
         });
-        setAdminLicznikStatus("UsuniÄ™to licznik.", "success");
+        setAdminLicznikStatus("Usunięto licznik.", "success");
       });
 
       adminLicznikiTableBodyEl.addEventListener("dragstart", (event) => {
         if (!hasLicznikiTabAccess()) {
           event.preventDefault();
-          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "dragstart_liczniki_table"
           });
@@ -3743,7 +4046,7 @@
         if (!hasLicznikiTabAccess()) {
           event.preventDefault();
           resetLicznikDragState();
-          setAdminLicznikStatus("Brak permisji do zakĹ‚adki Liczniki.", "error");
+          setAdminLicznikStatus("Brak permisji do zakładki Liczniki.", "error");
           sendAdminAuditEvent("admin_liczniki_access_denied", {
             operation: "drop_liczniki_table"
           });
@@ -3769,7 +4072,7 @@
           orderedLicznikIds: licznikiItems.map((item) => String(item.id || "").trim()).filter(Boolean),
           licznikiCount: licznikiItems.length
         });
-        setAdminLicznikStatus("Zmieniono kolejnoĹ›Ä‡ licznikĂłw.", "success");
+        setAdminLicznikStatus("Zmieniono kolejność liczników.", "success");
       });
 
       adminLicznikiTableBodyEl.addEventListener("dragend", () => {
@@ -3825,7 +4128,7 @@
     if (!cciMembers.length) {
       adminMembersTableBodyEl.innerHTML = `
         <tr>
-          <td colspan="3" class="admin-table-empty">Brak dodanych czĹ‚onkĂłw.</td>
+          <td colspan="3" class="admin-table-empty">Brak dodanych członków.</td>
         </tr>
       `;
       return;
@@ -3844,8 +4147,8 @@
               type="button"
               draggable="true"
               data-member-drag-handle="${escapeHtmlText(member.id)}"
-              title="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI"
-              aria-label="PrzeciÄ…gnij, aby ustawiÄ‡ kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI"
+              title="Przeciągnij, aby ustawić kolejność członków CCI"
+              aria-label="Przeciągnij, aby ustawić kolejność członków CCI"
             >
               <img class="admin-drag-icon" src="/img/drag%26drop.ico" alt="" aria-hidden="true">
             </button>
@@ -3857,7 +4160,7 @@
         <td>
           <span class="admin-account-actions">
             <button class="admin-row-btn" type="button" data-member-edit="${escapeHtmlText(member.id)}">Edytuj</button>
-            <button class="admin-row-btn admin-row-btn-danger" type="button" data-member-remove="${escapeHtmlText(member.id)}">UsuĹ„</button>
+            <button class="admin-row-btn admin-row-btn-danger" type="button" data-member-remove="${escapeHtmlText(member.id)}">Usuń</button>
           </span>
         </td>
       `;
@@ -3886,7 +4189,7 @@
     }
     const submitBtn = adminMemberFormEl.querySelector('button[type="submit"]');
     if (submitBtn) {
-      submitBtn.textContent = editingMemberId ? "Zapisz zmiany" : "Dodaj czĹ‚onka CCI";
+      submitBtn.textContent = editingMemberId ? "Zapisz zmiany" : "Dodaj członka CCI";
     }
   }
 
@@ -3960,7 +4263,7 @@
         event.preventDefault();
 
         if (!hasMembersTabAccess()) {
-          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "submit_member_form"
           });
@@ -3976,7 +4279,7 @@
         let auditDetails = {};
 
         if (!name || !url) {
-          setAdminMemberStatus("Podaj nazwÄ™ i profil Kick.", "error");
+          setAdminMemberStatus("Podaj nazwę i profil Kick.", "error");
           return;
         }
 
@@ -3984,7 +4287,7 @@
           const index = cciMembers.findIndex((member) => member.id === editingMemberId);
           if (index === -1) {
             setMemberFormEditingState("");
-            setAdminMemberStatus("Nie znaleziono czĹ‚onka do edycji.", "error");
+            setAdminMemberStatus("Nie znaleziono członka do edycji.", "error");
             return;
           }
           const beforeMember = { ...cciMembers[index] };
@@ -4000,7 +4303,7 @@
             before: buildMemberAuditSnapshot(beforeMember),
             after: buildMemberAuditSnapshot(cciMembers[index])
           };
-          setAdminMemberStatus("Zaktualizowano czĹ‚onka CCI.", "success");
+          setAdminMemberStatus("Zaktualizowano członka CCI.", "success");
         } else {
           const createdMember = {
             id: createMemberId(getKickSlugFromUrl(url)),
@@ -4014,7 +4317,7 @@
             member: buildMemberAuditSnapshot(createdMember),
             membersCount: cciMembers.length
           };
-          setAdminMemberStatus("Dodano nowego czĹ‚onka CCI.", "success");
+          setAdminMemberStatus("Dodano nowego członka CCI.", "success");
         }
 
         saveCciMembers();
@@ -4030,7 +4333,7 @@
     if (adminMembersTableBodyEl) {
       adminMembersTableBodyEl.addEventListener("click", (event) => {
         if (!hasMembersTabAccess()) {
-          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "click_members_table"
           });
@@ -4044,7 +4347,7 @@
 
         const dragHandleId = String(target.getAttribute("data-member-drag-handle") || "").trim();
         if (dragHandleId) {
-          setAdminMemberStatus("PrzeciÄ…gnij uchwyt, aby ustawiÄ‡ kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI.", "info");
+          setAdminMemberStatus("Przeciągnij uchwyt, aby ustawić kolejność członków CCI.", "info");
           return;
         }
 
@@ -4052,7 +4355,7 @@
         if (editId) {
           const member = cciMembers.find((item) => item.id === editId);
           if (!member || !adminMemberFormEl) {
-            setAdminMemberStatus("Nie znaleziono czĹ‚onka do edycji.", "error");
+            setAdminMemberStatus("Nie znaleziono członka do edycji.", "error");
             return;
           }
           const nameInput = adminMemberFormEl.querySelector('input[name="memberName"]');
@@ -4070,7 +4373,7 @@
               : String(member.avatar || "").trim();
           }
           setMemberFormEditingState(member.id);
-          setAdminMemberStatus("Tryb edycji czĹ‚onka CCI.", "info");
+          setAdminMemberStatus("Tryb edycji członka CCI.", "info");
           return;
         }
 
@@ -4080,7 +4383,7 @@
           const beforeCount = cciMembers.length;
           cciMembers = cciMembers.filter((member) => member.id !== removeId);
           if (cciMembers.length === beforeCount) {
-            setAdminMemberStatus("Nie znaleziono czĹ‚onka do usuniÄ™cia.", "error");
+            setAdminMemberStatus("Nie znaleziono członka do usunięcia.", "error");
             return;
           }
           saveCciMembers();
@@ -4092,7 +4395,7 @@
               adminMemberFormEl.reset();
             }
           }
-          setAdminMemberStatus("UsuniÄ™to czĹ‚onka CCI.", "success");
+          setAdminMemberStatus("Usunięto członka CCI.", "success");
           void updateFriendsLiveBadges(true);
           sendAdminAuditEvent("admin_member_removed", {
             memberId: removeId,
@@ -4106,7 +4409,7 @@
       adminMembersTableBodyEl.addEventListener("dragstart", (event) => {
         if (!hasMembersTabAccess()) {
           event.preventDefault();
-          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "dragstart_members_table"
           });
@@ -4171,7 +4474,7 @@
         if (!hasMembersTabAccess()) {
           event.preventDefault();
           resetMemberDragState();
-          setAdminMemberStatus("Brak permisji do zakĹ‚adki CzĹ‚onkowie CCI.", "error");
+          setAdminMemberStatus("Brak permisji do zakładki Członkowie CCI.", "error");
           sendAdminAuditEvent("admin_members_access_denied", {
             operation: "drop_members_table"
           });
@@ -4192,7 +4495,7 @@
         saveCciMembers();
         renderPublicMembersCards();
         renderAdminMembersTable();
-        setAdminMemberStatus("Zmieniono kolejnoĹ›Ä‡ czĹ‚onkĂłw CCI.", "success");
+        setAdminMemberStatus("Zmieniono kolejność członków CCI.", "success");
         void updateFriendsLiveBadges(true);
         sendAdminAuditEvent("admin_members_reordered", {
           orderedMemberIds: cciMembers.map((member) => String(member.id || "").trim()).filter(Boolean),
@@ -4244,7 +4547,7 @@
           ${
             account.isRoot
               ? "-"
-              : `<button class="admin-row-btn" type="button" data-account-toggle="${escapeHtmlText(accountId)}">${visiblePassword ? "Ukryj" : "PokaĹĽ"}</button>`
+              : `<button class="admin-row-btn" type="button" data-account-toggle="${escapeHtmlText(accountId)}">${visiblePassword ? "Ukryj" : "Pokaż"}</button>`
           }
         </td>
         <td>${account.canAccessMembers ? "Tak" : "Nie"}</td>
@@ -4265,7 +4568,7 @@
                     <ul class="admin-permissions-list">
                       <li class="admin-permission-item">
                         <label>
-                          <span>CzĹ‚onkowie CCI</span>
+                          <span>Członkowie CCI</span>
                           <input
                             class="admin-access-checkbox"
                             type="checkbox"
@@ -4313,7 +4616,7 @@
                       </li>
                       <li class="admin-permission-item">
                         <label>
-                          <span>PowiÄ…zania</span>
+                          <span>Powiązania</span>
                           <input
                             class="admin-access-checkbox"
                             type="checkbox"
@@ -4325,7 +4628,7 @@
                       </li>
                     </ul>
                   </details>
-                  <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtmlText(accountId)}">UsuĹ„</button>
+                  <button class="admin-row-btn admin-row-btn-danger" type="button" data-account-remove="${escapeHtmlText(accountId)}">Usuń</button>
                 </div>
               `
           }
@@ -4348,7 +4651,7 @@
         let auditDetails = {};
 
         if (!hasPanelAdminAccess()) {
-          setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
+          setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
           sendAdminAuditEvent("admin_accounts_access_denied", {
             operation: "submit_account_form"
           });
@@ -4446,7 +4749,7 @@
     if (adminAccountsTableBodyEl) {
       adminAccountsTableBodyEl.addEventListener("click", (event) => {
         if (!hasPanelAdminAccess()) {
-          setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
+          setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
           sendAdminAuditEvent("admin_accounts_access_denied", {
             operation: "click_accounts_table"
           });
@@ -4488,7 +4791,7 @@
         visibleAdminPasswords.delete(accountId);
         saveAdminAccounts();
         renderAdminAccountsTable();
-        setAdminAccountStatus("UsuniÄ™to konto admina.", "success");
+        setAdminAccountStatus("Usunięto konto admina.", "success");
         sendAdminAuditEvent("admin_account_removed", {
           account: buildAdminAccountAuditSnapshot(accountToDelete),
           accountsCount: adminAccounts.length
@@ -4515,7 +4818,7 @@
 
         if (!hasPanelAdminAccess()) {
           renderAdminAccountsTable();
-          setAdminAccountStatus("Brak permisji do zakĹ‚adki Panel Admina.", "error");
+          setAdminAccountStatus("Brak permisji do zakładki Panel Admina.", "error");
           sendAdminAuditEvent("admin_accounts_access_denied", {
             operation: "change_permissions"
           });
@@ -4540,11 +4843,11 @@
           bindings: "canAccessBindings"
         };
         const successMessageByKey = {
-          members: permissionCheckbox.checked ? "Nadano permisje do CzĹ‚onkĂłw CCI." : "Odebrano permisje do CzĹ‚onkĂłw CCI.",
-          liczniki: permissionCheckbox.checked ? "Nadano permisje do LicznikĂłw." : "Odebrano permisje do LicznikĂłw.",
+          members: permissionCheckbox.checked ? "Nadano permisje do Członków CCI." : "Odebrano permisje do Członków CCI.",
+          liczniki: permissionCheckbox.checked ? "Nadano permisje do Liczników." : "Odebrano permisje do Liczników.",
           youtube: permissionCheckbox.checked ? "Nadano permisje do YouTube." : "Odebrano permisje do YouTube.",
           admin: permissionCheckbox.checked ? "Nadano permisje do Panelu Admina." : "Odebrano permisje do Panelu Admina.",
-          bindings: permissionCheckbox.checked ? "Nadano permisje do PowiÄ…zaĹ„." : "Odebrano permisje do PowiÄ…zaĹ„."
+          bindings: permissionCheckbox.checked ? "Nadano permisje do Powiązań." : "Odebrano permisje do Powiązań."
         };
 
         const permissionField = permissionFieldByKey[permissionKey];
@@ -4615,9 +4918,9 @@
     }
   }
 
-  const ROOT_ADMIN_LOGIN = decodeObfuscatedSecret("FUA+Hg=="); // login wĹ‚aĹ›ciciela
-  const ROOT_ADMIN_PASSWORD = decodeObfuscatedSecret("PhEeDgAITCcGHQ=="); // hasĹ‚o wĹ‚aĹ›ciciela
-  const ROOT_ADMIN_DISCORD_ID = decodeObfuscatedSecret("R0NFV15RGFhQQ1VqAQAAA0FN"); // ID discord wĹ‚aĹ›ciciela
+  const ROOT_ADMIN_LOGIN = decodeObfuscatedSecret("FUA+Hg=="); // login właściciela
+  const ROOT_ADMIN_PASSWORD = decodeObfuscatedSecret("PhEeDgAITCcGHQ=="); // hasło właściciela
+  const ROOT_ADMIN_DISCORD_ID = decodeObfuscatedSecret("R0NFV15RGFhQQ1VqAQAAA0FN"); // ID discord właściciela
 
   function readStorageJsonFallback(key, fallback) {
     try {
@@ -5498,7 +5801,7 @@
     const hasSubscribers = Number.isFinite(Number(state.subscribersCount));
 
     if (kickOauthStatusTextEl) {
-      kickOauthStatusTextEl.textContent = linked ? "PowiÄ…zane" : "NiepowiÄ…zane";
+      kickOauthStatusTextEl.textContent = linked ? "Powiązane" : "Niepowiązane";
     }
     if (kickOauthChannelTextEl) {
       const channelLabel = String(state.channelSlug || state.channelName || "").trim();
@@ -5614,12 +5917,12 @@
     const oauthMessage = String(currentUrl.searchParams.get("kick_oauth_msg") || "").trim();
 
     if (oauthState === "success") {
-      setKickOAuthPanelStatus(oauthMessage || "Konto Kick zostaĹ‚o pomyĹ›lnie powiÄ…zane.", "success");
+      setKickOAuthPanelStatus(oauthMessage || "Konto Kick zostało pomyślnie powiązane.", "success");
       sendAdminAuditEvent("admin_kick_oauth_callback_success", {
         message: oauthMessage || "konto_kick_powiazane"
       });
     } else {
-      setKickOAuthPanelStatus(oauthMessage || "Nie udaĹ‚o siÄ™ powiÄ…zaÄ‡ konta Kick.", "error");
+      setKickOAuthPanelStatus(oauthMessage || "Nie udało się powiązać konta Kick.", "error");
       sendAdminAuditEvent("admin_kick_oauth_callback_error", {
         message: oauthMessage || "kick_oauth_callback_error"
       });
@@ -5682,7 +5985,7 @@
       if (!response.ok) {
         throw new Error(`HTTP_${response.status}`);
       }
-      setKickOAuthPanelStatus("PoĹ‚Ä…czenie Kick OAuth zostaĹ‚o odĹ‚Ä…czone.", "success");
+      setKickOAuthPanelStatus("Połączenie Kick OAuth zostało odłączone.", "success");
       cachedKickOAuthStatus = { linked: false, subscribersCount: null };
       updateKickOAuthPanelView(cachedKickOAuthStatus);
       setKickSubsBadgeState({
@@ -5696,7 +5999,7 @@
       });
       return { ok: true };
     } catch (error) {
-      setKickOAuthPanelStatus("Nie udaĹ‚o siÄ™ odĹ‚Ä…czyÄ‡ konta Kick.", "error");
+      setKickOAuthPanelStatus("Nie udało się odłączyć konta Kick.", "error");
       sendAdminAuditEvent("admin_kick_oauth_unlink_failed", {
         error: error instanceof Error ? error.message : "KICK_OAUTH_UNLINK_FAILED"
       });
@@ -5716,7 +6019,7 @@
     if (kickOauthConnectBtnEl) {
       kickOauthConnectBtnEl.addEventListener("click", () => {
         if (!hasBindingsAccess()) {
-          setKickOAuthPanelStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
+          setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
           sendAdminAuditEvent("admin_kick_oauth_access_denied", {
             operation: "connect"
           });
@@ -5729,7 +6032,7 @@
 
     if (kickOauthRefreshBtnEl) {
       kickOauthRefreshBtnEl.addEventListener("click", () => {
-        setKickOAuthPanelStatus("OdĹ›wieĹĽanie statusu Kick OAuth...", "info");
+        setKickOAuthPanelStatus("Odświeżanie statusu Kick OAuth...", "info");
         sendAdminAuditEvent("admin_kick_oauth_status_refresh_requested", {
           force: true
         });
@@ -5748,7 +6051,7 @@
     if (kickOauthUnlinkBtnEl) {
       kickOauthUnlinkBtnEl.addEventListener("click", () => {
         if (!hasBindingsAccess()) {
-          setKickOAuthPanelStatus("Brak permisji do zakĹ‚adki PowiÄ…zania.", "error");
+          setKickOAuthPanelStatus("Brak permisji do zakładki Powiązania.", "error");
           sendAdminAuditEvent("admin_kick_oauth_access_denied", {
             operation: "unlink"
           });
@@ -5967,7 +6270,7 @@
     }
     if (adminPasswordToggleEl) {
       adminPasswordToggleEl.setAttribute("aria-pressed", visible ? "true" : "false");
-      adminPasswordToggleEl.setAttribute("aria-label", visible ? "Ukryj hasĹ‚o" : "PokaĹĽ hasĹ‚o");
+      adminPasswordToggleEl.setAttribute("aria-label", visible ? "Ukryj hasło" : "Pokaż hasło");
     }
     if (adminPasswordToggleIconEl) {
       adminPasswordToggleIconEl.classList.toggle("fa-eye", !visible);
@@ -6029,7 +6332,7 @@
         if (!result.ok || !hasAnyAdminAccess) {
           setInlineLoginStatus(
             adminDiscordStatusEl,
-            (result && result.error) || "Brak permisji do ĹĽadnej zakĹ‚adki panelu administratora.",
+            (result && result.error) || "Brak permisji do żadnej zakładki panelu administratora.",
             "error"
           );
           sendAdminAuditEvent("admin_discord_login_failed", {
@@ -6051,7 +6354,7 @@
           clearPersistedAdminSessionFallback();
         }
 
-        setInlineLoginStatus(adminDiscordStatusEl, "Logowanie Discord zakoĹ„czone pomyĹ›lnie.", "success");
+        setInlineLoginStatus(adminDiscordStatusEl, "Logowanie Discord zakończone pomyślnie.", "success");
         sendAdminAuditEvent("admin_discord_login_success", {
           username: String(session.username || "").trim(),
           discordUserId: normalizeDiscordUserId(session.id),
@@ -6061,7 +6364,7 @@
         navigateToRouteAfterAuth(getAdminRoutePathFallback(), "admin");
       })
       .catch((error) => {
-        setInlineLoginStatus(adminDiscordStatusEl, "Nie udaĹ‚o siÄ™ zakoĹ„czyÄ‡ logowania Discord.", "error");
+        setInlineLoginStatus(adminDiscordStatusEl, "Nie udało się zakończyć logowania Discord.", "error");
         sendAdminAuditEvent("admin_discord_login_failed", {
           error: error instanceof Error ? error.message : "DISCORD_LOGIN_CALLBACK_FAILED"
         });
@@ -6080,7 +6383,7 @@
     if (typeof window.StronaliveWebhook.isDiscordLoginAvailable === "function") {
       const availability = window.StronaliveWebhook.isDiscordLoginAvailable();
       if (!availability.ok) {
-        setInlineLoginStatus(adminDiscordStatusEl, availability.error || "Logowanie Discord jest niedostÄ™pne.", "error");
+        setInlineLoginStatus(adminDiscordStatusEl, availability.error || "Logowanie Discord jest niedostępne.", "error");
         sendAdminAuditEvent("admin_discord_login_start_failed", {
           reason: availability.error || "DISCORD_LOGIN_UNAVAILABLE"
         });
@@ -6095,7 +6398,7 @@
       rememberMe
     });
     Promise.resolve(window.StronaliveWebhook.startDiscordLogin()).catch((error) => {
-      setInlineLoginStatus(adminDiscordStatusEl, "Nie udaĹ‚o siÄ™ uruchomiÄ‡ logowania Discord.", "error");
+      setInlineLoginStatus(adminDiscordStatusEl, "Nie udało się uruchomić logowania Discord.", "error");
       sendAdminAuditEvent("admin_discord_login_start_failed", {
         error: error instanceof Error ? error.message : "DISCORD_LOGIN_START_FAILED"
       });
@@ -6163,7 +6466,7 @@
           saveRememberFallback(Boolean(adminRememberMeEl && adminRememberMeEl.checked));
           setLoginPasswordVisibility(false);
           adminLoginFormEl.reset();
-          setInlineLoginStatus(adminLoginStatusEl, "Zalogowano pomyĹ›lnie.", "success");
+          setInlineLoginStatus(adminLoginStatusEl, "Zalogowano pomyślnie.", "success");
           setInlineLoginStatus(adminDiscordStatusEl, "", "info");
           sendAdminAuditEvent("admin_local_login_success", {
             login: String(matched.login || login).trim(),
@@ -6186,7 +6489,7 @@
           adminDiscordLoginBtnEl.disabled = true;
           setInlineLoginStatus(
             adminDiscordStatusEl,
-            availability.error || "Logowanie Discord jest niedostÄ™pne.",
+            availability.error || "Logowanie Discord jest niedostępne.",
             "error"
           );
         }
@@ -6579,7 +6882,7 @@
     return readKickNumericCandidates(channelData, goalPaths);
   }
 
-  function setKickSubsBadgeState({ count = null, text = "subskrybentĂłw na Kicku", state = "ready" } = {}) {
+  function setKickSubsBadgeState({ count = null, text = "subskrybentów na Kicku", state = "ready" } = {}) {
     if (!streamIntroSubsStatEl || !streamIntroSubsCountEl || !streamIntroSubsTextEl) {
       return;
     }
@@ -7185,7 +7488,7 @@
         }
       }
 
-      throw new Error("NieprawidĹ‚owy format danych klipĂłw.");
+      throw new Error("Nieprawidłowy format danych klipów.");
     }
 
     function buildApiUrl(cursor = "") {
@@ -7866,7 +8169,7 @@
 
       const source = String(video.dataset.src ?? "").trim();
       if (!source) {
-        setStatus("Ten klip nie ma bezpoĹ›redniego linku do odtworzenia na stronie.", true);
+        setStatus("Ten klip nie ma bezpośredniego linku do odtworzenia na stronie.", true);
         return false;
       }
 
@@ -8562,7 +8865,7 @@
         syncClipViewerControls(viewer);
       } catch (_error) {
         if (currentOpenSeq === clipViewerOpenSeq) {
-          setStatus("Nie udaĹ‚o siÄ™ odtworzyÄ‡ klipu w podglÄ…dzie.", true);
+          setStatus("Nie udało się odtworzyć klipu w podglądzie.", true);
         }
         syncClipViewerControls(viewer);
       }
@@ -8749,7 +9052,7 @@
             try {
               await downloadClipBestQuality(clipData, downloadBtn);
             } catch (_error) {
-              setStatus("Nie udaĹ‚o siÄ™ pobraÄ‡ klipu w najlepszej jakoĹ›ci.", true);
+              setStatus("Nie udało się pobrać klipu w najlepszej jakości.", true);
             }
           });
         }
@@ -8882,7 +9185,7 @@
             <a class="clip-title" href="${escapeHtml(clipPageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clip.title)}</a>
             <p class="clip-meta">
               <span class="clip-meta-category">${escapeHtml(categoryLabel)}</span>
-              ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">â€˘</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
+              ${metaTimeLabel ? `<span class="clip-meta-sep" aria-hidden="true">•</span><span class="clip-meta-time">${escapeHtml(metaTimeLabel)}</span>` : ""}
             </p>
             ${authorUrl
               ? `<a class="clip-author" href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(authorName)}</a>`
@@ -8951,7 +9254,7 @@
       clipsEl.innerHTML = "";
 
       if (!Array.isArray(clips) || !clips.length) {
-        setStatus("Brak klipĂłw w odczytanych danych.", true);
+        setStatus("Brak klipów w odczytanych danych.", true);
         return;
       }
 
@@ -8962,7 +9265,7 @@
 
       setupClipPosterLoading();
       bindPlayers();
-      setStatus(`ZaĹ‚adowano ${clips.length} klipĂłw.`);
+      setStatus(`Załadowano ${clips.length} klipów.`);
     }
 
     async function loadClips() {
@@ -9002,16 +9305,16 @@
         const shouldLoadRest = Boolean(quickResult.reachedLimit && quickLimit < CLIPS_MAX_ITEMS);
         if (!shouldLoadRest) {
           if (quickResult.reachedLimit) {
-            setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw (limit ${CLIPS_MAX_ITEMS}).`);
+            setStatus(`Załadowano ${quickClips.length} klipów (limit ${CLIPS_MAX_ITEMS}).`);
           } else if (quickResult.partial) {
-            setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw.`);
+            setStatus(`Załadowano ${quickClips.length} klipów.`);
           } else {
-            setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw.`);
+            setStatus(`Załadowano ${quickClips.length} klipów.`);
           }
           return;
         }
 
-        setStatus(`ZaĹ‚adowano ${quickClips.length} klipĂłw. DoczytujÄ™ resztÄ™...`);
+        setStatus(`Załadowano ${quickClips.length} klipów. Doczytuję resztę...`);
 
         const fullResult = await fetchAllClips(40, CLIPS_MAX_ITEMS);
         if (loadSeq !== clipsLoadSeq) {
@@ -9041,11 +9344,11 @@
 
         const totalLoaded = quickClips.length + extraClips.length;
         if (fullResult.reachedLimit) {
-          setStatus(`ZaĹ‚adowano ${totalLoaded} klipĂłw (limit ${CLIPS_MAX_ITEMS}).`);
+          setStatus(`Załadowano ${totalLoaded} klipów (limit ${CLIPS_MAX_ITEMS}).`);
         } else if (fullResult.partial) {
-          setStatus(`ZaĹ‚adowano ${totalLoaded} klipĂłw.`);
+          setStatus(`Załadowano ${totalLoaded} klipów.`);
         } else {
-          setStatus(`ZaĹ‚adowano ${totalLoaded} klipĂłw.`);
+          setStatus(`Załadowano ${totalLoaded} klipów.`);
         }
       } catch (error) {
         if (loadSeq !== clipsLoadSeq) {
@@ -9053,7 +9356,7 @@
         }
         const reason = String(error?.message || "").trim();
         const suffix = reason ? ` (${reason})` : "";
-        setStatus(`Nie udaĹ‚o siÄ™ pobraÄ‡ wszystkich klipĂłw.${suffix}`, true);
+        setStatus(`Nie udało się pobrać wszystkich klipów.${suffix}`, true);
       } finally {
         if (releaseRefreshInFinally && loadSeq === clipsLoadSeq) {
           refreshBtn.disabled = false;
@@ -9127,7 +9430,7 @@
       const remainingMs = remainingSeconds * 1000;
       return {
         value: formatLicznikDuration(remainingMs),
-        state: remainingMs > 0 ? "DO STARTU" : "ZAKOĹCZONO",
+        state: remainingMs > 0 ? "DO STARTU" : "ZAKOŃCZONO",
         isDone: remainingMs <= 0
       };
     }
@@ -9138,7 +9441,7 @@
         const totalSecondsAtEnd = Math.max(0, Math.floor((endDateMs - targetDateMs) / 1000));
         return {
           value: formatLicznikDuration(totalSecondsAtEnd * 1000),
-          state: "ZAKOĹCZONO",
+          state: "ZAKOŃCZONO",
           isDone: true
         };
       }
@@ -9185,7 +9488,7 @@
           valueEl.textContent = "--";
         }
         if (stateEl) {
-          stateEl.textContent = "BĹÄDNA DATA";
+          stateEl.textContent = "BŁĘDNA DATA";
         }
         return;
       }
@@ -9393,6 +9696,7 @@
     startKickOAuthStatusPolling();
     startKickFollowersPolling();
     startFriendsLivePolling();
+    startYouTubeLivePolling();
     startLicznikiTicker();
     bindInlineLoginFallback(initialRoute);
     applyRoute(initialRoute);
@@ -9404,5 +9708,3 @@
     init();
   }
 })();
-
-

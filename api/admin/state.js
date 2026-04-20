@@ -97,6 +97,29 @@ function normalizeAdminState(rawState) {
     licznikiConfigRaw.items = normalizedLicznikiItems;
   }
 
+  const youtubeConfigRaw =
+    source.youtubeConfig && typeof source.youtubeConfig === 'object' && !Array.isArray(source.youtubeConfig)
+      ? toSafeJsonValue(source.youtubeConfig, {})
+      : {};
+  const youtubeChannelsFromConfig = Array.isArray(youtubeConfigRaw.channels)
+    ? youtubeConfigRaw.channels
+    : Array.isArray(youtubeConfigRaw.youtubeChannels)
+      ? youtubeConfigRaw.youtubeChannels
+      : null;
+  const hasExplicitYoutubeChannels =
+    Array.isArray(source.youtubeChannels) || Array.isArray(youtubeChannelsFromConfig);
+  const youtubeChannelsSource = Array.isArray(source.youtubeChannels)
+    ? source.youtubeChannels
+    : Array.isArray(youtubeChannelsFromConfig)
+      ? youtubeChannelsFromConfig
+      : [];
+  const normalizedYoutubeChannels = Array.isArray(youtubeChannelsSource)
+    ? toSafeJsonValue(youtubeChannelsSource, [])
+    : [];
+  if (hasExplicitYoutubeChannels) {
+    youtubeConfigRaw.channels = normalizedYoutubeChannels;
+  }
+
   return {
     accounts: Array.isArray(source.accounts) ? toSafeJsonValue(source.accounts, []) : [],
     baseMemberOverrides: toSafeJsonValue(source.baseMemberOverrides, {}),
@@ -109,6 +132,8 @@ function normalizeAdminState(rawState) {
     timeryConfig: toSafeJsonValue(source.timeryConfig, {}),
     licznikiItems: normalizedLicznikiItems,
     licznikiConfig: licznikiConfigRaw,
+    youtubeChannels: normalizedYoutubeChannels,
+    youtubeConfig: youtubeConfigRaw,
   };
 }
 
