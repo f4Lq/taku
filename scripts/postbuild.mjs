@@ -4,7 +4,7 @@ import path from "node:path";
 const rootDir = process.cwd();
 const distDir = path.join(rootDir, "dist");
 
-const staticDirectories = ["img", "js", "styles"];
+const staticDirectories = ["img", "styles"];
 const staticFiles = ["_redirects"];
 
 async function exists(targetPath) {
@@ -43,3 +43,4 @@ for (const dirName of staticDirectories) {
 for (const fileName of staticFiles) {
   await copyStaticFile(fileName);
 }
+
