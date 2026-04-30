@@ -895,6 +895,44 @@
 }
 
 
+.admin-account-avatar-link{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  border-radius: 999px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+
+.admin-account-avatar{
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
+  display: block;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #2a4f79;
+  background: #101a29;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+  flex: 0 0 auto;
+}
+
+
+.admin-account-avatar-empty{
+  color: #8ea6cb;
+  font-weight: 700;
+}
+
+
 .admin-member-name-text{
   color: #edf4ff;
   font-weight: 700;
@@ -946,11 +984,75 @@
 }
 
 
+.admin-table-wrap.admin-table-wrap-accounts{
+  overflow-x: clip !important;
+  overflow-y: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+
+.admin-table-wrap.admin-table-wrap-accounts::-webkit-scrollbar{
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+
+.admin-table.admin-table-accounts{
+  width: 100% !important;
+  min-width: 0;
+  table-layout: fixed !important;
+}
+
+
+.admin-table.admin-table-accounts th,
+.admin-table.admin-table-accounts td{
+  padding: 6px 6px;
+  font-size: 0.88rem;
+  line-height: 1.18;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+
+.admin-table.admin-table-accounts td:nth-child(2){
+  font-size: 0.82rem;
+}
+
+
 .admin-account-actions{
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  position: relative;
+  min-height: 36px;
+  overflow: visible;
+}
+
+
+.admin-table.admin-table-accounts th:first-child,
+.admin-table.admin-table-accounts td:first-child{
+  width: 52px;
+  min-width: 52px;
+  text-align: center;
+}
+
+
+.admin-table.admin-table-accounts th:last-child,
+.admin-table.admin-table-accounts td:last-child{
+  width: 19%;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+}
+
+
+.admin-table.admin-table-accounts .admin-row-btn{
+  white-space: nowrap;
 }
 
 
@@ -1013,6 +1115,9 @@
 
 .admin-permissions-details{
   position: relative;
+  z-index: 2;
+  display: inline-block;
+  flex: 0 0 auto;
 }
 
 
@@ -1043,15 +1148,40 @@
 
 
 .admin-permissions-list{
-  margin: 8px 0 0;
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  right: 0 !important;
+  z-index: 25 !important;
+  margin: 0;
   padding: 10px;
   min-width: 220px;
+  max-width: min(300px, calc(100vw - 48px));
+  max-height: min(320px, 52vh);
+  overflow: auto;
   list-style: none;
   border: 1px solid #2a4f79;
   border-radius: 8px;
   background: rgba(7, 18, 34, 0.92);
+  box-shadow: 0 16px 32px rgba(3, 9, 22, 0.5);
   display: grid;
   gap: 8px;
+}
+
+
+.admin-account-actions .admin-permissions-details .admin-permissions-list{
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  right: 0 !important;
+}
+
+
+.admin-permissions-details > .admin-permissions-list{
+  display: none !important;
+}
+
+
+.admin-permissions-details[open] > .admin-permissions-list{
+  display: grid !important;
 }
 
 

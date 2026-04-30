@@ -1,0 +1,7 @@
+(() => {
+  const appVersion = "20260430-react-1";
+  const script = document.createElement("script");
+  script.src = `/js/app.js?v=${appVersion}`;
+  script.defer = true;
+  document.head.appendChild(script);
+})();

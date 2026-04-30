@@ -7,5 +7,32 @@
 @import "./page-clips.css";
 @import "./page-liczniki.css";
 @import "./page-youtube.css";
-@import "./main.css";
+@import "./main.css?v=20260430-admin-ui-6";
+
+#root{
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+#root > div{
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+
+#root > div > .stream-shell{
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  flex: 1 0 auto;
+}
+
+#root > div > .stream-shell .site-footer{
+  margin-top: auto;
+}
 
