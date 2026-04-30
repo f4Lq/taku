@@ -1,0 +1,421 @@
+﻿/* Auto-split from styles.css: page-liczniki */
+
+
+.liczniki-panel{
+  width: min(1360px, 92vw);
+  margin: 14px auto 0;
+  padding-bottom: 24px;
+}
+
+
+.liczniki-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+
+.liczniki-title{
+  margin: 0;
+  font-size: clamp(1.7rem, 2.6vw, 2.2rem);
+  color: #f1f7ff;
+}
+
+
+.liczniki-grid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+
+.liczniki-card{
+  min-height: 154px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+
+.liczniki-card-content{
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
+}
+
+
+.liczniki-card-media{
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+
+.liczniki-card-image{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.28;
+  filter: saturate(1.06);
+}
+
+
+.liczniki-card.has-image::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(112deg, rgba(7, 12, 30, 0.88) 12%, rgba(7, 12, 30, 0.64) 44%, rgba(7, 12, 30, 0.82) 100%);
+}
+
+
+.liczniki-card h3{
+  margin: 0;
+  color: #f4f8ff;
+  font-size: clamp(1.55rem, 2.3vw, 2rem);
+  line-height: 1.1;
+}
+
+
+.liczniki-card .kary-counter-pill{
+  min-width: 156px;
+  min-height: 48px;
+  padding: 0 12px;
+  font-size: clamp(1.1rem, 2vw, 1.58rem);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  margin-top: auto;
+}
+
+
+.liczniki-panel{
+  --liczniki-card-bg: #101420;
+}
+
+
+.liczniki-panel .liczniki-card{
+  background:
+    linear-gradient(180deg, rgba(8, 14, 35, 0.78), rgba(6, 11, 28, 0.74)),
+    radial-gradient(circle at 8% 0%, rgba(117, 183, 255, 0.13), transparent 56%);
+  background-color: var(--liczniki-card-bg);
+}
+
+
+.kary-counter-card{
+  border: 1px solid rgba(132, 176, 244, 0.4);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(8, 14, 35, 0.92), rgba(6, 11, 28, 0.88)),
+    radial-gradient(circle at 12% 0%, rgba(120, 183, 255, 0.12), transparent 50%);
+}
+
+
+.kary-counter-card{
+  padding: 18px 20px;
+}
+
+
+.kary-card-state{
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: #b4c7ec;
+}
+
+
+.kary-counter-pill{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: 14px;
+  border: 1px solid rgba(139, 188, 255, 0.34);
+  background: rgba(5, 10, 26, 0.75);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+
+.kary-counter-pill{
+  min-width: 42px;
+  padding: 0 10px;
+  font-size: 2rem;
+}
+
+
+body.route-liczniki{
+  background:
+    radial-gradient(circle at 10% 18%, rgba(141, 217, 255, 0.26), transparent 34%),
+    radial-gradient(circle at 82% 12%, rgba(111, 149, 255, 0.25), transparent 36%),
+    radial-gradient(circle at 56% 95%, rgba(255, 136, 207, 0.2), transparent 38%),
+    linear-gradient(165deg, var(--bg-a), var(--bg-b));
+}
+
+
+body.route-liczniki::before{
+  opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(164, 198, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(164, 198, 255, 0.09) 1px, transparent 1px);
+}
+
+
+body.route-liczniki .stream-shell{
+  padding-top: 0;
+}
+
+
+/* Modern Redesign: /liczniki */
+body.route-liczniki .liczniki-panel{
+  width: min(1360px, 94vw);
+  margin: 16px auto 24px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(133, 187, 255, 0.35);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(129, 196, 255, 0.14), transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(255, 141, 210, 0.12), transparent 45%),
+    linear-gradient(165deg, rgba(7, 14, 33, 0.9), rgba(8, 14, 31, 0.8));
+  box-shadow: 0 18px 40px rgba(5, 10, 24, 0.42);
+  position: relative;
+  overflow: hidden;
+}
+
+
+body.route-liczniki .liczniki-panel::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(166, 205, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(166, 205, 255, 0.09) 1px, transparent 1px);
+  background-size: 38px 38px;
+  opacity: 0.1;
+}
+
+
+body.route-liczniki .liczniki-head{
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+
+body.route-liczniki .liczniki-title{
+  margin: 0;
+  font-size: clamp(1.6rem, 2.4vw, 2rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #f2f8ff;
+  text-shadow: 0 0 20px rgba(154, 207, 255, 0.22);
+}
+
+
+body.route-liczniki .liczniki-grid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  position: relative;
+  z-index: 2;
+}
+
+
+body.route-liczniki .liczniki-card{
+  min-height: 190px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  padding: 16px;
+  background:
+    linear-gradient(165deg, rgba(8, 14, 34, 0.86), rgba(7, 11, 27, 0.8)) padding-box,
+    linear-gradient(130deg, rgba(130, 190, 255, 0.6), rgba(255, 141, 210, 0.44)) border-box;
+  box-shadow: 0 12px 26px rgba(4, 8, 20, 0.4);
+  transition: transform 0.26s ease, box-shadow 0.26s ease, border-color 0.26s ease;
+}
+
+
+body.route-liczniki .liczniki-card:hover{
+  transform: translateY(-3px);
+  box-shadow: 0 20px 36px rgba(4, 8, 21, 0.5);
+}
+
+
+body.route-liczniki .liczniki-card-content{
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+
+body.route-liczniki .liczniki-card.has-image .liczniki-card-content{
+  max-width: 56%;
+}
+
+
+body.route-liczniki .liczniki-card.has-image .liczniki-card-media{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 10px 12px 10px 36%;
+  overflow: hidden;
+  --liczniki-logo-scale: 1.08;
+  transform: scale(var(--liczniki-logo-scale));
+  transform-origin: right center;
+}
+
+
+body.route-liczniki .liczniki-card.has-image .liczniki-card-image{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: right center;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.52;
+  filter: saturate(1.18) contrast(1.06) brightness(0.96);
+}
+
+
+body.route-liczniki .liczniki-card.has-image::after{
+  background:
+    linear-gradient(118deg, rgba(6, 10, 26, 0.9) 8%, rgba(6, 10, 26, 0.67) 40%, rgba(6, 10, 26, 0.44) 68%, rgba(6, 10, 26, 0.76) 100%);
+}
+
+
+body.route-liczniki .liczniki-card .kary-card-state{
+  margin: 0;
+  width: fit-content;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(147, 197, 255, 0.45);
+  background: rgba(13, 25, 57, 0.68);
+  color: #c9dcff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+
+body.route-liczniki .liczniki-card h3{
+  margin: 0;
+  font-size: clamp(1.5rem, 2.15vw, 1.95rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #f6fbff;
+  line-height: 1.02;
+}
+
+
+body.route-liczniki .liczniki-card .kary-counter-pill{
+  margin-top: auto;
+  align-self: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 52px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(158, 209, 255, 0.45);
+  background:
+    linear-gradient(140deg, rgba(17, 33, 74, 0.72), rgba(10, 20, 48, 0.78)),
+    rgba(8, 13, 31, 0.72);
+  color: #ffffff;
+  font-size: clamp(0.96rem, 1.45vw, 1.34rem);
+  font-weight: 800;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 0 0 1px rgba(123, 178, 255, 0.2),
+    0 8px 20px rgba(6, 11, 28, 0.38);
+}
+
+
+body.route-liczniki .liczniki-card.is-done .kary-card-state{
+  border-color: rgba(130, 255, 183, 0.55);
+  background: rgba(16, 63, 38, 0.58);
+  color: #c8ffe0;
+}
+
+
+body.route-liczniki .liczniki-card.is-done .kary-counter-pill{
+  border-color: rgba(133, 245, 176, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(90, 201, 130, 0.25),
+    0 8px 22px rgba(7, 26, 15, 0.32);
+}
+
+
+@media (max-width: 1180px) {
+  body.route-liczniki .liczniki-grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+@media (max-width: 760px) {
+  body.route-liczniki .liczniki-panel{
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  body.route-liczniki .liczniki-grid{
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  body.route-liczniki .liczniki-card{
+    min-height: 162px;
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  body.route-liczniki .liczniki-card h3{
+    font-size: clamp(1.28rem, 5.3vw, 1.72rem);
+  }
+
+  body.route-liczniki .liczniki-card .kary-counter-pill{
+    min-width: 0;
+    max-width: 100%;
+    min-height: 50px;
+    font-size: clamp(0.96rem, 4.4vw, 1.16rem);
+    letter-spacing: 0.01em;
+  }
+
+  body.route-liczniki .liczniki-card.has-image .liczniki-card-content{
+    max-width: 100%;
+  }
+
+  body.route-liczniki .liczniki-card.has-image .liczniki-card-media{
+    padding: 12px;
+    justify-content: center;
+    --liczniki-logo-scale: 1;
+    transform: scale(var(--liczniki-logo-scale));
+    transform-origin: center center;
+  }
+
+  body.route-liczniki .liczniki-card.has-image .liczniki-card-image{
+    object-position: center;
+    opacity: 0.44;
+  }
+}
+

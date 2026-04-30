@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Takuu - Live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
+  <link rel="stylesheet" href="/styles/styles.css?v=20260430-admin-ui-4">
+  <link rel="shortcut icon" type="x-icon" href="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" />
+</head>
+<body data-streamer-slug="takuu" data-storage-namespace="takuu" data-channel-avatar-fallback="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" data-licznik-77-logo-url="/img/default_profile.png">
+<section class="stream-shell" aria-label="Live stream i czat">
+    <header class="stream-topbar">
+      <p class="stream-brand">
+        <span class="stream-brand-main glitch" data-text="TAKUU">TAKUU</span>
+      </p>
+
+      <nav class="stream-nav" aria-label="Nawigacja panelu">
+        <a class="stream-nav-item stream-nav-item-home" href="/">
+          <i class="fas fa-home stream-nav-icon" aria-hidden="true"></i>
+          <span>Strona główna</span>
+        </a>
+        <a class="stream-nav-item stream-nav-item-clips" href="/klipy">
+          <i class="fas fa-video stream-nav-icon" aria-hidden="true"></i>
+          <span class="stream-nav-main">Klipy</span>
+          <span class="stream-nav-sub">takuu (ostatni miesiąc)</span>
+        </a>
+        <a class="stream-nav-item stream-nav-item-youtube" href="/youtube">
+          <i class="fab fa-youtube stream-nav-icon" aria-hidden="true"></i>
+          <span>YouTube</span>
+        </a>
+        <a class="stream-nav-item stream-nav-item-liczniki" href="/liczniki">
+          <i class="fas fa-list-ol stream-nav-icon" aria-hidden="true"></i>
+          <span>Liczniki</span>
+        </a>
+        <a class="stream-nav-item stream-nav-item-soon" href="/soon" hidden>
+          <i class="fas fa-clock stream-nav-icon" aria-hidden="true"></i>
+          <span>Wkrótce</span>
+        </a>
+      </nav>
+
+      <a class="stream-log" href="/logowanie">
+        <i class="fas fa-user-cog stream-nav-icon" aria-hidden="true"></i>
+        <span>Admin</span>
+      </a>
+    </header>
+
+    <section id="routePlaceholder" class="route-panel" aria-live="polite" hidden>
+      <div class="route-card">
+        <span class="route-glow route-glow-red" aria-hidden="true"></span>
+        <span class="route-glow route-glow-white" aria-hidden="true"></span>
+        <span class="route-glow route-glow-green" aria-hidden="true"></span>
+        <div class="route-copy">
+          <span id="routeBadge" class="route-badge">WKRÓTCE...</span>
+          <p class="route-subtext">Podstrona Wkrótce widoczność tylko dla admin</p>
+          <p class="route-subtext"></p>
+
+        </div>
+      </div>
+    </section>
+
+    <section id="licznikiPanel" class="liczniki-panel" aria-live="polite" hidden>
+      <header class="liczniki-head">
+        <h2 class="liczniki-title">Liczniki</h2>
+      </header>
+
+      <div id="licznikiGrid" class="liczniki-grid">
+        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="since" data-licznik-date="2023-07-07T00:00:00" data-licznik-image="/img/77logo.webp">
+          <span class="liczniki-card-media" aria-hidden="true">
+            <img class="liczniki-card-image" src="/img/77logo.webp" alt="">
+          </span>
+          <div class="liczniki-card-content">
+            <p class="kary-card-state" data-licznik-state>OD STARTU</p>
+            <h3>77RP WL:ON 3.0</h3>
+            <span class="kary-counter-pill" data-licznik-value>0</span>
+          </div>
+        </article>
+
+        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="since" data-licznik-date="2025-12-17T18:00:00" data-licznik-image="/img/77logo.webp">
+          <span class="liczniki-card-media" aria-hidden="true">
+            <img class="liczniki-card-image" src="/img/77logo.webp" alt="">
+          </span>
+          <div class="liczniki-card-content">
+            <p class="kary-card-state" data-licznik-state>OD STARTU</p>
+            <h3>77RP WL:OFF</h3>
+            <span class="kary-counter-pill" data-licznik-value>0</span>
+          </div>
+        </article>
+
+        <article class="kary-counter-card liczniki-card has-image" data-licznik-mode="until" data-licznik-date="2026-11-19T00:00:00" data-licznik-image="/img/logogta6.png">
+          <span class="liczniki-card-media" aria-hidden="true">
+            <img class="liczniki-card-image" src="/img/logogta6.png" alt="">
+          </span>
+          <div class="liczniki-card-content">
+            <p class="kary-card-state" data-licznik-state>DO STARTU</p>
+            <h3>GTA VI</h3>
+            <span class="kary-counter-pill" data-licznik-value>0</span>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section id="youtubePanel" class="youtube-panel" aria-live="polite" hidden>
+      <header class="youtube-head">
+        <h2 class="youtube-title">YouTube</h2>
+        <div id="youtubeSortTabs" class="youtube-sort-tabs" role="tablist" aria-label="Sortowanie filmów YouTube">
+          <button class="youtube-sort-btn is-active" type="button" data-youtube-sort="newest" aria-pressed="true">Najnowsze</button>
+          <button class="youtube-sort-btn" type="button" data-youtube-sort="popular" aria-pressed="false">Popularne</button>
+          <button class="youtube-sort-btn" type="button" data-youtube-sort="oldest" aria-pressed="false">Najstarsze</button>
+        </div>
+      </header>
+      <p id="youtubeStatus" class="youtube-status" aria-live="polite"></p>
+      <div id="youtubeChannelsGrid" class="youtube-channels-grid"></div>
+    </section>
+
+    <section id="adminPanel" class="admin-panel" hidden>
+      <div class="admin-login-wrap">
+        <article class="admin-card" aria-label="Panel administratora">
+          <span class="admin-lock" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="11" width="16" height="10" rx="2"></rect>
+              <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+            </svg>
+          </span>
+
+          <h2 class="admin-title">Panel Administratora</h2>
+          <p class="admin-subtitle">Zaloguj się, aby zarządzać systemem</p>
+
+          <form id="adminLoginForm" class="admin-form" action="#" method="post" novalidate>
+            <label class="admin-field">
+              <span class="admin-field-label">Login</span>
+              <input class="admin-input" type="text" name="login" placeholder="Login" autocomplete="username" autofocus required>
+            </label>
+
+            <label class="admin-field">
+              <span class="admin-field-label">Hasło</span>
+              <span class="admin-password-wrap">
+                <input id="adminLoginPassword" class="admin-input admin-password-input" type="password" name="password" placeholder="Hasło" autocomplete="current-password" required>
+                <button id="adminPasswordToggle" class="admin-password-toggle" type="button" aria-label="Pokaż hasło" aria-pressed="false">
+                  <i id="adminPasswordToggleIcon" class="fas fa-eye" aria-hidden="true"></i>
+                </button>
+              </span>
+            </label>
+
+            <label class="admin-checkbox-line admin-login-checkbox" for="adminRememberMe">
+              <input id="adminRememberMe" type="checkbox">
+              Zapamiętaj mnie
+            </label>
+
+            <button class="admin-submit" type="submit">Zaloguj się</button>
+            <div class="admin-login-divider" role="separator" aria-label="lub">lub</div>
+            <button id="adminDiscordLoginBtn" class="admin-submit admin-discord-submit" type="button">
+              <i class="fab fa-discord" aria-hidden="true"></i>
+              Zaloguj się przez Discord
+            </button>
+            <p id="adminDiscordStatus" class="admin-login-status admin-discord-status" aria-live="polite"></p>
+            <p class="admin-discord-note">Dostęp przez Discord tylko dla osób z odpowiednimi rangami.</p>
+            <p id="adminLoginStatus" class="admin-login-status" aria-live="polite"></p>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <section id="adminDashboard" class="admin-dashboard" hidden>
+      <div class="admin-dashboard-wrap">
+        <header class="admin-dashboard-head">
+          <h2>Panel Administratora</h2>
+          <button id="adminLogoutBtn" class="admin-logout" type="button">Wyloguj się</button>
+        </header>
+
+        <nav class="admin-tabs" aria-label="Zakładki panelu">
+          <button class="admin-tab-btn is-active" type="button" data-tab="members">Członkowie CCI</button>
+          <button class="admin-tab-btn" type="button" data-tab="liczniki">Liczniki</button>
+          <button class="admin-tab-btn" type="button" data-tab="youtube">YouTube</button>
+          <button class="admin-tab-btn" type="button" data-tab="accounts">Panel Admina</button>
+          <button class="admin-tab-btn" type="button" data-tab="bindings">Powiązania</button>
+        </nav>
+
+        <section id="adminMembersTab" class="admin-tab-panel is-active">
+          <h3 class="admin-section-title">Dodaj Członka CCI</h3>
+          <form id="adminMemberForm" class="admin-form admin-member-form" novalidate>
+            <label class="admin-field">
+              <span class="admin-field-label">Nazwa</span>
+              <input class="admin-input" type="text" name="memberName" placeholder="Nazwa / Nick" required>
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Kick</span>
+              <input class="admin-input" type="text" name="memberKick" placeholder="URL kanału Kick lub nazwa" required>
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Avatar</span>
+              <input class="admin-input" type="url" name="memberAvatar" placeholder="URL avatara (opcjonalnie)">
+            </label>
+            <button class="admin-submit" type="submit">Dodaj Członka CCI</button>
+          </form>
+
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Nazwa</th>
+                  <th>Profil Kick</th>
+                  <th>Akcje</th>
+                </tr>
+              </thead>
+              <tbody id="adminMembersTableBody"></tbody>
+            </table>
+          </div>
+          <p id="adminMemberStatus" class="admin-panel-status" aria-live="polite"></p>
+        </section>
+
+        <section id="adminBindingsTab" class="admin-tab-panel" hidden>
+          <h3 class="admin-section-title">Powiązania</h3>
+          <section class="kick-bindings-card kick-bindings-wrap" aria-labelledby="kickBindingsTitle">
+            <h4 id="kickBindingsTitle" class="admin-kary-title">Kick OAuth - subskrypcje streamera</h4>
+            <p class="kick-bindings-help">
+              Połącz konto streamera Kick, aby odczytywać liczbę subskrypcji na żywo przez oficjalny access token.
+            </p>
+            <div class="kick-bindings-grid">
+              <p><strong>Status:</strong> <span id="kickOauthStatusText">Sprawdzanie...</span></p>
+              <p><strong>Kanał:</strong> <span id="kickOauthChannelText">-</span></p>
+              <p><strong>Subskrypcje:</strong> <span id="kickOauthSubscribersText">--</span></p>
+              <p><strong>Ważność tokena:</strong> <span id="kickOauthExpiresText">-</span></p>
+              <p><strong>Redirect URI:</strong> <span id="kickOauthRedirectText">-</span></p>
+            </div>
+            <div class="admin-kary-actions kick-bindings-actions">
+              <button id="kickOauthConnectBtn" class="admin-kary-btn" type="button">Połącz konto Kick</button>
+              <button id="kickOauthRefreshBtn" class="admin-kary-btn" type="button">Odśwież status</button>
+              <button id="kickOauthUnlinkBtn" class="admin-kary-btn admin-kary-btn-danger" type="button">Odłącz konto</button>
+            </div>
+            <p id="kickOauthStatus" class="admin-panel-status" aria-live="polite"></p>
+          </section>
+        </section>
+
+        <section id="adminLicznikiTab" class="admin-tab-panel" hidden>
+          <h3 class="admin-section-title">Liczniki</h3>
+          <form id="adminLicznikForm" class="admin-form admin-account-form" novalidate>
+            <label class="admin-field">
+              <span class="admin-field-label">Nazwa</span>
+              <input class="admin-input" type="text" name="licznikTitle" placeholder="Nazwa licznika" required>
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Tryb</span>
+              <select class="admin-input" name="licznikMode">
+                <option value="since">Od daty (liczy w górę)</option>
+                <option value="until">Do daty (liczy w dół)</option>
+              </select>
+            </label>
+            <label class="admin-field admin-datetime-field">
+              <span class="admin-field-label">Data i godzina</span>
+              <span class="admin-datetime-row">
+                <input class="admin-input admin-datetime-display" type="text" name="licznikDateDisplay" placeholder="dd.mm.rrrr --:--" readonly required>
+                <input type="hidden" name="licznikDate" required>
+                <button class="admin-row-btn admin-datetime-open" type="button" data-licznik-date-open>Wybierz</button>
+              </span>
+              <div id="adminLicznikDatePicker" class="admin-date-picker" hidden>
+                <div class="admin-date-picker-nav">
+                  <button class="admin-date-picker-nav-btn" type="button" data-licznik-picker-prev aria-label="Poprzedni miesiąc">&lt;&lt;</button>
+                  <strong class="admin-date-picker-month" data-licznik-picker-month>Kwiecień</strong>
+                  <button class="admin-date-picker-nav-btn" type="button" data-licznik-picker-next aria-label="Następny miesiąc">&gt;&gt;</button>
+                </div>
+                <div class="admin-date-picker-year-controls">
+                  <button class="admin-date-picker-year-btn" type="button" data-licznik-picker-year-prev aria-label="Poprzedni rok">&lt;&lt;</button>
+                  <input
+                    class="admin-date-picker-year-input"
+                    type="number"
+                    min="1970"
+                    max="2100"
+                    step="1"
+                    value="2026"
+                    data-licznik-picker-year-input
+                    aria-label="Rok"
+                  >
+                  <button class="admin-date-picker-year-btn" type="button" data-licznik-picker-year-next aria-label="Następny rok">&gt;&gt;</button>
+                </div>
+                <div class="admin-date-picker-weekdays" aria-hidden="true">
+                  <span>Pon</span>
+                  <span>Wt</span>
+                  <span>Śr</span>
+                  <span>Czw</span>
+                  <span>Pt</span>
+                  <span>Sob</span>
+                  <span>Niedz</span>
+                </div>
+                <div class="admin-date-picker-grid" data-licznik-picker-grid></div>
+                <div class="admin-date-picker-time">
+                  <label>
+                    <span>Godzina</span>
+                    <input class="admin-date-picker-time-input" type="number" min="0" max="23" step="1" value="0" data-licznik-picker-hour>
+                  </label>
+                  <label>
+                    <span>Minuty</span>
+                    <input class="admin-date-picker-time-input" type="number" min="0" max="59" step="1" value="0" data-licznik-picker-minute>
+                  </label>
+                </div>
+                <div class="admin-date-picker-actions">
+                  <button class="admin-date-picker-action" type="button" data-licznik-picker-now>Teraz</button>
+                  <button class="admin-date-picker-action admin-date-picker-action-primary" type="button" data-licznik-picker-apply>Ustaw</button>
+                </div>
+              </div>
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Grafika (URL)</span>
+              <input class="admin-input" type="url" name="licznikImageUrl" placeholder="https://... (opcjonalnie)">
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Grafika (plik)</span>
+              <input class="admin-input" type="file" name="licznikImageFile" accept="image/*">
+            </label>
+            <button class="admin-submit" type="submit">Dodaj licznik</button>
+          </form>
+
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Nazwa</th>
+                  <th>Tryb</th>
+                  <th>Data startu</th>
+                  <th>Data zakończenia</th>
+                  <th>Grafika</th>
+                  <th>Akcje</th>
+                </tr>
+              </thead>
+              <tbody id="adminLicznikiTableBody"></tbody>
+            </table>
+          </div>
+          <p id="adminLicznikStatus" class="admin-panel-status" aria-live="polite"></p>
+
+          <section id="adminLicznikFinishPickerModal" class="admin-modal" hidden>
+            <div class="admin-modal-backdrop" data-admin-modal-close></div>
+            <div
+              class="admin-modal-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="adminLicznikFinishPickerTitle"
+            >
+              <h4 id="adminLicznikFinishPickerTitle" class="admin-modal-title">Zakończ odliczanie</h4>
+              <p class="admin-modal-text">Wybierz datę i godzinę zakończenia odliczania.</p>
+              <label class="admin-field">
+                <span class="admin-field-label">Data i godzina zakończenia</span>
+                <input
+                  id="adminLicznikFinishInput"
+                  class="admin-input"
+                  type="datetime-local"
+                  step="60"
+                >
+              </label>
+              <p id="adminLicznikFinishPickerStatus" class="admin-panel-status" aria-live="polite"></p>
+              <div class="admin-modal-actions">
+                <button id="adminLicznikFinishPickerCancelBtn" class="admin-row-btn" type="button">Anuluj</button>
+                <button id="adminLicznikFinishPickerChooseBtn" class="admin-row-btn" type="button">Wybierz</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="adminLicznikFinishConfirmModal" class="admin-modal" hidden>
+            <div class="admin-modal-backdrop" data-admin-modal-close></div>
+            <div
+              class="admin-modal-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="adminLicznikFinishConfirmTitle"
+            >
+              <h4 id="adminLicznikFinishConfirmTitle" class="admin-modal-title">Potwierdzenie zakończenia</h4>
+              <p id="adminLicznikFinishConfirmText" class="admin-modal-text">
+                Czy na pewno chcesz zakończyć odliczanie wtedy?
+              </p>
+              <div class="admin-modal-actions">
+                <button id="adminLicznikFinishConfirmCancelBtn" class="admin-row-btn" type="button">Anuluj</button>
+                <button
+                  id="adminLicznikFinishConfirmApproveBtn"
+                  class="admin-row-btn admin-date-picker-action-primary"
+                  type="button"
+                >Potwierdź</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="adminYoutubeTab" class="admin-tab-panel" hidden>
+          <h3 class="admin-section-title">YouTube</h3>
+          <form id="adminYoutubeForm" class="admin-form admin-account-form" novalidate>
+            <label class="admin-field">
+              <span class="admin-field-label">Kanał YouTube</span>
+              <input class="admin-input" type="text" name="youtubeChannelInput" placeholder="URL kanału, @handle lub ID kanału" required>
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Nazwa (opcjonalnie)</span>
+              <input class="admin-input" type="text" name="youtubeChannelName" placeholder="Własna nazwa kanału (opcjonalnie)">
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Domyślne sortowanie</span>
+              <select class="admin-input" name="youtubeSortMode">
+                <option value="newest">Najnowsze</option>
+                <option value="popular">Popularne</option>
+                <option value="oldest">Najstarsze</option>
+              </select>
+            </label>
+            <button class="admin-submit" type="submit">Dodaj kanał YouTube</button>
+          </form>
+
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Kanał</th>
+                  <th>Link</th>
+                  <th>Domyślne sortowanie</th>
+                  <th>Akcje</th>
+                </tr>
+              </thead>
+              <tbody id="adminYoutubeTableBody"></tbody>
+            </table>
+          </div>
+          <p id="adminYoutubeStatus" class="admin-panel-status" aria-live="polite"></p>
+        </section>
+
+        <section id="adminAccountsTab" class="admin-tab-panel" hidden>
+          <h3 class="admin-section-title">Panel Admina</h3>
+          <div class="admin-table-wrap admin-table-wrap-accounts">
+            <table class="admin-table admin-table-accounts">
+              <thead>
+                <tr>
+                  <th>Avatar Discord</th>
+                  <th>Discord ID</th>
+                  <th>Nazwa Discord</th>
+                  <th>Login</th>
+                  <th>Hasło</th>
+                  <th>Ukryj hasło</th>
+                  <th>Członkowie CCI</th>
+                  <th>Liczniki</th>
+                  <th>YouTube</th>
+                  <th>Panel Admina</th>
+                  <th>Powiązania</th>
+                  <th>Akcje</th>
+                </tr>
+              </thead>
+              <tbody id="adminAccountsTableBody"></tbody>
+            </table>
+          </div>
+
+          <h3 class="admin-section-title">Dodaj / Edytuj Admina</h3>
+          <form id="adminAccountForm" class="admin-form admin-account-form" novalidate>
+            <label class="admin-field">
+              <span class="admin-field-label">Login</span>
+              <input class="admin-input" type="text" name="accountLogin" placeholder="Login">
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Hasło</span>
+              <input class="admin-input" type="text" name="accountPassword" placeholder="Hasło (dla kont lokalnych)">
+            </label>
+            <label class="admin-field">
+              <span class="admin-field-label">Discord ID</span>
+              <input class="admin-input" type="text" name="accountDiscordId" placeholder="Discord ID (opcjonalnie, np. 123456789012345678)">
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessMembers">
+              Widzi zakładkę Członkowie CCI
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessLiczniki">
+              Widzi zakładkę Liczniki
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessYoutube">
+              Widzi zakładkę YouTube
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessAdmin">
+              Widzi zakładkę Panel Admina
+            </label>
+            <label class="admin-checkbox-line">
+              <input type="checkbox" name="accountAccessBindings">
+              Widzi zakładkę Powiązania
+            </label>
+            <button class="admin-submit" type="submit">Dodaj / Aktualizuj</button>
+          </form>
+          <p id="adminAccountStatus" class="admin-panel-status" aria-live="polite"></p>
+        </section>
+      </div>
+    </section>
+
+    <div class="stream-layout">
+      <section class="stream-intro" aria-label="Powitanie streamu">
+        <div class="stream-intro-visual">
+          <span class="stream-intro-glow" aria-hidden="true"></span>
+          <img
+            class="stream-intro-avatar"
+            src="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp"
+            alt="takuu"
+          >
+        </div>
+
+        <div class="stream-intro-content">
+          <h2 class="stream-intro-title">
+            Witaj u <span class="stream-intro-title-accent">takuu</span>
+          </h2>
+          <p class="stream-intro-subtitle">
+            Sprawdź stream, klipy i najważniejsze linki do społeczności Takuu.
+          </p>
+
+          <div class="stream-intro-actions">
+            <a class="stream-intro-profile" href="https://kick.com/takuu" target="_blank" rel="noopener noreferrer">
+              <img src="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" alt="">
+              <span>TAKUU</span>
+            </a>
+            <a class="stream-intro-profile stream-intro-profile-kary" href="https://taku.r-sandbox.pro/">
+              <i class="fas fa-gavel stream-intro-profile-icon" aria-hidden="true"></i>
+              <span>STRONA Z KARAMI</span>
+            </a>
+          </div>
+
+          <div class="stream-followers-slot">
+            <p id="streamIntroFollowersStat" class="stream-kick-followers is-loading" aria-live="polite">
+              <span class="stream-kick-followers-icon" aria-hidden="true"></span>
+              <strong id="streamIntroFollowersCount">--</strong>
+              <span id="streamIntroFollowersText">obserwujących na Kicku</span>
+            </p>
+            <p id="streamIntroSubsStat" class="stream-kick-subs is-loading" aria-live="polite">
+              <span class="stream-kick-subs-icon" aria-hidden="true"></span>
+              <strong id="streamIntroSubsCount">--</strong>
+              <span id="streamIntroSubsText">subów na Kicku</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div class="stream-columns-head" aria-hidden="true">
+        <p class="stream-live-badge">
+          <span class="stream-live-badge-dot" aria-hidden="true"></span>
+          LIVE STREAM
+        </p>
+        <span class="stream-column-label stream-column-label-site">KICK.COM</span>
+        <span class="stream-column-label stream-column-label-chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="9" cy="8" r="3"></circle>
+            <path d="M3 19a6 6 0 0 1 12 0"></path>
+            <path d="M17 9h4"></path>
+            <path d="M19 7v4"></path>
+          </svg>
+          <span>CZAT</span>
+        </span>
+      </div>
+
+      <div class="stream-player-wrap">
+        <div class="stream-player-frame">
+          <iframe
+            class="stream-player"
+            src="https://player.kick.com/takuu?muted=true"
+            allowfullscreen
+            frameborder="0"
+            scrolling="no"
+            title="Player takuu"
+          ></iframe>
+        </div>
+      </div>
+
+      <aside class="stream-chat-frame">
+        <iframe
+          class="stream-chat"
+          src="https://kick.com/popout/takuu/chat"
+          frameborder="0"
+          scrolling="no"
+          title="Chat takuu"
+        ></iframe>
+      </aside>
+      
+
+      <div class="stream-cta-row" aria-label="Szybkie akcje streamu">
+
+        <a class="stream-cta-btn stream-cta-btn-donate" href="https://www.paymedia.pl/taku" target="_blank" rel="noopener noreferrer">
+          <i class="fas fa-hand-holding-usd stream-cta-icon" aria-hidden="true"></i>
+          <span>PRZEJDŹ DO DONATE</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-sub" href="https://kick.com/takuu/subscribe" target="_blank" rel="noopener noreferrer">
+          <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp" alt="">
+          <span>SUBSKRYBUJ NA KICK</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-dc" href="https://discord.com/invite/6JV7jxxxhp" target="_blank" rel="noopener noreferrer">
+          <i class="fab fa-discord stream-cta-icon" aria-hidden="true"></i>
+          <span>DISCORD TAKU</span>
+        </a>
+
+      </div>
+      
+      <div class="stream-cta-row stream-cta-row-social" aria-label="Social media">
+
+        <a class="stream-cta-btn stream-cta-btn-ig" href="https://www.instagram.com/takupl/" target="_blank" rel="noopener noreferrer">
+          <i class="fab fa-instagram stream-cta-icon" aria-hidden="true"></i>
+          <span>INSTAGRAM TAKU</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-yt" href="https://www.youtube.com/@TakuPL" target="_blank" rel="noopener noreferrer">
+          <i class="fab fa-youtube stream-cta-icon" aria-hidden="true"></i>
+          <span>YOUTUBE TAKU</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-tt" href="https://www.tiktok.com/@taku_pl" target="_blank" rel="noopener noreferrer">
+          <i class="fab fa-tiktok stream-cta-icon" aria-hidden="true"></i>
+          <span>TIKTOK TAKU</span>
+        </a>
+
+      </div>
+
+      <div class="stream-cta-row stream-cta-row-secondary" aria-label="Linki 77RP">
+        <a class="stream-cta-btn stream-cta-btn-77rp" href="https://77roleplay.pl/" target="_blank" rel="noopener noreferrer">
+          <img src="/img/77.ico" alt="77RP logo">
+          <span>STRONA 77RP</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-wl-on" href="https://cfx.re/join/oky847" target="_blank" rel="noopener noreferrer">
+          <img src="/img/77logo.webp" alt="77RP logo">
+          <span>77RP WL:ON</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-wl-off" href="https://cfx.re/join/965vlm" target="_blank" rel="noopener noreferrer">
+          <img src="/img/77logo.webp" alt="77RP logo">
+          <span>77RP WL:OFF</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-yt" href="https://www.youtube.com/@77ROLEPLAY" target="_blank" rel="noopener noreferrer">
+          <i class="fab fa-youtube stream-cta-icon" aria-hidden="true"></i>
+          <span>YOUTUBE 77RP</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-tt" href="https://www.tiktok.com/@77roleplay" target="_blank" rel="noopener noreferrer">
+          <i class="fab fa-tiktok stream-cta-icon" aria-hidden="true"></i>
+          <span>TIKTOK 77RP</span>
+        </a>
+
+        <a class="stream-cta-btn stream-cta-btn-7more7" href="https://www.7more7.com/sklep?collection=1002" target="_blank" rel="noopener noreferrer">
+          <img src="/img/7more7.webp" alt="7more7 logo">
+          <span>SKLEP Z UBRANIAMI 77RP</span>
+        </a>
+      </div>
+
+    </div>
+
+  </section>
+
+  <main class="wrap" hidden>
+    <header class="top">
+      <div>
+        <h1>Klipy</h1>
+        <p class="subtitle">Źródło: kick.com/takuu/clips?sort=date&range=month</p>
+      </div>
+      <button id="refreshBtn" class="btn" type="button">Odśwież</button>
+    </header>
+
+    <p id="status">Ładowanie klipów...</p>
+    <section id="clips" class="grid" aria-live="polite"></section>
+  </main>
+
+  <section id="friends" class="friends" aria-label="Członkowie CCI">
+    <h2 class="friends-head">
+      <span class="friends-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="8.5" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+      </span>
+      Członkowie CCI
+    </h2>
+
+    <div class="friends-grid" id="friendsGrid">
+      <a class="friend-card" href="https://kick.com/takuu" target="_blank" rel="noopener noreferrer">
+        <span class="friend-avatar-wrap">
+          <img class="friend-avatar" src="https://files.kick.com/images/user/196056/profile_image/conversion/5ed75600-4d1e-40ed-afb8-b2731a02ba10-fullsize.webp" alt="takuu">
+          <img class="friend-k" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp" alt="">
+        </span>
+        <span class="friend-name">Takuu</span>
+      </a>
+
+      <a class="friend-card" href="https://kick.com/mlodym5" target="_blank" rel="noopener noreferrer">
+        <span class="friend-avatar-wrap">
+          <img class="friend-avatar" src="https://files.kick.com/images/user/20575182/profile_image/conversion/6316d4ba-02da-44d5-95cd-ac8f6a48e663-fullsize.webp" alt="MlodyM5">
+          <img class="friend-k" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp" alt="">
+        </span>
+        <span class="friend-name">MlodyM5</span>
+      </a>
+
+      <a class="friend-card" href="https://kick.com/xdomciaaa" target="_blank" rel="noopener noreferrer">
+        <span class="friend-avatar-wrap">
+          <img class="friend-avatar" src="https://files.kick.com/images/user/35793573/profile_image/conversion/1b15829c-756a-47a0-8262-e57d7a9c0a93-fullsize.webp" alt="xdomciaaa">
+          <img class="friend-k" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp" alt="">
+        </span>
+        <span class="friend-name">xDomciaaa</span>
+      </a>
+
+      <a class="friend-card" href="https://kick.com/xkiwka" target="_blank" rel="noopener noreferrer">
+        <span class="friend-avatar-wrap">
+          <img class="friend-avatar" src="https://files.kick.com/images/user/68578938/profile_image/conversion/cf2cd740-436b-45c6-b263-5b33d70687b1-fullsize.webp" alt="xkiwka">
+          <img class="friend-k" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp" alt="">
+        </span>
+        <span class="friend-name">xKiwka</span>
+      </a>
+
+      <a class="friend-card" href="https://kick.com/zorgus" target="_blank" rel="noopener noreferrer">
+        <span class="friend-avatar-wrap">
+          <img class="friend-avatar" src="https://files.kick.com/images/user/40948896/profile_image/conversion/84f29d4f-c806-4528-98b3-3244eedd80ee-fullsize.webp" alt="Zorgus">
+          <img class="friend-k" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp" alt="">
+        </span>
+        <span class="friend-name">Zorgus</span>
+      </a>
+
+      <a class="friend-card" href="https://kick.com/tytuss" target="_blank" rel="noopener noreferrer">
+        <span class="friend-avatar-wrap">
+          <img class="friend-avatar" src="https://files.kick.com/images/user/324087/profile_image/conversion/eb57a8cf-b670-469c-9c3a-31e8981263ea-fullsize.webp" alt="tytuss">
+          <img class="friend-k" src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/kick.webp" alt="">
+        </span>
+        <span class="friend-name">Tytuss</span>
+      </a>
+    </div>
+  </section>
+
+  <footer class="site-footer" aria-label="Stopka strony">
+    <p class="site-footer-main">© 2026 f4Lq. Zrobione dla <a class="site-footer-link" href="https://www.instagram.com/takupl/" target="_blank" rel="noopener noreferrer">Takuu</a>.</p>
+    <p class="site-footer-sub">Projekt i realizacja - f4Lq.</p>
+    <p class="site-footer-sub">Kontakt Discord - <a class="site-footer-link" href="https://discord.com/users/477800549505302529" target="_blank" rel="noopener noreferrer">f4Lq</a></p>
+  </footer>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="/js/discord.js?v=20260430-admin-ui-4"></script>
+  <script src="/js/script.js?v=20260430-admin-ui-4"></script>
+</body>
+</html>
