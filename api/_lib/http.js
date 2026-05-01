@@ -1,129 +1,21 @@
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Cache-Control": "no-store",
-};
+/* OBFUSCATED_TAKU_20260501 */
+(()=>{
+  const __codeBase64 = "Y29uc3QgQ09SU19IRUFERVJTID0gewogICJBY2Nlc3MtQ29udHJvbC1BbGxvdy1PcmlnaW4iOiAiKiIsCiAgIkFjY2Vzcy1Db250cm9sLUFsbG93LUhlYWRlcnMiOiAiQ29udGVudC1UeXBlIiwKICAiQWNjZXNzLUNvbnRyb2wtQWxsb3ctTWV0aG9kcyI6ICJHRVQsIFBPU1QsIE9QVElPTlMiLAogICJDYWNoZS1Db250cm9sIjogIm5vLXN0b3JlIiwKfTsKCmZ1bmN0aW9uIHNldEhlYWRlcihyZXMsIG5hbWUsIHZhbHVlKSB7CiAgaWYgKHZhbHVlID09PSB1bmRlZmluZWQgfHwgdmFsdWUgPT09IG51bGwpIHsKICAgIHJldHVybjsKICB9CiAgcmVzLnNldEhlYWRlcihuYW1lLCBTdHJpbmcodmFsdWUpKTsKfQoKZnVuY3Rpb24gc2V0Q29yc0hlYWRlcnMocmVzLCBleHRyYUhlYWRlcnMgPSB7fSkgewogIGNvbnN0IGhlYWRlcnMgPSB7IC4uLkNPUlNfSEVBREVSUywgLi4uZXh0cmFIZWFkZXJzIH07CiAgT2JqZWN0LmVudHJpZXMoaGVhZGVycykuZm9yRWFjaCgoW25hbWUsIHZhbHVlXSkgPT4gc2V0SGVhZGVyKHJlcywgbmFtZSwgdmFsdWUpKTsKfQoKZnVuY3Rpb24gc2V0U3RhdHVzKHJlcywgc3RhdHVzQ29kZSkgewogIGlmICh0eXBlb2YgcmVzLnN0YXR1cyA9PT0gImZ1bmN0aW9uIikgewogICAgcmVzLnN0YXR1cyhzdGF0dXNDb2RlKTsKICAgIHJldHVybjsKICB9CiAgcmVzLnN0YXR1c0NvZGUgPSBzdGF0dXNDb2RlOwp9CgpmdW5jdGlvbiBzZW5kSnNvbihyZXMsIHBheWxvYWQsIHN0YXR1c0NvZGUgPSAyMDAsIGV4dHJhSGVhZGVycyA9IHt9KSB7CiAgc2V0Q29yc0hlYWRlcnMocmVzLCB7CiAgICAiQ29udGVudC1UeXBlIjogImFwcGxpY2F0aW9uL2pzb247IGNoYXJzZXQ9dXRmLTgiLAogICAgLi4uZXh0cmFIZWFkZXJzLAogIH0pOwogIHNldFN0YXR1cyhyZXMsIHN0YXR1c0NvZGUpOwogIHJlcy5lbmQoSlNPTi5zdHJpbmdpZnkocGF5bG9hZCkpOwp9CgpmdW5jdGlvbiBzZW5kT3B0aW9ucyhyZXMsIGFsbG93TWV0aG9kcyA9ICJHRVQsIFBPU1QsIE9QVElPTlMiKSB7CiAgc2V0Q29yc0hlYWRlcnMocmVzLCB7CiAgICAiQWNjZXNzLUNvbnRyb2wtQWxsb3ctTWV0aG9kcyI6IGFsbG93TWV0aG9kcywKICAgICJDb250ZW50LUxlbmd0aCI6ICIwIiwKICB9KTsKICBzZXRTdGF0dXMocmVzLCAyMDQpOwogIHJlcy5lbmQoKTsKfQoKYXN5bmMgZnVuY3Rpb24gcmVhZFJhd0JvZHkocmVxKSB7CiAgcmV0dXJuIG5ldyBQcm9taXNlKChyZXNvbHZlLCByZWplY3QpID0+IHsKICAgIGNvbnN0IGNodW5rcyA9IFtdOwogICAgcmVxLm9uKCJkYXRhIiwgKGNodW5rKSA9PiB7CiAgICAgIGNodW5rcy5wdXNoKEJ1ZmZlci5pc0J1ZmZlcihjaHVuaykgPyBjaHVuayA6IEJ1ZmZlci5mcm9tKGNodW5rKSk7CiAgICB9KTsKICAgIHJlcS5vbigiZW5kIiwgKCkgPT4gewogICAgICByZXNvbHZlKEJ1ZmZlci5jb25jYXQoY2h1bmtzKS50b1N0cmluZygidXRmOCIpKTsKICAgIH0pOwogICAgcmVxLm9uKCJlcnJvciIsIHJlamVjdCk7CiAgfSk7Cn0KCmFzeW5jIGZ1bmN0aW9uIHJlYWRKc29uQm9keShyZXEpIHsKICBpZiAocmVxLmJvZHkgJiYgdHlwZW9mIHJlcS5ib2R5ID09PSAib2JqZWN0IiAmJiAhQXJyYXkuaXNBcnJheShyZXEuYm9keSkpIHsKICAgIHJldHVybiByZXEuYm9keTsKICB9CiAgaWYgKHR5cGVvZiByZXEuYm9keSA9PT0gInN0cmluZyIpIHsKICAgIHRyeSB7CiAgICAgIHJldHVybiBKU09OLnBhcnNlKHJlcS5ib2R5KTsKICAgIH0gY2F0Y2ggKF9lcnJvcikgewogICAgICByZXR1cm4gbnVsbDsKICAgIH0KICB9CgogIGNvbnN0IHJhdyA9IGF3YWl0IHJlYWRSYXdCb2R5KHJlcSk7CiAgaWYgKCFyYXcpIHsKICAgIHJldHVybiBudWxsOwogIH0KICB0cnkgewogICAgcmV0dXJuIEpTT04ucGFyc2UocmF3KTsKICB9IGNhdGNoIChfZXJyb3IpIHsKICAgIHJldHVybiBudWxsOwogIH0KfQoKZnVuY3Rpb24gZ2V0U2FmZUludCh2YWx1ZSwgZmFsbGJhY2sgPSAwKSB7CiAgY29uc3QgcGFyc2VkID0gTnVtYmVyLnBhcnNlSW50KFN0cmluZyh2YWx1ZSA/PyAiIikudHJpbSgpLCAxMCk7CiAgaWYgKCFOdW1iZXIuaXNGaW5pdGUocGFyc2VkKSkgewogICAgcmV0dXJuIGZhbGxiYWNrOwogIH0KICByZXR1cm4gcGFyc2VkOwp9CgpmdW5jdGlvbiBwaWNrRm9yd2FyZGVkVmFsdWUocmF3VmFsdWUsIGZhbGxiYWNrID0gIiIpIHsKICBjb25zdCB0ZXh0ID0gU3RyaW5nKHJhd1ZhbHVlIHx8ICIiKQogICAgLnNwbGl0KCIsIilbMF0KICAgIC50cmltKCk7CiAgcmV0dXJuIHRleHQgfHwgZmFsbGJhY2s7Cn0KCmZ1bmN0aW9uIG5vcm1hbGl6ZVByb3RvKHJhd1ZhbHVlKSB7CiAgY29uc3QgcHJvdG8gPSBwaWNrRm9yd2FyZGVkVmFsdWUocmF3VmFsdWUsICJodHRwcyIpLnRvTG93ZXJDYXNlKCk7CiAgcmV0dXJuIHByb3RvID09PSAiaHR0cCIgfHwgcHJvdG8gPT09ICJodHRwcyIgPyBwcm90byA6ICJodHRwcyI7Cn0KCmZ1bmN0aW9uIG5vcm1hbGl6ZUhvc3QocmF3VmFsdWUpIHsKICBjb25zdCBjYW5kaWRhdGUgPSBwaWNrRm9yd2FyZGVkVmFsdWUocmF3VmFsdWUsICJsb2NhbGhvc3QiKTsKICBjb25zdCBjbGVhbmVkID0gY2FuZGlkYXRlLnJlcGxhY2UoL1teXHcuXC06W1xdXSsvZywgIiIpOwogIHJldHVybiBjbGVhbmVkIHx8ICJsb2NhbGhvc3QiOwp9CgpmdW5jdGlvbiBnZXRSZXF1ZXN0VXJsKHJlcSkgewogIGNvbnN0IGhlYWRlcnMgPSByZXEgJiYgdHlwZW9mIHJlcS5oZWFkZXJzID09PSAib2JqZWN0IiAmJiByZXEuaGVhZGVycyA/IHJlcS5oZWFkZXJzIDoge307CiAgY29uc3QgaG9zdCA9IG5vcm1hbGl6ZUhvc3QoaGVhZGVyc1sieC1mb3J3YXJkZWQtaG9zdCJdIHx8IGhlYWRlcnMuaG9zdCB8fCAibG9jYWxob3N0Iik7CiAgY29uc3QgcHJvdG8gPSBub3JtYWxpemVQcm90byhoZWFkZXJzWyJ4LWZvcndhcmRlZC1wcm90byJdIHx8ICJodHRwcyIpOwogIGNvbnN0IHBhdGggPSBTdHJpbmcoKHJlcSAmJiByZXEudXJsKSB8fCAiLyIpOwoKICB0cnkgewogICAgcmV0dXJuIG5ldyBVUkwocGF0aCwgYCR7cHJvdG99Oi8vJHtob3N0fWApOwogIH0gY2F0Y2ggKF9lcnJvcikgewogICAgcmV0dXJuIG5ldyBVUkwoIi8iLCAiaHR0cHM6Ly9sb2NhbGhvc3QiKTsKICB9Cn0KCm1vZHVsZS5leHBvcnRzID0gewogIENPUlNfSEVBREVSUywKICBnZXRSZXF1ZXN0VXJsLAogIGdldFNhZmVJbnQsCiAgcmVhZEpzb25Cb2R5LAogIHNlbmRKc29uLAogIHNlbmRPcHRpb25zLAogIHNldENvcnNIZWFkZXJzLAp9Owo=";
 
-function setHeader(res, name, value) {
-  if (value === undefined || value === null) {
-    return;
-  }
-  res.setHeader(name, String(value));
-}
-
-function setCorsHeaders(res, extraHeaders = {}) {
-  const headers = { ...CORS_HEADERS, ...extraHeaders };
-  Object.entries(headers).forEach(([name, value]) => setHeader(res, name, value));
-}
-
-function setStatus(res, statusCode) {
-  if (typeof res.status === "function") {
-    res.status(statusCode);
-    return;
-  }
-  res.statusCode = statusCode;
-}
-
-function sendJson(res, payload, statusCode = 200, extraHeaders = {}) {
-  setCorsHeaders(res, {
-    "Content-Type": "application/json; charset=utf-8",
-    ...extraHeaders,
-  });
-  setStatus(res, statusCode);
-  res.end(JSON.stringify(payload));
-}
-
-function sendOptions(res, allowMethods = "GET, POST, OPTIONS") {
-  setCorsHeaders(res, {
-    "Access-Control-Allow-Methods": allowMethods,
-    "Content-Length": "0",
-  });
-  setStatus(res, 204);
-  res.end();
-}
-
-async function readRawBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    req.on("end", () => {
-      resolve(Buffer.concat(chunks).toString("utf8"));
-    });
-    req.on("error", reject);
-  });
-}
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === "object" && !Array.isArray(req.body)) {
-    return req.body;
-  }
-  if (typeof req.body === "string") {
-    try {
-      return JSON.parse(req.body);
-    } catch (_error) {
-      return null;
+  const __decodeBase64Utf8 = (base64Value) => {
+    if (typeof Buffer !== "undefined" && typeof Buffer.from === "function") {
+      return Buffer.from(base64Value, "base64").toString("utf8");
     }
-  }
 
-  const raw = await readRawBody(req);
-  if (!raw) {
-    return null;
-  }
-  try {
-    return JSON.parse(raw);
-  } catch (_error) {
-    return null;
-  }
-}
+    const binary = atob(base64Value);
+    let percentEncoded = "";
+    for (let index = 0; index < binary.length; index += 1) {
+      const hex = binary.charCodeAt(index).toString(16).padStart(2, "0");
+      percentEncoded += `%${hex}`;
+    }
+    return decodeURIComponent(percentEncoded);
+  };
 
-function getSafeInt(value, fallback = 0) {
-  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-  return parsed;
-}
-
-function pickForwardedValue(rawValue, fallback = "") {
-  const text = String(rawValue || "")
-    .split(",")[0]
-    .trim();
-  return text || fallback;
-}
-
-function normalizeProto(rawValue) {
-  const proto = pickForwardedValue(rawValue, "https").toLowerCase();
-  return proto === "http" || proto === "https" ? proto : "https";
-}
-
-function normalizeHost(rawValue) {
-  const candidate = pickForwardedValue(rawValue, "localhost");
-  const cleaned = candidate.replace(/[^\w.\-:[\]]+/g, "");
-  return cleaned || "localhost";
-}
-
-function getRequestUrl(req) {
-  const headers = req && typeof req.headers === "object" && req.headers ? req.headers : {};
-  const host = normalizeHost(headers["x-forwarded-host"] || headers.host || "localhost");
-  const proto = normalizeProto(headers["x-forwarded-proto"] || "https");
-  const path = String((req && req.url) || "/");
-
-  try {
-    return new URL(path, `${proto}://${host}`);
-  } catch (_error) {
-    return new URL("/", "https://localhost");
-  }
-}
-
-module.exports = {
-  CORS_HEADERS,
-  getRequestUrl,
-  getSafeInt,
-  readJsonBody,
-  sendJson,
-  sendOptions,
-  setCorsHeaders,
-};
+  const __decodedCode = __decodeBase64Utf8(__codeBase64);
+  eval(__decodedCode);
+})();

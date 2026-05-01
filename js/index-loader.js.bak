@@ -1,0 +1,87 @@
+﻿(() => {
+  "use strict";
+
+  const scriptsToLoad = [
+    {
+      src: "https://unpkg.com/react@18/umd/react.production.min.js",
+      crossorigin: "anonymous"
+    },
+    {
+      src: "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
+      crossorigin: "anonymous"
+    },
+    {
+      src: "/js/app-react.js?v=20260501-footer-bottom-4"
+    },
+    {
+      src: "https://cdn.jsdelivr.net/npm/hls.js@latest"
+    },
+    {
+      src: "/js/discord.js?v=20260501-footer-bottom-4"
+    },
+    {
+      src: "/js/script.js?v=20260501-footer-bottom-4"
+    }
+  ];
+
+  function hasScriptAlready(src) {
+    return Array.from(document.scripts).some((scriptEl) => scriptEl.src === new URL(src, window.location.href).href);
+  }
+
+  function loadScript({ src, crossorigin }) {
+    return new Promise((resolve, reject) => {
+      if (!src) {
+        resolve();
+        return;
+      }
+
+      if (hasScriptAlready(src)) {
+        resolve();
+        return;
+      }
+
+      const scriptEl = document.createElement("script");
+      scriptEl.src = src;
+      scriptEl.async = false;
+      if (crossorigin) {
+        scriptEl.setAttribute("crossorigin", crossorigin);
+      }
+
+      scriptEl.onload = () => resolve();
+      scriptEl.onerror = () => reject(new Error(`Nie udalo sie zaladowac skryptu: ${src}`));
+      document.body.appendChild(scriptEl);
+    });
+  }
+
+  async function loadAllScripts() {
+    for (const scriptConfig of scriptsToLoad) {
+      await loadScript(scriptConfig);
+    }
+  }
+
+  function enforceFooterAtBottom() {
+    const appEl = document.getElementById("app");
+    const appRootEl = appEl ? appEl.querySelector(".app-root") : null;
+    if (appRootEl) {
+      appRootEl.style.minHeight = "100vh";
+      appRootEl.style.display = "flex";
+      appRootEl.style.flexDirection = "column";
+      appRootEl.style.width = "100%";
+    }
+
+    const footerEl = appRootEl
+      ? appRootEl.querySelector(".site-footer")
+      : document.querySelector(".site-footer");
+    if (footerEl) {
+      footerEl.style.marginTop = "auto";
+    }
+  }
+
+  loadAllScripts().catch((error) => {
+    console.error("[index-loader] Blad ladowania skryptow:", error);
+  });
+
+  window.setTimeout(enforceFooterAtBottom, 0);
+  window.setTimeout(enforceFooterAtBottom, 250);
+  window.setTimeout(enforceFooterAtBottom, 800);
+})();

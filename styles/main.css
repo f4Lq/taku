@@ -161,6 +161,21 @@ body{
 }
 
 
+#app{
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+
+#app > .app-root{
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+
 body::before{
   content: "";
   position: fixed;

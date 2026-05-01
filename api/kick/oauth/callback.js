@@ -1,147 +1,21 @@
-const { createRedisClient } = require("../../_lib/redis.js");
-const { getRequestUrl, sendJson, sendOptions } = require("../../_lib/http.js");
-const {
-  createKickLinkFromToken,
-  exchangeKickAuthorizationCode,
-  fetchKickChannelsByAccessToken,
-  getKickOAuthConfig,
-  getKickOAuthAllowedHosts,
-  isKickOAuthAllowedHost,
-  patchKickLinkWithChannel,
-  pickKickChannel,
-  resolveKickOAuthRedirectUri,
-  sanitizeReturnToPath,
-  saveKickLink,
-  verifyKickOAuthState
-} = require("../../_lib/kick-oauth.js");
+/* OBFUSCATED_TAKU_20260501 */
+(()=>{
+  const __codeBase64 = "Y29uc3QgeyBjcmVhdGVSZWRpc0NsaWVudCB9ID0gcmVxdWlyZSgiLi4vLi4vX2xpYi9yZWRpcy5qcyIpOwpjb25zdCB7IGdldFJlcXVlc3RVcmwsIHNlbmRKc29uLCBzZW5kT3B0aW9ucyB9ID0gcmVxdWlyZSgiLi4vLi4vX2xpYi9odHRwLmpzIik7CmNvbnN0IHsKICBjcmVhdGVLaWNrTGlua0Zyb21Ub2tlbiwKICBleGNoYW5nZUtpY2tBdXRob3JpemF0aW9uQ29kZSwKICBmZXRjaEtpY2tDaGFubmVsc0J5QWNjZXNzVG9rZW4sCiAgZ2V0S2lja09BdXRoQ29uZmlnLAogIGdldEtpY2tPQXV0aEFsbG93ZWRIb3N0cywKICBpc0tpY2tPQXV0aEFsbG93ZWRIb3N0LAogIHBhdGNoS2lja0xpbmtXaXRoQ2hhbm5lbCwKICBwaWNrS2lja0NoYW5uZWwsCiAgcmVzb2x2ZUtpY2tPQXV0aFJlZGlyZWN0VXJpLAogIHNhbml0aXplUmV0dXJuVG9QYXRoLAogIHNhdmVLaWNrTGluaywKICB2ZXJpZnlLaWNrT0F1dGhTdGF0ZQp9ID0gcmVxdWlyZSgiLi4vLi4vX2xpYi9raWNrLW9hdXRoLmpzIik7CgpmdW5jdGlvbiBzYW5pdGl6ZU1lc3NhZ2UocmF3VmFsdWUsIGZhbGxiYWNrID0gIm9hdXRoX2Vycm9yIikgewogIGNvbnN0IHRleHQgPSBTdHJpbmcocmF3VmFsdWUgfHwgIiIpLnRyaW0oKTsKICBpZiAoIXRleHQpIHsKICAgIHJldHVybiBmYWxsYmFjazsKICB9CiAgcmV0dXJuIHRleHQucmVwbGFjZSgvW15cd1wtOi4gXSsvZywgIiAiKS5yZXBsYWNlKC9ccysvZywgIiAiKS50cmltKCkuc2xpY2UoMCwgMTgwKSB8fCBmYWxsYmFjazsKfQoKZnVuY3Rpb24gYnVpbGRSZXR1cm5Mb2NhdGlvbihyZXR1cm5Ub1BhdGgsIHN0YXR1cywgbWVzc2FnZSA9ICIiKSB7CiAgY29uc3Qgc2FmZVBhdGggPSBzYW5pdGl6ZVJldHVyblRvUGF0aChyZXR1cm5Ub1BhdGggfHwgIi9hZG1pbiIpOwogIGNvbnN0IHVybCA9IG5ldyBVUkwoc2FmZVBhdGgsICJodHRwczovL3Rha3UtbGl2ZS5sb2NhbCIpOwogIHVybC5zZWFyY2hQYXJhbXMuc2V0KCJraWNrX29hdXRoIiwgU3RyaW5nKHN0YXR1cyB8fCAiZXJyb3IiKSk7CiAgaWYgKG1lc3NhZ2UpIHsKICAgIHVybC5zZWFyY2hQYXJhbXMuc2V0KCJraWNrX29hdXRoX21zZyIsIHNhbml0aXplTWVzc2FnZShtZXNzYWdlKSk7CiAgfQogIHJldHVybiBgJHt1cmwucGF0aG5hbWV9JHt1cmwuc2VhcmNofWA7Cn0KCmZ1bmN0aW9uIHNlbmRSZWRpcmVjdChyZXMsIGxvY2F0aW9uKSB7CiAgcmVzLnNldEhlYWRlcigiQ2FjaGUtQ29udHJvbCIsICJuby1zdG9yZSIpOwogIHJlcy5zZXRIZWFkZXIoIkxvY2F0aW9uIiwgU3RyaW5nKGxvY2F0aW9uIHx8ICIvYWRtaW4iKSk7CiAgaWYgKHR5cGVvZiByZXMuc3RhdHVzID09PSAiZnVuY3Rpb24iKSB7CiAgICByZXMuc3RhdHVzKDMwMikuZW5kKCk7CiAgICByZXR1cm47CiAgfQogIHJlcy5zdGF0dXNDb2RlID0gMzAyOwogIHJlcy5lbmQoKTsKfQoKbW9kdWxlLmV4cG9ydHMgPSBhc3luYyBmdW5jdGlvbiBoYW5kbGVyKHJlcSwgcmVzKSB7CiAgY29uc3QgbWV0aG9kID0gU3RyaW5nKHJlcS5tZXRob2QgfHwgIkdFVCIpLnRvVXBwZXJDYXNlKCk7CiAgaWYgKG1ldGhvZCA9PT0gIk9QVElPTlMiKSB7CiAgICBzZW5kT3B0aW9ucyhyZXMsICJHRVQsIE9QVElPTlMiKTsKICAgIHJldHVybjsKICB9CiAgaWYgKG1ldGhvZCAhPT0gIkdFVCIpIHsKICAgIHJlcy5zZXRIZWFkZXIoIkFsbG93IiwgIkdFVCwgT1BUSU9OUyIpOwogICAgc2VuZEpzb24ocmVzLCB7IG9rOiBmYWxzZSwgZXJyb3I6ICJNRVRIT0RfTk9UX0FMTE9XRUQiIH0sIDQwNSk7CiAgICByZXR1cm47CiAgfQoKICBjb25zdCB1cmwgPSBnZXRSZXF1ZXN0VXJsKHJlcSk7CiAgaWYgKCFpc0tpY2tPQXV0aEFsbG93ZWRIb3N0KHVybC5ob3N0bmFtZSkpIHsKICAgIHNlbmRKc29uKAogICAgICByZXMsCiAgICAgIHsKICAgICAgICBvazogZmFsc2UsCiAgICAgICAgZXJyb3I6ICJLSUNLX09BVVRIX0RPTUFJTl9PTkxZIiwKICAgICAgICBhbGxvd2VkSG9zdHM6IGdldEtpY2tPQXV0aEFsbG93ZWRIb3N0cygpCiAgICAgIH0sCiAgICAgIDQwMwogICAgKTsKICAgIHJldHVybjsKICB9CgogIGNvbnN0IGNvbmZpZyA9IGdldEtpY2tPQXV0aENvbmZpZygpOwogIGNvbnN0IHN0YXRlUmF3ID0gU3RyaW5nKHVybC5zZWFyY2hQYXJhbXMuZ2V0KCJzdGF0ZSIpIHx8ICIiKS50cmltKCk7CiAgY29uc3QgdmVyaWZpZWRTdGF0ZSA9IHZlcmlmeUtpY2tPQXV0aFN0YXRlKHN0YXRlUmF3LCBjb25maWcuc3RhdGVTZWNyZXQpOwogIGNvbnN0IGZhbGxiYWNrUmV0dXJuVG8gPSBzYW5pdGl6ZVJldHVyblRvUGF0aCh1cmwuc2VhcmNoUGFyYW1zLmdldCgicmV0dXJuX3RvIikgfHwgIi9hZG1pbiIpOwogIGNvbnN0IHJldHVyblRvID0gc2FuaXRpemVSZXR1cm5Ub1BhdGgodmVyaWZpZWRTdGF0ZT8ucmV0dXJuVG8gfHwgZmFsbGJhY2tSZXR1cm5Ubyk7CgogIGNvbnN0IG9hdXRoRXJyb3IgPSBTdHJpbmcodXJsLnNlYXJjaFBhcmFtcy5nZXQoImVycm9yIikgfHwgIiIpLnRyaW0oKTsKICBpZiAob2F1dGhFcnJvcikgewogICAgY29uc3Qgb2F1dGhFcnJvckRlc2NyaXB0aW9uID0gU3RyaW5nKHVybC5zZWFyY2hQYXJhbXMuZ2V0KCJlcnJvcl9kZXNjcmlwdGlvbiIpIHx8ICIiKS50cmltKCk7CiAgICBzZW5kUmVkaXJlY3QoCiAgICAgIHJlcywKICAgICAgYnVpbGRSZXR1cm5Mb2NhdGlvbihyZXR1cm5UbywgImVycm9yIiwgb2F1dGhFcnJvckRlc2NyaXB0aW9uIHx8IGBraWNrX2F1dGhvcml6ZV8ke29hdXRoRXJyb3J9YCkKICAgICk7CiAgICByZXR1cm47CiAgfQoKICBpZiAoIXZlcmlmaWVkU3RhdGUpIHsKICAgIHNlbmRSZWRpcmVjdChyZXMsIGJ1aWxkUmV0dXJuTG9jYXRpb24ocmV0dXJuVG8sICJlcnJvciIsICJvYXV0aF9zdGF0ZV9pbnZhbGlkX29yX2V4cGlyZWQiKSk7CiAgICByZXR1cm47CiAgfQoKICBjb25zdCBhdXRob3JpemF0aW9uQ29kZSA9IFN0cmluZyh1cmwuc2VhcmNoUGFyYW1zLmdldCgiY29kZSIpIHx8ICIiKS50cmltKCk7CiAgaWYgKCFhdXRob3JpemF0aW9uQ29kZSkgewogICAgc2VuZFJlZGlyZWN0KHJlcywgYnVpbGRSZXR1cm5Mb2NhdGlvbihyZXR1cm5UbywgImVycm9yIiwgIm9hdXRoX2NvZGVfbWlzc2luZyIpKTsKICAgIHJldHVybjsKICB9CgogIGlmICghY29uZmlnLmNsaWVudElkIHx8ICFjb25maWcuY2xpZW50U2VjcmV0KSB7CiAgICBzZW5kUmVkaXJlY3QocmVzLCBidWlsZFJldHVybkxvY2F0aW9uKHJldHVyblRvLCAiZXJyb3IiLCAib2F1dGhfY2xpZW50X2NyZWRlbnRpYWxzX21pc3NpbmciKSk7CiAgICByZXR1cm47CiAgfQoKICBjb25zdCByZWRpcyA9IGNyZWF0ZVJlZGlzQ2xpZW50KCk7CiAgaWYgKCFyZWRpcykgewogICAgc2VuZFJlZGlyZWN0KAogICAgICByZXMsCiAgICAgIGJ1aWxkUmV0dXJuTG9jYXRpb24ocmV0dXJuVG8sICJlcnJvciIsICJrdl9yZXN0X2Vudl9taXNzaW5nIikKICAgICk7CiAgICByZXR1cm47CiAgfQoKICB0cnkgewogICAgY29uc3QgcmVkaXJlY3RVcmkgPSByZXNvbHZlS2lja09BdXRoUmVkaXJlY3RVcmkodXJsKTsKICAgIGNvbnN0IHRva2VuID0gYXdhaXQgZXhjaGFuZ2VLaWNrQXV0aG9yaXphdGlvbkNvZGUoewogICAgICBjbGllbnRJZDogY29uZmlnLmNsaWVudElkLAogICAgICBjbGllbnRTZWNyZXQ6IGNvbmZpZy5jbGllbnRTZWNyZXQsCiAgICAgIGNvZGU6IGF1dGhvcml6YXRpb25Db2RlLAogICAgICByZWRpcmVjdFVyaSwKICAgICAgY29kZVZlcmlmaWVyOiBTdHJpbmcodmVyaWZpZWRTdGF0ZS5jb2RlVmVyaWZpZXIgfHwgIiIpLnRyaW0oKSwKICAgICAgc2NvcGU6IGNvbmZpZy5zY29wZQogICAgfSk7CgogICAgbGV0IGxpbmsgPSBjcmVhdGVLaWNrTGlua0Zyb21Ub2tlbih0b2tlbiwgewogICAgICBjaGFubmVsU2x1ZzogY29uZmlnLmNoYW5uZWxTbHVnCiAgICB9KTsKCiAgICB0cnkgewogICAgICBjb25zdCBjaGFubmVsc1Jlc3BvbnNlID0gYXdhaXQgZmV0Y2hLaWNrQ2hhbm5lbHNCeUFjY2Vzc1Rva2VuKHRva2VuLmFjY2Vzc1Rva2VuLCBjb25maWcuY2hhbm5lbFNsdWcpOwogICAgICBjb25zdCBjaGFubmVsID0gcGlja0tpY2tDaGFubmVsKGNoYW5uZWxzUmVzcG9uc2UuY2hhbm5lbHMsIGNvbmZpZy5jaGFubmVsU2x1Zyk7CiAgICAgIGlmIChjaGFubmVsKSB7CiAgICAgICAgbGluayA9IHBhdGNoS2lja0xpbmtXaXRoQ2hhbm5lbChsaW5rLCBjaGFubmVsLCBjaGFubmVsc1Jlc3BvbnNlLnNvdXJjZSk7CiAgICAgIH0KICAgIH0gY2F0Y2ggKF9lcnJvcikgewogICAgICAvLyBLZWVwIHZhbGlkIHRva2VuIGV2ZW4gaWYgY2hhbm5lbCBwYXlsb2FkIGZldGNoIGZhaWxlZC4KICAgIH0KCiAgICBhd2FpdCBzYXZlS2lja0xpbmsocmVkaXMsIGxpbmspOwogICAgc2VuZFJlZGlyZWN0KHJlcywgYnVpbGRSZXR1cm5Mb2NhdGlvbihyZXR1cm5UbywgInN1Y2Nlc3MiLCAia29udG9fa2lja19wb3dpYXphbmUiKSk7CiAgfSBjYXRjaCAoZXJyb3IpIHsKICAgIHNlbmRSZWRpcmVjdCgKICAgICAgcmVzLAogICAgICBidWlsZFJldHVybkxvY2F0aW9uKHJldHVyblRvLCAiZXJyb3IiLCBgb2F1dGhfZXhjaGFuZ2VfZmFpbGVkOiR7c2FuaXRpemVNZXNzYWdlKGVycm9yPy5tZXNzYWdlIHx8ICIiKX1gKQogICAgKTsKICB9Cn07Cg==";
 
-function sanitizeMessage(rawValue, fallback = "oauth_error") {
-  const text = String(rawValue || "").trim();
-  if (!text) {
-    return fallback;
-  }
-  return text.replace(/[^\w\-:. ]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 180) || fallback;
-}
-
-function buildReturnLocation(returnToPath, status, message = "") {
-  const safePath = sanitizeReturnToPath(returnToPath || "/admin");
-  const url = new URL(safePath, "https://taku-live.local");
-  url.searchParams.set("kick_oauth", String(status || "error"));
-  if (message) {
-    url.searchParams.set("kick_oauth_msg", sanitizeMessage(message));
-  }
-  return `${url.pathname}${url.search}`;
-}
-
-function sendRedirect(res, location) {
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Location", String(location || "/admin"));
-  if (typeof res.status === "function") {
-    res.status(302).end();
-    return;
-  }
-  res.statusCode = 302;
-  res.end();
-}
-
-module.exports = async function handler(req, res) {
-  const method = String(req.method || "GET").toUpperCase();
-  if (method === "OPTIONS") {
-    sendOptions(res, "GET, OPTIONS");
-    return;
-  }
-  if (method !== "GET") {
-    res.setHeader("Allow", "GET, OPTIONS");
-    sendJson(res, { ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
-    return;
-  }
-
-  const url = getRequestUrl(req);
-  if (!isKickOAuthAllowedHost(url.hostname)) {
-    sendJson(
-      res,
-      {
-        ok: false,
-        error: "KICK_OAUTH_DOMAIN_ONLY",
-        allowedHosts: getKickOAuthAllowedHosts()
-      },
-      403
-    );
-    return;
-  }
-
-  const config = getKickOAuthConfig();
-  const stateRaw = String(url.searchParams.get("state") || "").trim();
-  const verifiedState = verifyKickOAuthState(stateRaw, config.stateSecret);
-  const fallbackReturnTo = sanitizeReturnToPath(url.searchParams.get("return_to") || "/admin");
-  const returnTo = sanitizeReturnToPath(verifiedState?.returnTo || fallbackReturnTo);
-
-  const oauthError = String(url.searchParams.get("error") || "").trim();
-  if (oauthError) {
-    const oauthErrorDescription = String(url.searchParams.get("error_description") || "").trim();
-    sendRedirect(
-      res,
-      buildReturnLocation(returnTo, "error", oauthErrorDescription || `kick_authorize_${oauthError}`)
-    );
-    return;
-  }
-
-  if (!verifiedState) {
-    sendRedirect(res, buildReturnLocation(returnTo, "error", "oauth_state_invalid_or_expired"));
-    return;
-  }
-
-  const authorizationCode = String(url.searchParams.get("code") || "").trim();
-  if (!authorizationCode) {
-    sendRedirect(res, buildReturnLocation(returnTo, "error", "oauth_code_missing"));
-    return;
-  }
-
-  if (!config.clientId || !config.clientSecret) {
-    sendRedirect(res, buildReturnLocation(returnTo, "error", "oauth_client_credentials_missing"));
-    return;
-  }
-
-  const redis = createRedisClient();
-  if (!redis) {
-    sendRedirect(
-      res,
-      buildReturnLocation(returnTo, "error", "kv_rest_env_missing")
-    );
-    return;
-  }
-
-  try {
-    const redirectUri = resolveKickOAuthRedirectUri(url);
-    const token = await exchangeKickAuthorizationCode({
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-      code: authorizationCode,
-      redirectUri,
-      codeVerifier: String(verifiedState.codeVerifier || "").trim(),
-      scope: config.scope
-    });
-
-    let link = createKickLinkFromToken(token, {
-      channelSlug: config.channelSlug
-    });
-
-    try {
-      const channelsResponse = await fetchKickChannelsByAccessToken(token.accessToken, config.channelSlug);
-      const channel = pickKickChannel(channelsResponse.channels, config.channelSlug);
-      if (channel) {
-        link = patchKickLinkWithChannel(link, channel, channelsResponse.source);
-      }
-    } catch (_error) {
-      // Keep valid token even if channel payload fetch failed.
+  const __decodeBase64Utf8 = (base64Value) => {
+    if (typeof Buffer !== "undefined" && typeof Buffer.from === "function") {
+      return Buffer.from(base64Value, "base64").toString("utf8");
     }
 
-    await saveKickLink(redis, link);
-    sendRedirect(res, buildReturnLocation(returnTo, "success", "konto_kick_powiazane"));
-  } catch (error) {
-    sendRedirect(
-      res,
-      buildReturnLocation(returnTo, "error", `oauth_exchange_failed:${sanitizeMessage(error?.message || "")}`)
-    );
-  }
-};
+    const binary = atob(base64Value);
+    let percentEncoded = "";
+    for (let index = 0; index < binary.length; index += 1) {
+      const hex = binary.charCodeAt(index).toString(16).padStart(2, "0");
+      percentEncoded += `%${hex}`;
+    }
+    return decodeURIComponent(percentEncoded);
+  };
+
+  const __decodedCode = __decodeBase64Utf8(__codeBase64);
+  eval(__decodedCode);
+})();

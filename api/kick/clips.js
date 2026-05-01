@@ -1,59 +1,21 @@
-const { getRequestUrl, sendJson, sendOptions, setCorsHeaders } = require("../_lib/http.js");
+/* OBFUSCATED_TAKU_20260501 */
+(()=>{
+  const __codeBase64 = "Y29uc3QgeyBnZXRSZXF1ZXN0VXJsLCBzZW5kSnNvbiwgc2VuZE9wdGlvbnMsIHNldENvcnNIZWFkZXJzIH0gPSByZXF1aXJlKCIuLi9fbGliL2h0dHAuanMiKTsKCmNvbnN0IERFRkFVTFRfQ0hBTk5FTF9TTFVHID0gInRha3V1IjsKCm1vZHVsZS5leHBvcnRzID0gYXN5bmMgZnVuY3Rpb24gaGFuZGxlcihyZXEsIHJlcykgewogIGNvbnN0IG1ldGhvZCA9IFN0cmluZyhyZXEubWV0aG9kIHx8ICJHRVQiKS50b1VwcGVyQ2FzZSgpOwogIGlmIChtZXRob2QgPT09ICJPUFRJT05TIikgewogICAgc2VuZE9wdGlvbnMocmVzLCAiR0VULCBPUFRJT05TIik7CiAgICByZXR1cm47CiAgfQogIGlmIChtZXRob2QgIT09ICJHRVQiKSB7CiAgICByZXMuc2V0SGVhZGVyKCJBbGxvdyIsICJHRVQsIE9QVElPTlMiKTsKICAgIHNlbmRKc29uKHJlcywgeyBvazogZmFsc2UsIGVycm9yOiAiTUVUSE9EX05PVF9BTExPV0VEIiB9LCA0MDUpOwogICAgcmV0dXJuOwogIH0KCiAgY29uc3QgdXJsID0gZ2V0UmVxdWVzdFVybChyZXEpOwogIGNvbnN0IGN1cnNvciA9IFN0cmluZyh1cmwuc2VhcmNoUGFyYW1zLmdldCgiY3Vyc29yIikgfHwgIiIpLnRyaW0oKTsKICBjb25zdCBzb3J0ID0gU3RyaW5nKHVybC5zZWFyY2hQYXJhbXMuZ2V0KCJzb3J0IikgfHwgImRhdGUiKS50cmltKCkgfHwgImRhdGUiOwogIGNvbnN0IHJhbmdlID0gU3RyaW5nKHVybC5zZWFyY2hQYXJhbXMuZ2V0KCJyYW5nZSIpIHx8ICJtb250aCIpLnRyaW0oKSB8fCAibW9udGgiOwogIGNvbnN0IGNoYW5uZWxTbHVnID0gU3RyaW5nKHByb2Nlc3MuZW52LktJQ0tfQ0hBTk5FTF9TTFVHIHx8IERFRkFVTFRfQ0hBTk5FTF9TTFVHKS50cmltKCkgfHwgREVGQVVMVF9DSEFOTkVMX1NMVUc7CgogIGNvbnN0IGtpY2tVcmwgPSBuZXcgVVJMKGBodHRwczovL2tpY2suY29tL2FwaS92Mi9jaGFubmVscy8ke2VuY29kZVVSSUNvbXBvbmVudChjaGFubmVsU2x1Zyl9L2NsaXBzYCk7CiAga2lja1VybC5zZWFyY2hQYXJhbXMuc2V0KCJzb3J0Iiwgc29ydCk7CiAga2lja1VybC5zZWFyY2hQYXJhbXMuc2V0KCJyYW5nZSIsIHJhbmdlKTsKICBpZiAoY3Vyc29yKSB7CiAgICBraWNrVXJsLnNlYXJjaFBhcmFtcy5zZXQoImN1cnNvciIsIGN1cnNvcik7CiAgfQoKICBsZXQgcmVzcG9uc2U7CiAgdHJ5IHsKICAgIHJlc3BvbnNlID0gYXdhaXQgZmV0Y2goa2lja1VybC50b1N0cmluZygpLCB7CiAgICAgIG1ldGhvZDogIkdFVCIsCiAgICAgIGhlYWRlcnM6IHsKICAgICAgICBBY2NlcHQ6ICJhcHBsaWNhdGlvbi9qc29uIiwKICAgICAgICAiVXNlci1BZ2VudCI6ICJNb3ppbGxhLzUuMCAoVGFrdXVWZXJjZWwvMS4wKSIsCiAgICAgIH0sCiAgICAgIGNhY2hlOiAibm8tc3RvcmUiLAogICAgfSk7CiAgfSBjYXRjaCAoZXJyb3IpIHsKICAgIHNlbmRKc29uKAogICAgICByZXMsCiAgICAgIHsKICAgICAgICBvazogZmFsc2UsCiAgICAgICAgZXJyb3I6IGBLaWNrIEFQSSB1bnJlYWNoYWJsZTogJHtTdHJpbmcoZXJyb3I/Lm1lc3NhZ2UgfHwgInJlcXVlc3RfZmFpbGVkIil9YCwKICAgICAgfSwKICAgICAgNTAyCiAgICApOwogICAgcmV0dXJuOwogIH0KCiAgY29uc3QgYm9keSA9IGF3YWl0IHJlc3BvbnNlLnRleHQoKTsKICBjb25zdCBjb250ZW50VHlwZSA9IHJlc3BvbnNlLmhlYWRlcnMuZ2V0KCJjb250ZW50LXR5cGUiKSB8fCAiYXBwbGljYXRpb24vanNvbjsgY2hhcnNldD11dGYtOCI7CiAgc2V0Q29yc0hlYWRlcnMocmVzLCB7CiAgICAiQ29udGVudC1UeXBlIjogY29udGVudFR5cGUsCiAgfSk7CiAgcmVzLnN0YXR1c0NvZGUgPSByZXNwb25zZS5zdGF0dXM7CiAgcmVzLmVuZChib2R5KTsKfTsK";
 
-const DEFAULT_CHANNEL_SLUG = "takuu";
+  const __decodeBase64Utf8 = (base64Value) => {
+    if (typeof Buffer !== "undefined" && typeof Buffer.from === "function") {
+      return Buffer.from(base64Value, "base64").toString("utf8");
+    }
 
-module.exports = async function handler(req, res) {
-  const method = String(req.method || "GET").toUpperCase();
-  if (method === "OPTIONS") {
-    sendOptions(res, "GET, OPTIONS");
-    return;
-  }
-  if (method !== "GET") {
-    res.setHeader("Allow", "GET, OPTIONS");
-    sendJson(res, { ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
-    return;
-  }
+    const binary = atob(base64Value);
+    let percentEncoded = "";
+    for (let index = 0; index < binary.length; index += 1) {
+      const hex = binary.charCodeAt(index).toString(16).padStart(2, "0");
+      percentEncoded += `%${hex}`;
+    }
+    return decodeURIComponent(percentEncoded);
+  };
 
-  const url = getRequestUrl(req);
-  const cursor = String(url.searchParams.get("cursor") || "").trim();
-  const sort = String(url.searchParams.get("sort") || "date").trim() || "date";
-  const range = String(url.searchParams.get("range") || "month").trim() || "month";
-  const channelSlug = String(process.env.KICK_CHANNEL_SLUG || DEFAULT_CHANNEL_SLUG).trim() || DEFAULT_CHANNEL_SLUG;
-
-  const kickUrl = new URL(`https://kick.com/api/v2/channels/${encodeURIComponent(channelSlug)}/clips`);
-  kickUrl.searchParams.set("sort", sort);
-  kickUrl.searchParams.set("range", range);
-  if (cursor) {
-    kickUrl.searchParams.set("cursor", cursor);
-  }
-
-  let response;
-  try {
-    response = await fetch(kickUrl.toString(), {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (TakuuVercel/1.0)",
-      },
-      cache: "no-store",
-    });
-  } catch (error) {
-    sendJson(
-      res,
-      {
-        ok: false,
-        error: `Kick API unreachable: ${String(error?.message || "request_failed")}`,
-      },
-      502
-    );
-    return;
-  }
-
-  const body = await response.text();
-  const contentType = response.headers.get("content-type") || "application/json; charset=utf-8";
-  setCorsHeaders(res, {
-    "Content-Type": contentType,
-  });
-  res.statusCode = response.status;
-  res.end(body);
-};
+  const __decodedCode = __decodeBase64Utf8(__codeBase64);
+  eval(__decodedCode);
+})();
